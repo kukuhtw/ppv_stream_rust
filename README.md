@@ -120,6 +120,8 @@ Tables:
 ---
 Open source for educational and non-commercial use.
 ---
+
+---
 =============================================================================
 Project : PPV Stream - Secure Pay-Per-View Video Platform
 Author  : Kukuh Tripamungkas Wicaksono (Kukuh TW)
@@ -147,5 +149,9 @@ Main Features:
 
 
 © 2025 Kukuh Tripamungkas Wicaksono.
+
+---
+
+
 
 
