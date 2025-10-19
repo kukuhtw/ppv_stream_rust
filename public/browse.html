@@ -1,0 +1,113 @@
+<!-- public/browse.html -->
+<!doctype html>
+<html lang="id">
+<meta charset="utf-8">
+<title>Browse Video</title>
+<link rel="stylesheet" href="/public/styles.css">
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+    background: #fafafa;
+  }
+  nav {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+  .spacer {
+    flex-grow: 1;
+  }
+  .badge {
+    background: #eee;
+    padding: 4px 8px;
+    border-radius: 4px;
+  }
+  #videos {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1rem;
+  }
+  .card {
+    background: white;
+    padding: 1rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+  .card h3 {
+    margin: 0 0 0.5rem 0;
+  }
+  .card p {
+    margin: 0.3rem 0;
+  }
+  .card a {
+    display: inline-block;
+    margin-top: 0.5rem;
+    padding: 6px 12px;
+    background: #007bff;
+    color: white;
+    border-radius: 4px;
+    text-decoration: none;
+  }
+  .card a:hover {
+    background: #0056b3;
+  }
+</style>
+
+<body>
+<h1>Daftar Video</h1>
+
+<nav>
+  <a href="/public/browse.html">Browse</a>
+  <a href="/public/dashboard.html">Dashboard</a>
+  <span class="spacer"></span>
+  <span id="userbar" class="badge">Memuat user…</span>
+</nav>
+
+<script>
+(async function loadMe(){
+  try {
+    const r = await fetch('/api/me');
+    const j = await r.json();
+    const el = document.getElementById('userbar');
+    if(j.ok && j.user){
+      el.innerHTML = `Login: <b>${j.user.username}</b> &lt;${j.user.email}&gt;`;
+    } else {
+      el.innerHTML = `<a href="/public/auth/login.html">Login</a>`;
+    }
+  } catch {
+    document.getElementById('userbar').textContent = 'User: (gagal memuat)';
+  }
+})();
+</script>
+
+<div id="videos"></div>
+
+<script>
+(async () => {
+  const USD_TO_IDR = 17000; // 1 USD = Rp 17.000
+  const res = await fetch('/api/videos');
+  const data = await res.json();
+  let html = '';
+  const list = data.videos || [];
+
+  for (const v of list) {
+    const priceUSD = (v.price_cents / 100).toFixed(2);
+    const priceIDR = (priceUSD * USD_TO_IDR).toLocaleString('id-ID');
+
+    html += `
+      <div class="card">
+        <h3>${v.title}</h3>
+        <p><strong>Owner:</strong> ${v.owner_name}</p>
+        <p>💰 Harga: $${priceUSD} (~Rp ${priceIDR})</p>
+        <a href="/public/watch.html?video_id=${encodeURIComponent(v.id)}">▶ Tonton</a>
+      </div>
+    `;
+  }
+
+  document.getElementById('videos').innerHTML = html || '<p>Belum ada video.</p>';
+})();
+</script>
+</body>
+</html>

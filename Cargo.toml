@@ -1,0 +1,49 @@
+[package]
+name = "ppv_stream"
+version = "0.2.0"
+edition = "2021"
+
+[dependencies]
+# --- Web & HTTP ---
+axum = { version = "0.7", features = ["multipart"] }
+tower-cookies = "0.10"
+tower-http = { version = "0.5", features = ["fs"] }
+
+# --- Data / Serialize ---
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# --- Utilities & Hashing ---
+uuid = { version = "1", features = ["v4", "fast-rng"] }
+chrono = { version = "0.4", features = ["serde", "clock"] }
+argon2 = "0.5"
+hmac = "0.12"
+sha2 = "0.10"
+base64 = "0.22"
+base64ct = "=1.6.0" # penting: versi ini stabil dengan sha2 v0.10
+regex = "1"
+anyhow = "1"
+
+# --- Async & Runtime ---
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "process", "fs", "net"] }
+
+# --- Logging ---
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+# --- Database ---
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "macros", "postgres", "uuid", "chrono"] }
+
+# --- Env loader untuk seeder & dev ---
+dotenvy = "0.15"
+
+[net]
+git-fetch-with-cli = true
+retry = 10
+timeout = 600
+
+[http]
+multiplexing = false
+
+[registries.crates-io]
+protocol = "sparse"

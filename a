@@ -1,0 +1,165 @@
+cd /home/kukuhtw/rust/ppv_stream
+make db-up
+make wait-db
+make migrate
+make build      # (build online sqlx)
+make run-all
+make seed
+
+# buka http://localhost:8080/
+
+
+
+kukuhtw@KukuhTW-Lenovo:~/rust/ppv_stream$ tree
+.
+├── Cargo.lock
+├── Cargo.toml
+├── Dockerfile
+├── Makefile
+├── README.md
+├── a
+├── docker-compose.yml
+├── public
+│   ├── admin
+│   │   ├── dashboard.html
+│   │   └── login.html
+│   ├── auth
+│   │   ├── forgot_password.html
+│   │   ├── login.html
+│   │   ├── register.html
+│   │   └── reset_password.html
+│   ├── browse.html
+│   ├── dashboard.html
+│   ├── index.html
+│   ├── styles.css
+│   └── watch.html
+├── sql
+│   ├── 001_init.sql
+│   ├── 002_admins.sql
+│   ├── 003_password_resets.sql
+│   ├── 004_sessions.sql
+│   ├── 005_allowlist.sql
+│   ├── 006_indexes.sql
+│   ├── 007_perf_and_fk.sql
+│   ├── 008_price_cents_bigint.sql
+│   └── 009_users_username_unique.sql
+└── src
+    ├── a
+    ├── auth.rs
+    ├── bootstrap.rs
+    ├── config.rs
+    ├── db.rs
+    ├── email.rs
+    ├── ffmpeg.rs
+    ├── handlers
+    │   ├── admin.rs
+    │   ├── auth_admin.rs
+    │   ├── auth_user.rs
+    │   ├── mod.rs
+    │   ├── pages.rs
+    │   ├── password.rs
+    │   ├── setup.rs
+    │   ├── stream.rs
+    │   ├── upload.rs
+    │   ├── users.rs
+    │   └── video.rs
+    ├── hls.rs
+    ├── main.rs
+    ├── middleware.rs
+    ├── models.rs
+    ├── schema.sql
+    ├── sessions.rs
+    ├── token.rs
+    ├── util.rs
+    └── validators.rs
+
+7 directories, 54 files
+kukuhtw@KukuhTW-Lenovo:~/rust/ppv_stream$
+
+┌───────────────┐
+│ User Browser  │
+│ (HTML + JS)   │
+└──────┬────────┘
+       │ HTTP
+       ▼
+┌───────────────────────┐
+│ Rust Backend (Axum)   │
+│  - Auth (user/admin)  │
+│  - Upload MP4         │
+│  - Allowlist / Buy     │
+│  - Request HLS Token  │
+│  - Serve HLS Segments │
+└────────┬──────────────┘
+         │
+         ▼
+   ┌──────────────┐
+   │ SQLite DB    │
+   │ (users,      │
+   │  videos,     │
+   │  purchases,  │
+   │  allowlist)  │
+   └──────────────┘
+         │
+         ▼
+   ┌──────────────┐
+   │ File Storage │
+   │  - /storage/ │
+   │  - /hls/     │
+   └──────────────┘
+# dari root project (ada Dockerfile & docker-compose.yaml)
+docker build -t ppv_stream:dev .
+docker images | grep ppv_stream      # pastikan terlihat ppv_stream   dev
+
+docker compose up -d db app
+docker compose logs -f app
+
+docker build -t ppv_stream:dev .
+docker compose up -d app db
+docker compose logs -f app
+
+
+find . -type f -name "*:Zone.Identifier" -exec rm -f {} +
+
+
+docker system prune -af --volumes
+cargo clean
+rm -rf target
+rm -rf data/ppv.db
+
+docker compose up -d db
+docker build --no-cache \
+  --add-host=host.docker.internal:host-gateway \
+  --build-arg DATABASE_URL=postgres://ppv:secret@host.docker.internal:5432/ppv_stream \
+  --build-arg BUILD_REV=$(date +%s) \
+  -t ppv_stream:dev .
+
+
+
+kukuhtw+user1@gmail.com
+user1Yfji477EGG1444
+
+
+kukuhtw+user2@gmail.com
+user2ji477EGG1444
+
+ADMIN_BOOTSTRAP_EMAIL=admin@example.com
+ADMIN_BOOTSTRAP_PASSWORD=ChangeMe123!
+
+
+docker exec -it ppv_stream_db psql -U ppv -d ppv_stream -c \
+"SELECT email, is_admin FROM users;"
+
+
+| No | Username   | Email                                           | Password (plain) |
+| -- | ---------- | ----------------------------------------------- | ---------------- |
+| 1  | **user01** | [user01@example.com](mailto:user01@example.com) | `Passw0rd01!`    |
+| 2  | **user02** | [user02@example.com](mailto:user02@example.com) | `Passw0rd02!`    |
+| 3  | **user03** | [user03@example.com](mailto:user03@example.com) | `Passw0rd03!`    |
+| 4  | **user04** | [user04@example.com](mailto:user04@example.com) | `Passw0rd04!`    |
+| 5  | **user05** | [user05@example.com](mailto:user05@example.com) | `Passw0rd05!`    |
+| 6  | **user06** | [user06@example.com](mailto:user06@example.com) | `Passw0rd06!`    |
+| 7  | **user07** | [user07@example.com](mailto:user07@example.com) | `Passw0rd07!`    |
+| 8  | **user08** | [user08@example.com](mailto:user08@example.com) | `Passw0rd08!`    |
+| 9  | **user09** | [user09@example.com](mailto:user09@example.com) | `Passw0rd09!`    |
+| 10 | **user10** | [user10@example.com](mailto:user10@example.com) | `Passw0rd10!`    |
+

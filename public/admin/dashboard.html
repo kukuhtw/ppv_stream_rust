@@ -1,0 +1,18 @@
+<!-- public/admin/dashboard.html -->
+<!doctype html><meta charset="utf-8"><title>Admin Dashboard</title>
+<link rel="stylesheet" href="/public/styles.css">
+<header><h1>Admin Dashboard</h1><nav><a href="/browse">Browse</a></nav></header>
+<section class="card">
+  <h2>Ringkasan</h2>
+  <ul>
+    <li>Total Users: <span id="u">-</span></li>
+    <li>Total Videos: <span id="v">-</span></li>
+    <li>Total Purchases: <span id="p">-</span></li>
+  </ul>
+</section>
+<script>
+(async ()=>{
+  const r = await fetch('/admin/stats'); const j = await r.json();
+  u.textContent = j.total_users; v.textContent = j.total_videos; p.textContent = j.total_purchases;
+})();
+</script>

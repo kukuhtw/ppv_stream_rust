@@ -1,0 +1,58 @@
+// placeholder module file (intentionally minimal)
+.
+├── Cargo.toml
+├── README.md
+├── a
+├── public
+│   ├── admin
+│   │   ├── dashboard.html
+│   │   └── login.html
+│   ├── auth
+│   │   ├── forgot_password.html
+│   │   ├── login.html
+│   │   ├── register.html
+│   │   └── reset_password.html
+│   ├── browse.html
+│   ├── dashboard.html
+│   ├── styles.css
+│   └── watch.html
+├── sql
+│   ├── 002_admins.sql
+│   ├── 003_password_resets.sql
+│   ├── 004_sessions.sql
+│   └── init.sql
+└── src
+    ├── a
+    ├── auth.rs
+    ├── config.rs
+    ├── db.rs
+    ├── email.rs
+    ├── ffmpeg.rs
+    ├── handlers
+    │   ├── admin.rs
+    │   ├── auth_admin.rs
+    │   ├── auth_user.rs
+    │   ├── pages.rs
+    │   ├── password.rs
+    │   ├── stream.rs
+    │   ├── upload.rs
+    │   ├── users.rs
+    │   └── video.rs
+    ├── hls.rs
+    ├── main.rs
+    ├── middleware.rs
+    ├── models.rs
+    ├── sessions.rs
+    ├── token.rs
+    ├── util.rs
+    └── validators.rs
+
+7 directories, 40 files
+kukuhtw@KukuhTW-Lenovo:~/rust/ppv_stream$
+
+make db-up
+make wait-db
+make migrate
+make build      # (build online sqlx)
+make run-all
+make seed

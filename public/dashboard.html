@@ -1,0 +1,281 @@
+<!-- public/dashboard.html -->
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/public/styles.css">
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Arial, sans-serif; }
+    nav { display:flex; gap:12px; align-items:center; margin-bottom:16px; }
+    .card { border:1px solid rgba(0,0,0,.15); border-radius:12px; padding:16px; margin:18px 0; background:rgba(0,0,0,.03); }
+    label { display:block; margin:10px 0; }
+    input, select, button { font: inherit; padding:8px 10px; }
+    button.primary { background:#0b67ff; color:#fff; border:0; border-radius:10px; padding:10px 14px; cursor:pointer; }
+    small.muted { opacity:.8; }
+  </style>
+</head>
+
+<body>
+  <nav>
+  <a href="/public/browse.html">Browse</a>
+  <a href="/public/dashboard.html">Dashboard</a>
+  <span class="spacer"></span>
+  <span id="userbar" class="badge">Memuat user…</span>
+  <form id="logoutForm" style="display:inline" onsubmit="return false">
+    <button id="logoutBtn" class="primary" type="button" title="Logout aman (POST)">Logout</button>
+  </form>
+</nav>
+<script>
+// loadMe() sama persis
+(async function loadMe(){ try{const r=await fetch('/api/me');const j=await r.json();const el=document.getElementById('userbar');if(j.ok&&j.user){el.innerHTML=`Login: <b>${j.user.username}</b> &lt;${j.user.email}&gt;`;}else{el.innerHTML=`<a href="/public/auth/login.html">Login</a>`;}}catch{document.getElementById('userbar').textContent='User: (gagal memuat)';}})();
+</script>
+
+  <h1>Dashboard Pengguna</h1>
+
+  <nav>
+    <a href="/public/browse.html">Lihat Video</a>
+    <form id="logoutForm" style="display:inline" onsubmit="return false">
+      <button id="logoutBtn" class="primary" type="button" title="Logout aman (POST)">Logout</button>
+    </form>
+  </nav>
+
+  <section>
+    <p>Selamat datang di platform streaming video berbayar!</p>
+    <p>Upload video Anda, tetapkan harga, dan dapatkan penghasilan dari penonton.</p>
+  </section>
+
+    <!-- ================= Video Saya & Akses ================= -->
+  <section class="card">
+    <h2>Video Saya & Akses</h2>
+    <div id="mine"></div>
+  </section>
+
+
+  <!-- ================= Upload ================= -->
+  <section class="card">
+    <h2>Upload Video</h2>
+    <form id="uploadForm" enctype="multipart/form-data">
+      <label>Judul
+        <input name="title" value="Untitled" required>
+      </label>
+      <label>Harga (cents)
+        <input name="price_cents" type="number" min="0" value="0" required>
+      </label>
+      <label>File MP4
+        <input name="file" type="file" accept="video/mp4" required>
+      </label>
+      <button class="primary" type="submit">Upload</button>
+    </form>
+    <small class="muted">Catatan: pastikan file berformat MP4.</small>
+  </section>
+
+  <!-- ================= Allowlist ================= -->
+  <section class="card">
+    <h2>Grant Akses (Allowlist)</h2>
+    <form id="allow">
+      <!-- Select terlihat (tanpa name) -->
+      <label>Video
+        <select id="videoSelect" required></select>
+      </label>
+
+      <!-- Field yang dikirim ke server -->
+      <input type="hidden" name="video_id" id="videoIdHidden">
+      <small id="videoIdEcho" class="muted" style="display:block;margin:-6px 0 8px 0"></small>
+
+      <label>Username yg diizinkan
+        <input name="username" id="usernameInp" required>
+      </label>
+      <div id="lookup" class="muted" style="font-size:12px;min-height:1.2em"></div>
+
+      <button class="primary">Tambah</button>
+    </form>
+  </section>
+
+  <script>
+  // ===== util toast sederhana =====
+  function toast(msg, ok=true){ alert((ok ? "✅ " : "❌ ") + msg); }
+
+  // ===== Logout (POST /auth/logout lalu redirect ke login) =====
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
+    try {
+      const r = await fetch('/auth/logout', { method: 'POST' });
+      // Terlepas dari respons, arahkan ke halaman login publik
+      location.href = '/public/auth/login.html?status=ok';
+    } catch (e) {
+      // fallback
+      location.href = '/public/auth/login.html';
+    }
+  });
+
+  // ================= Upload =================
+  const uploadForm = document.getElementById('uploadForm');
+  uploadForm.onsubmit = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(uploadForm);
+    try {
+      const r = await fetch('/api/upload', { method: 'POST', body: formData });
+      const isJson = (r.headers.get('content-type')||'').includes('application/json');
+      const j = isJson ? await r.json() : { error: await r.text() };
+
+      if (!r.ok) {
+        // backend kirim string error → tampilkan jelas
+        toast(`Upload gagal: ${j.error || 'unknown error'}`, false);
+        return;
+      }
+      // Sukses: backend kirim {video_id, owner_id, path}
+      toast(`Upload sukses. Video ID: ${j.video_id}`);
+      uploadForm.reset();
+      // Refresh dropdown video agar video baru muncul
+      await loadMyVideos();
+    } catch (e2) {
+      toast(`Upload gagal (network/format): ${e2}`, false);
+    }
+  };
+
+  // ================= Allowlist =================
+  const allowForm    = document.getElementById('allow');
+  const videoSelect  = document.getElementById('videoSelect');
+  const videoHidden  = document.getElementById('videoIdHidden');
+  const videoEcho    = document.getElementById('videoIdEcho');
+  const usernameInp  = document.getElementById('usernameInp');
+  const lookupBox    = document.getElementById('lookup');
+
+  function syncVideoIdEcho(){
+    const vid = videoSelect.value || "";
+    videoHidden.value = vid;
+    videoEcho.textContent = vid ? `video_id: ${vid}` : '';
+  }
+
+  async function loadMyVideos(){
+    try {
+      const r = await fetch('/api/my_videos');
+      const j = await r.json();
+      if (j.ok && Array.isArray(j.videos) && j.videos.length) {
+        videoSelect.innerHTML = j.videos
+          .map(v => `<option value="${v.id}">${v.title} — ${v.id}</option>`)
+          .join('');
+      } else {
+        videoSelect.innerHTML = '<option value="">(Belum ada video)</option>';
+      }
+    } catch {
+      videoSelect.innerHTML = '<option value="">Gagal load video</option>';
+    }
+    syncVideoIdEcho();
+  }
+
+  // load awal
+  loadMyVideos();
+  videoSelect.addEventListener('change', syncVideoIdEcho);
+
+  // Lookup user_id live
+  let t;
+  usernameInp.addEventListener('input', () => {
+    clearTimeout(t);
+    const u = usernameInp.value.trim();
+    lookupBox.textContent = '';
+    if (!u) return;
+    t = setTimeout(async () => {
+      try {
+        const r = await fetch('/api/user_lookup?' + new URLSearchParams({ username: u }));
+        const j = await r.json();
+        lookupBox.textContent = (j.ok && j.user)
+          ? `→ user_id: ${j.user.id}`
+          : '→ user tidak ditemukan';
+      } catch {
+        lookupBox.textContent = '→ gagal lookup user';
+      }
+    }, 300);
+  });
+
+  // Submit allowlist
+  allowForm.onsubmit = async (e) => {
+    e.preventDefault();
+    const body = new URLSearchParams(new FormData(allowForm)); // include hidden video_id
+    try {
+      const r = await fetch('/api/allow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body
+      });
+      const j = await r.json().catch(async () => ({ ok:false, error: await r.text() }));
+
+      if (!r.ok || j.ok === false) {
+        // server add_allow mengirim {ok:false, error, where?}
+        toast(`Gagal allowlist${j.where ? ' ['+j.where+']' : ''}: ${j.error || 'unknown'}`, false);
+        return;
+      }
+      toast(`Allowlist sukses: ${j.username} → video ${j.video_id}`);
+      allowForm.reset();
+      lookupBox.textContent = '';
+      // setelah reset, select tetap, tapi hidden kosong—sync lagi
+      syncVideoIdEcho();
+    } catch (e2) {
+      toast(`Gagal allowlist: ${e2}`, false);
+    }
+  };
+async function renderMyVideos() {
+    const box = document.getElementById('mine');
+    box.innerHTML = '<p>Memuat...</p>';
+    try {
+      const r = await fetch('/api/my_videos');
+      const j = await r.json();
+      if (!j.ok) {
+        box.innerHTML = `<p class="muted">Gagal memuat: ${j.error || 'unknown'}</p>`;
+        return;
+      }
+      if (!Array.isArray(j.videos) || j.videos.length === 0) {
+        box.innerHTML = '<p class="muted">Belum ada video yang Anda unggah.</p>';
+        return;
+      }
+
+      const html = j.videos.map(v => {
+        const users = (v.allow_users || []).map(u => `<code>${u}</code>`).join(', ');
+        const price = (v.price_cents/100).toLocaleString('id-ID');
+
+        return `
+          <div class="card" style="background:rgba(0,0,0,.02)">
+            <h3 style="margin:0 0 6px 0">${v.title}</h3>
+            <small class="muted">ID: ${v.id} • Dibuat: ${v.created_at}</small>
+            <p style="margin:8px 0 4px 0">Harga: Rp ${price}</p>
+            <details>
+              <summary>Allowlist (${v.allow_count})</summary>
+              <div style="margin-top:6px">
+                ${users || '<span class="muted">(Belum ada user diizinkan)</span>'}
+              </div>
+            </details>
+          </div>
+        `;
+      }).join('');
+
+      box.innerHTML = html;
+    } catch (e) {
+      box.innerHTML = `<p class="muted">Error: ${e}</p>`;
+    }
+  }
+
+  // panggil saat load, dan setelah upload/allow sukses
+  (async () => {
+    await loadMyVideos();
+    await renderMyVideos();
+  })();
+
+  // Setelah upload sukses, panggil render ulang
+  const _oldUpload = uploadForm.onsubmit;
+  uploadForm.onsubmit = async (e) => {
+    await _oldUpload(e);
+    await renderMyVideos();
+  };
+
+  // Setelah allow sukses, panggil render ulang
+  const _oldAllow = allowForm.onsubmit;
+  allowForm.onsubmit = async (e) => {
+    await _oldAllow(e);
+    await renderMyVideos();
+  };
+  
+  </script>
+</body>
+</html>

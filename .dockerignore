@@ -1,0 +1,15 @@
+target
+.git
+.gitignore
+**/*.swp
+**/*.swo
+**/*.log
+**/*.tmp
+node_modules
+.env
+*.db
+hls_tmp
+storage
+.idea
+.vscode
+.DS_Store

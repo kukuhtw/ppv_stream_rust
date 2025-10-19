@@ -1,0 +1,77 @@
+services:
+  db:
+    image: postgres:16
+    container_name: ppv_stream_db
+    environment:
+      POSTGRES_DB: ppv_stream
+      POSTGRES_USER: ppv
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5432:5432"          # publish agar builder bisa akses via host.docker.internal:5432
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ppv -d ppv_stream"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      args:
+        - BUILD_REV=${BUILD_REV:-dev}
+        # ⚠️ penting untuk SQLx ONLINE MODE saat cargo build
+        - DATABASE_URL=${DATABASE_URL_BUILD}
+    image: ppv_stream:dev
+    container_name: ppv_stream_app
+    depends_on:
+      db:
+        condition: service_healthy
+    # Pastikan file .env berisi: DATABASE_URL (runtime) & DATABASE_URL_BUILD (build time)
+    env_file:
+      - .env
+    environment:
+      PUBLIC_DIR: /app/public
+      # (opsional) override spesifik:
+      # BIND: ${BIND}
+      # RUST_LOG: ${RUST_LOG}
+    # Pastikan host.docker.internal bisa di-resolve (khusus Linux)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8080:8080"
+    volumes:
+      # Persist upload & HLS (path sesuai .env -> config.rs)
+      - appdata:${STORAGE_DIR:-/data}
+      - hlstmp:${HLS_ROOT:-/tmp/hls}
+    restart: unless-stopped
+    healthcheck:
+      # pastikan image runtime punya curl (Dockerfile sudah install)
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    # (opsional) kalau trafik tinggi:
+    # ulimits:
+    #   nofile:
+    #     soft: 65536
+    #     hard: 65536
+
+  adminer:
+    image: adminer:4
+    container_name: ppv_stream_adminer
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+    ports:
+      - "8081:8080"
+    restart: unless-stopped
+
+volumes:
+  pgdata: {}
+  appdata: {}
+  hlstmp: {}

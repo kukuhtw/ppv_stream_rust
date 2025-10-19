@@ -1,0 +1,76 @@
+<!-- public/auth/login.html -->
+<!doctype html>
+<meta charset="utf-8">
+<title>Login</title>
+<link rel="stylesheet" href="/public/styles.css">
+
+<style>
+  .alert{padding:10px;border-radius:8px;margin:12px 0;font-size:14px;line-height:1.4}
+  .alert.ok{background:#e8f5e9;border:1px solid #a5d6a7}
+  .alert.fail{background:#ffebee;border:1px solid #ef9a9a}
+  .field{display:block;margin:8px 0}
+  .row{display:flex;align-items:center;gap:6px}
+</style>
+
+<h1>Login</h1>
+
+<div id="alert" class="alert" style="display:none"></div>
+
+<form method="post" action="/auth/login">
+  <label class="field">Email <input name="email" type="email" required></label>
+  <label class="field">
+    Password
+    <div class="row">
+      <input id="loginPassword" name="password" type="password" required>
+      <button type="button" id="toggleLoginPass" title="Tahan mouse untuk melihat password">👁️</button>
+    </div>
+  </label>
+  <button>Login</button>
+</form>
+
+<p>Lupa password? <a href="/auth/forgot">Reset</a></p>
+<p>Belum punya akun? <a href="/auth/register">Daftar</a></p>
+
+<script>
+/* === Toggle show/hide password === */
+const loginPass = document.getElementById('loginPassword');
+const toggleLoginPass = document.getElementById('toggleLoginPass');
+
+toggleLoginPass.addEventListener('mousedown', () => {
+  loginPass.type = 'text';
+  toggleLoginPass.textContent = '🙈';
+});
+toggleLoginPass.addEventListener('mouseup', () => {
+  loginPass.type = 'password';
+  toggleLoginPass.textContent = '👁️';
+});
+toggleLoginPass.addEventListener('mouseleave', () => {
+  loginPass.type = 'password';
+  toggleLoginPass.textContent = '👁️';
+});
+
+/* === Alert status & reason === */
+(function () {
+  const box = document.getElementById('alert');
+  const p = new URLSearchParams(location.search);
+  const status = p.get('status');
+  const reason = p.get('reason');
+
+  if (!status) return;
+
+  const map = {
+    missing_field: 'Lengkapi semua field.',
+    invalid_email: 'Format email tidak valid.',
+    bad_credentials: 'Email atau password salah.',
+    server_error: 'Terjadi masalah di server. Coba lagi.',
+  };
+
+  let msg = status === 'ok'
+    ? 'Login berhasil.'
+    : (map[reason] || `Login gagal. (${reason || 'unknown'})`);
+
+  box.textContent = msg;
+  box.classList.add(status === 'ok' ? 'ok' : 'fail');
+  box.style.display = 'block';
+})();
+</script>
