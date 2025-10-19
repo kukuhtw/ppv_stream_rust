@@ -119,7 +119,6 @@ Tables:
 
 Open source for educational and non-commercial use.
 
-/*
 =============================================================================
 Project : PPV Stream - Secure Pay-Per-View Video Platform
 Author  : Kukuh Tripamungkas Wicaksono (Kukuh TW)
@@ -144,7 +143,6 @@ Main Features:
 - USD to IDR Conversion ($1 = Rp17,000)
 - Responsive Frontend (HTML + JS)
 =============================================================================
-*/
 
 
 © 2025 Kukuh Tripamungkas Wicaksono.
