@@ -121,36 +121,34 @@ Tables:
 Open source for educational and non-commercial use.
 ---
 
----
-=============================================================================
-Project : PPV Stream - Secure Pay-Per-View Video Platform
-Author  : Kukuh Tripamungkas Wicaksono (Kukuh TW)
-Email   : kukuhtw@gmail.com
-WhatsApp: https://wa.me/628129893706
-LinkedIn: https://id.linkedin.com/in/kukuhtw
+### 🧠 Description
 
-=============================================================================
-Description:
-PPV Stream is a secure Rust-based Pay-Per-View (PPV) video streaming platform.
-It allows independent creators to upload, sell, and stream encrypted videos
-with dynamic watermarking to prevent piracy. Built with Rust (Axum), PostgreSQL,
-and FFmpeg (HLS transcoding), it provides fast, safe, and transparent streaming.
+**PPV Stream** is a secure **Rust-based Pay-Per-View (PPV)** video streaming platform.  
+It allows independent creators to upload, sell, and stream encrypted videos  
+with **dynamic watermarking** to prevent piracy.  
+Built with **Rust (Axum)**, **PostgreSQL**, and **FFmpeg (HLS transcoding)**,  
+it provides fast, safe, and transparent streaming.
 
-Main Features:
-- User & Admin Authentication
-- Video Upload and Management
-- Pay-Per-View Monetization
-- Randomly Moving Watermark per 5 seconds
-- HLS (HTTP Live Streaming) with FFmpeg
-- Allowlist-based Access Control
-- USD to IDR Conversion ($1 = Rp17,000)
-- Responsive Frontend (HTML + JS)
-=============================================================================
+### 🔑 Main Features
 
-
-© 2025 Kukuh Tripamungkas Wicaksono.
+- 👤 User & Admin Authentication  
+- 🎥 Video Upload and Management  
+- 💰 Pay-Per-View Monetization  
+- 💧 Randomly Moving Watermark (every 5 seconds)  
+- 📡 HLS (HTTP Live Streaming) with FFmpeg  
+- 🔒 Allowlist-based Access Control  
+- 💵 USD → IDR Conversion ($1 = Rp17,000)  
+- 🖥️ Responsive Frontend (HTML + JS)
 
 ---
+
+<p align="center">
+  © 2025 <b>Kukuh Tripamungkas Wicaksono</b><br>
+  📧 <a href="mailto:kukuhtw@gmail.com">kukuhtw@gmail.com</a> |
+  💬 <a href="https://wa.me/628129893706">WhatsApp</a> |
+  🔗 <a href="https://id.linkedin.com/in/kukuhtw">LinkedIn</a>
+</p>
+
 
 
 
