@@ -6,6 +6,19 @@
 **PPV Stream** is a secure video streaming application built with **Rust (Axum)** and **PostgreSQL**, designed for independent creators to monetize their content fairly through a **Pay-Per-View (PPV)** model.
 It features watermark-protected HLS streaming, authentication, upload management, and user dashboards.
 
+Key features include:
+
+🔒 HLS streaming with dynamic watermarking — prevents direct MP4 downloads and embeds user-specific identifiers to trace unauthorized sharing.
+👤 Authentication & user management — ensures that only paying viewers can access protected videos.
+☁️ Automated upload & transcoding (FFmpeg) — converts uploaded MP4 files into secure HLS segments for streaming.
+📊 Creator & admin dashboards — monitor video sales, view counts, and manage user access seamlessly.
+
+Built on the performance and safety of Rust, PPV Stream offers a powerful foundation for professional content distribution — ideal for online educators, indie filmmakers, and digital creators who value both monetization and content protection.
+
+🎥 Demo on YouTube: https://www.youtube.com/watch?v=WOsDwBcD03A
+--- 
+https://www.youtube.com/watch?v=WOsDwBcD03A
+
 ---
 
 ## 🚀 Key Features
