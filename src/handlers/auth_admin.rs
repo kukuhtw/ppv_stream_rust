@@ -1,4 +1,3 @@
-
 // src/handlers/auth_admin.rs
 // src/handlers/auth_admin.rs
 
@@ -9,8 +8,8 @@ use axum::{
 use serde::Deserialize;
 use tower_cookies::Cookies;
 
-use argon2::{Argon2, PasswordVerifier};
 use argon2::password_hash::PasswordHash;
+use argon2::{Argon2, PasswordVerifier};
 use sqlx::PgPool;
 
 use crate::sessions;
@@ -70,7 +69,10 @@ pub async fn post_admin_login(
         .is_ok()
     {
         let uid: &str = &r.id;
-        if sessions::create_session(&st.pool, uid, true, &cookies).await.is_err() {
+        if sessions::create_session(&st.pool, uid, true, &cookies)
+            .await
+            .is_err()
+        {
             return Redirect::to("/public/admin/login.html?status=fail&reason=server_error");
         }
         // ✅ SUKSES → ke dashboard admin

@@ -2,12 +2,12 @@
 use axum::{
     extract::{Query, State},
     response::IntoResponse,
-    Json, Form,
+    Form, Json,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
-use tower_cookies::Cookies;
 use std::collections::HashMap;
+use tower_cookies::Cookies;
 
 use crate::sessions;
 
@@ -54,18 +54,20 @@ pub async fn list_videos(State(st): State<VideoState>) -> impl IntoResponse {
         }
     };
 
-   let list: Vec<VideoItem> = rows
-    .into_iter()
-    .map(|r| VideoItem {
-        id: r.id,
-        owner_id: r.owner_id,
-        owner_name: r.owner_name.unwrap_or_else(|| "(tidak diketahui)".to_string()),
-        title: r.title,
-        price_cents: r.price_cents,
-        filename: r.filename,
-        created_at: r.created_at,
-    })
-    .collect();
+    let list: Vec<VideoItem> = rows
+        .into_iter()
+        .map(|r| VideoItem {
+            id: r.id,
+            owner_id: r.owner_id,
+            owner_name: r
+                .owner_name
+                .unwrap_or_else(|| "(tidak diketahui)".to_string()),
+            title: r.title,
+            price_cents: r.price_cents,
+            filename: r.filename,
+            created_at: r.created_at,
+        })
+        .collect();
 
     Json(serde_json::json!({ "ok": true, "videos": list }))
 }
@@ -83,10 +85,7 @@ struct MyVideo {
 }
 
 // GET /api/my_videos → butuh login
-pub async fn my_videos(
-    State(st): State<VideoState>,
-    cookies: Cookies,
-) -> impl IntoResponse {
+pub async fn my_videos(State(st): State<VideoState>, cookies: Cookies) -> impl IntoResponse {
     let (uid, _is_admin) = match sessions::current_user_id(&st.pool, &cookies).await {
         Some(v) => v,
         None => return Json(serde_json::json!({"ok": false, "error": "not logged in"})),
@@ -206,26 +205,31 @@ pub async fn add_allow(
 ) -> impl IntoResponse {
     let (uid, _is_admin) = match sessions::current_user_id(&st.pool, &cookies).await {
         Some(v) => v,
-        None => return Json(serde_json::json!({"ok": false, "where":"auth", "error": "not logged in"})),
+        None => {
+            return Json(serde_json::json!({"ok": false, "where":"auth", "error": "not logged in"}))
+        }
     };
 
     let vid = f.video_id.trim();
     let uname = f.username.trim();
 
     if vid.is_empty() || uname.is_empty() {
-        return Json(serde_json::json!({"ok": false, "where":"validation", "error": "video_id/username required"}));
+        return Json(
+            serde_json::json!({"ok": false, "where":"validation", "error": "video_id/username required"}),
+        );
     }
 
     // Pastikan video milik user
-    let owner_row = match sqlx::query!(
-        r#"SELECT owner_id FROM videos WHERE id = $1 LIMIT 1"#,
-        vid
-    )
-    .fetch_optional(&st.pool)
-    .await
+    let owner_row = match sqlx::query!(r#"SELECT owner_id FROM videos WHERE id = $1 LIMIT 1"#, vid)
+        .fetch_optional(&st.pool)
+        .await
     {
         Ok(r) => r,
-        Err(e) => return Json(serde_json::json!({"ok": false, "where":"db_video", "error": e.to_string()})),
+        Err(e) => {
+            return Json(
+                serde_json::json!({"ok": false, "where":"db_video", "error": e.to_string()}),
+            )
+        }
     };
 
     let Some(vrow) = owner_row else {
@@ -237,20 +241,25 @@ pub async fn add_allow(
     }
 
     // Pastikan username ada (INT4/i32)
-    let exists = match sqlx::query_scalar::<_, i32>(
-        r#"SELECT 1 FROM users WHERE username = $1 LIMIT 1"#,
-    )
-    .bind(uname)
-    .fetch_optional(&st.pool)
-    .await
-    {
-        Ok(Some(_)) => true,
-        Ok(None) => false,
-        Err(e) => return Json(serde_json::json!({"ok": false, "where":"db_user", "error": e.to_string()})),
-    };
+    let exists =
+        match sqlx::query_scalar::<_, i32>(r#"SELECT 1 FROM users WHERE username = $1 LIMIT 1"#)
+            .bind(uname)
+            .fetch_optional(&st.pool)
+            .await
+        {
+            Ok(Some(_)) => true,
+            Ok(None) => false,
+            Err(e) => {
+                return Json(
+                    serde_json::json!({"ok": false, "where":"db_user", "error": e.to_string()}),
+                )
+            }
+        };
 
     if !exists {
-        return Json(serde_json::json!({"ok": false, "where":"user", "error": "username not found"}));
+        return Json(
+            serde_json::json!({"ok": false, "where":"user", "error": "username not found"}),
+        );
     }
 
     // Tambahkan allowlist (idempotent)
@@ -260,14 +269,17 @@ pub async fn add_allow(
         VALUES ($1, $2)
         ON CONFLICT (video_id, username) DO NOTHING
         "#,
-        vid, uname
+        vid,
+        uname
     )
     .execute(&st.pool)
     .await;
 
     match res {
         Ok(_) => Json(serde_json::json!({"ok": true, "video_id": vid, "username": uname})),
-        Err(e) => Json(serde_json::json!({"ok": false, "where":"db_insert", "error": e.to_string()})),
+        Err(e) => {
+            Json(serde_json::json!({"ok": false, "where":"db_insert", "error": e.to_string()}))
+        }
     }
 }
 
@@ -276,14 +288,17 @@ pub async fn add_allow(
 /// - owner video, atau
 /// - ada di allowlist (by username), atau
 /// - ada purchase (opsional)
-pub async fn user_has_view_access(pool: &PgPool, video_id: &str, user_id: &str) -> sqlx::Result<bool> {
+pub async fn user_has_view_access(
+    pool: &PgPool,
+    video_id: &str,
+    user_id: &str,
+) -> sqlx::Result<bool> {
     // owner?
-    if let Some(owner) = sqlx::query_scalar::<_, String>(
-        r#"SELECT owner_id FROM videos WHERE id = $1 LIMIT 1"#,
-    )
-    .bind(video_id)
-    .fetch_optional(pool)
-    .await?
+    if let Some(owner) =
+        sqlx::query_scalar::<_, String>(r#"SELECT owner_id FROM videos WHERE id = $1 LIMIT 1"#)
+            .bind(video_id)
+            .fetch_optional(pool)
+            .await?
     {
         if owner == user_id {
             return Ok(true);

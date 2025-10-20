@@ -1,24 +1,26 @@
 // src/main.rs
+
 use axum::{
     extract::DefaultBodyLimit,
-    routing::{get, post},
     response::Redirect,
+    routing::{get, post},
     Router,
 };
 use tokio::net::TcpListener;
-use tracing_subscriber::fmt::init as tracing_init;
-use tower_http::services::ServeDir;
 use tower_cookies::CookieManagerLayer;
-
-mod handlers;
-use handlers::me::{me, MeState};
+use tower_http::services::ServeDir;
+use tracing_subscriber::fmt::init as tracing_init;
 
 mod config;
 mod db;
+mod email;
+mod ffmpeg; // masih dipakai oleh worker/utility
 mod sessions;
 mod validators;
-mod email;
-mod ffmpeg;            // ✅ diperlukan oleh stream
+mod worker;
+
+mod handlers;
+use handlers::me::{me, MeState};
 
 use handlers::{
     admin::{admin_data, AdminState},
@@ -34,20 +36,33 @@ use handlers::{
 async fn main() -> anyhow::Result<()> {
     tracing_init();
 
+    // ==== Config & DB ====
     let cfg = config::Config::from_env();
     let pool = db::new_pool(&cfg.database_url).await?;
 
-    // ===== Static files (/public) + root redirect + health =====
-    let public_root = std::env::var("PUBLIC_DIR")
-        .unwrap_or_else(|_| format!("{}/public", env!("CARGO_MANIFEST_DIR")));
+    // ==== Worker (transcode HLS pasca-upload) ====
+    let worker = worker::Worker::new(pool.clone(), cfg.clone(), 2);
+
+    // ==== Static files (/public) ====
+    let public_root = cfg.public_dir.clone();
     let static_service = ServeDir::new(public_root).append_index_html_on_directories(true);
 
+    // ==== Static HLS (/static_hls) dari MEDIA_DIR ====
+    // File hasil transcode HLS disajikan langsung (cepat & non-blok).
+    // ✅ prefix diubah agar tidak bentrok dengan /hls/:video/:file
+    let hls_service = ServeDir::new(&cfg.media_dir);
+
+    // ===== Static/router dasar =====
     let static_router = Router::new()
         .route("/", get(|| async { Redirect::to("/public/") }))
         .route("/browse", get(|| async { Redirect::to("/public/") }))
-        .route("/dashboard", get(|| async { Redirect::to("/public/dashboard.html") }))
+        .route(
+            "/dashboard",
+            get(|| async { Redirect::to("/public/dashboard.html") }),
+        )
         .route("/health", get(|| async { "ok" }))
-        .nest_service("/public", static_service);
+        .nest_service("/public", static_service)
+        .nest_service("/static_hls", hls_service); // ✅ diganti prefix agar tidak konflik
 
     // ===== Admin pages =====
     let admin_pages_router = Router::new()
@@ -91,8 +106,14 @@ async fn main() -> anyhow::Result<()> {
     // ===== Upload (besar) =====
     let upload_router = Router::new()
         .route("/api/upload", post(upload_video))
-        .with_state(UploadState { cfg: cfg.clone(), pool: pool.clone() })
-        .layer(DefaultBodyLimit::max(1024 * 1024 * 1024)); // 1 GB
+        .with_state(UploadState {
+            cfg: cfg.clone(),
+            pool: pool.clone(),
+            worker: worker.clone(),
+        })
+        .layer(DefaultBodyLimit::max(
+            cfg.max_upload_bytes.try_into().unwrap_or(usize::MAX),
+        ));
 
     // ===== Video (listing, my_videos, allowlist) =====
     let video_router = Router::new()
@@ -102,16 +123,20 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/allow", post(add_allow))
         .with_state(VideoState { pool: pool.clone() });
 
-    // ===== Streaming (request_play + serve_hls) =====
+    // ===== Streaming (request_play + serve_hls manual) =====
+    // ✅ Sekarang aman karena prefix ServeDir sudah diubah ke /static_hls
     let streaming_router = Router::new()
         .route("/api/request_play", get(request_play))
-        .route("/hls/:session/:file", get(serve_hls))
-        .with_state(StreamState { pool: pool.clone(), cfg: cfg.clone() });
+        .route("/hls/:video/:file", get(serve_hls)) // tetap dipakai untuk akses kontrol/logging
+        .with_state(StreamState {
+            pool: pool.clone(),
+            cfg: cfg.clone(),
+        });
 
     // ===== Me (info user login: id, username, email) =====
     let me_router = Router::new()
         .route("/api/me", get(me))
-        .with_state(MeState { pool: pool.clone() }); // ✅ pakai `pool`, bukan `pg_pool`
+        .with_state(MeState { pool: pool.clone() });
 
     // ===== Merge + cookies =====
     let app = static_router
@@ -125,7 +150,8 @@ async fn main() -> anyhow::Result<()> {
         .merge(me_router)
         .layer(CookieManagerLayer::new());
 
-    let addr = std::env::var("BIND").unwrap_or_else(|_| "0.0.0.0:8080".into());
+    // ==== Start server ====
+    let addr = cfg.bind.clone(); // contoh: "0.0.0.0:8080"
     let listener = TcpListener::bind(&addr).await?;
     println!("listening on http://{}", addr);
     axum::serve(listener, app).await?;

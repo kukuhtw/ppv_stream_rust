@@ -1,8 +1,40 @@
-<!-- public/watch.html -->
 <!doctype html>
 <meta charset="utf-8">
 <title>Tonton</title>
 <link rel="stylesheet" href="/public/styles.css">
+
+<style>
+  .player-wrap{
+    position:relative;
+    width:min(100%, 960px);
+    margin:12px auto;
+    aspect-ratio:16/9;          /* rapi sebelum metadata ada */
+    background:#000;
+    border-radius:10px;
+    overflow:hidden;
+  }
+  #player{
+    width:100%;
+    height:100%;
+    object-fit:contain;         /* jangan crop */
+    background:#000;
+    display:block;
+  }
+  /* sembunyikan tombol fullscreen bawaan video (kita pakai container FS) */
+  video::-webkit-media-controls-fullscreen-button { display:none; }
+  video::-webkit-media-controls-enclosure { overflow:hidden; }
+
+  /* tombol fullscreen kustom (wrapper) */
+  .fs-btn{
+    position:absolute; right:10px; top:10px; z-index:12;
+    background:rgba(0,0,0,.45); color:#fff; border:0;
+    border-radius:8px; padding:6px 10px; cursor:pointer; font-weight:600;
+  }
+  .player-wrap:fullscreen, .player-wrap:-webkit-full-screen {
+    width:100vw; height:100vh; border-radius:0;
+  }
+</style>
+
 <h1>Tonton</h1>
 
 <nav>
@@ -12,43 +44,89 @@
   <span id="userbar" class="badge">Memuat user…</span>
 </nav>
 <script>
-// loadMe() sama
-(async function loadMe(){ try{const r=await fetch('/api/me');const j=await r.json();const el=document.getElementById('userbar');if(j.ok&&j.user){el.innerHTML=`Login: <b>${j.user.username}</b> &lt;${j.user.email}&gt;`;}else{el.innerHTML=`<a href="/public/auth/login.html">Login</a>`;}}catch{document.getElementById('userbar').textContent='User: (gagal memuat)';}})();
+(async function loadMe(){
+  try{
+    const r = await fetch('/api/me');
+    const j = await r.json();
+    const el = document.getElementById('userbar');
+    if(j.ok && j.user){
+      el.innerHTML = `Login: <b>${j.user.username}</b> &lt;${j.user.email}&gt;`;
+    }else{
+      el.innerHTML = `<a href="/public/auth/login.html">Login</a>`;
+    }
+  }catch{
+    document.getElementById('userbar').textContent='User: (gagal memuat)';
+  }
+})();
 </script>
 
-<video id="player" controls style="max-width:100%;width:960px;"></video>
-<div id="wm" style="position:fixed;right:12px;bottom:12px;opacity:.7;font:14px/1.2 system-ui;background:rgba(0,0,0,.4);color:#fff;padding:6px 10px;border-radius:10px;pointer-events:none"></div>
+<div class="player-wrap" id="wrap">
+  <video id="player" controls playsinline crossorigin="anonymous"></video>
+  <button id="fsBtn" class="fs-btn" type="button">Fullscreen</button>
+</div>
 
-<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
 <script>
 (async () => {
+  // ===== ambil video_id dari query dan minta playlist ke backend =====
   const p = new URLSearchParams(location.search);
   const vid = p.get('video_id');
-  if (!vid) { document.body.insertAdjacentHTML('beforeend','<p>video_id kosong</p>'); return; }
+  if (!vid) {
+    document.body.insertAdjacentHTML('beforeend','<p>video_id kosong</p>');
+    return;
+  }
 
-  // tampilkan link balik ke video aktif
+  // link balik ke halaman ini
   const back = document.createElement('a');
   back.href = '/public/watch.html?video_id=' + encodeURIComponent(vid);
   back.textContent = 'Halaman ini';
   document.querySelector('nav').insertAdjacentElement('afterbegin', back);
 
-  const r = await fetch(`/api/request_play?video_id=${encodeURIComponent(vid)}`);
-  const j = await r.json();
-  if (!r.ok) { alert(j.error || 'gagal request_play'); return; }
+  const req = await fetch(`/api/request_play?video_id=${encodeURIComponent(vid)}`);
+  const play = await req.json();
+  if (!req.ok) { alert(play.error || 'gagal request_play'); return; }
 
-  // tampilkan watermark client-side (quick fix, non-secure)
-  try {
-    const me = await (await fetch('/api/me')).json();
-    if (me.ok && me.user) {
-      const now = new Date().toLocaleString('id-ID');
-      document.getElementById('wm').textContent = `${me.user.username} • ${now}`;
-    }
-  } catch {}
-
-  const src = j.playlist;
   const video = document.getElementById('player');
-  if (Hls.isSupported()) { const hls = new Hls(); hls.loadSource(src); hls.attachMedia(video); }
-  else if (video.canPlayType('application/vnd.apple.mpegurl')) { video.src = src; }
-  else { document.body.insertAdjacentHTML('beforeend','<p>Browser tidak mendukung HLS.</p>'); }
+  const src = play.playlist;
+
+  // ===== init HLS (m3u8) dengan fallback Safari/native =====
+  if (Hls.isSupported()) {
+    const hls = new Hls({ autoStartLoad:true });
+    hls.loadSource(src);
+    hls.attachMedia(video);
+    hls.on(Hls.Events.ERROR, (_, data) => {
+      if (data?.fatal) {
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
+        else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+        else { hls.destroy(); video.src = src; }
+      }
+    });
+  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = src; // Safari
+  } else {
+    document.body.insertAdjacentHTML('beforeend','<p>Browser tidak mendukung HLS.</p>');
+  }
+
+  // ===== FULLSCREEN CONTAINER (bukan native video) =====
+  const wrap = document.getElementById('wrap');
+  const fsBtn = document.getElementById('fsBtn');
+
+  async function toggleFS(){
+    const inFS = document.fullscreenElement === wrap || document.webkitFullscreenElement === wrap;
+    if (inFS) {
+      (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
+    } else {
+      (wrap.requestFullscreen || wrap.webkitRequestFullscreen)?.call(wrap);
+    }
+  }
+  fsBtn.addEventListener('click', toggleFS);
+  addEventListener('keydown', (e)=>{ if(e.key==='f') toggleFS(); });
+
+  function onFSChange(){
+    const active = document.fullscreenElement === wrap || document.webkitFullscreenElement === wrap;
+    fsBtn.textContent = active ? 'Keluar Fullscreen' : 'Fullscreen';
+  }
+  document.addEventListener('fullscreenchange', onFSChange);
+  document.addEventListener('webkitfullscreenchange', onFSChange);
 })();
 </script>

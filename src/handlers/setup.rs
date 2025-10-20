@@ -1,12 +1,15 @@
 // src/handlers/setup.rs
-use axum::{extract::{Query, State}, response::Html};
+use axum::{
+    extract::{Query, State},
+    response::Html,
+};
+use chrono::Utc;
 use serde::Deserialize;
 use sqlx::PgPool;
 use uuid::Uuid;
-use chrono::Utc;
 
+use argon2::password_hash::{rand_core::OsRng, SaltString};
 use argon2::{Argon2, PasswordHasher};
-use argon2::password_hash::{SaltString, rand_core::OsRng};
 
 #[derive(Clone)]
 pub struct SetupState {
@@ -31,8 +34,10 @@ pub async fn setup_admin(
     }
 
     // Baca email & password bootstrap dari ENV
-    let email = std::env::var("ADMIN_BOOTSTRAP_EMAIL").unwrap_or_else(|_| "admin@example.com".into());
-    let password = std::env::var("ADMIN_BOOTSTRAP_PASSWORD").unwrap_or_else(|_| "ChangeMe123!".into());
+    let email =
+        std::env::var("ADMIN_BOOTSTRAP_EMAIL").unwrap_or_else(|_| "admin@example.com".into());
+    let password =
+        std::env::var("ADMIN_BOOTSTRAP_PASSWORD").unwrap_or_else(|_| "ChangeMe123!".into());
 
     let email_norm = email.to_ascii_lowercase();
 
@@ -55,7 +60,10 @@ pub async fn setup_admin(
                 r#"UPDATE users SET is_admin=1, password_hash=$1 WHERE id=$2"#,
                 hash,
                 uid
-            ).execute(&st.pool).await {
+            )
+            .execute(&st.pool)
+            .await
+            {
                 return Html(format!("<h1>Error</h1><pre>UPDATE failed: {e}</pre>"));
             }
             Html("<h1>OK</h1><p>Existing user promoted to admin and password reset.</p>".into())
@@ -75,7 +83,10 @@ pub async fn setup_admin(
                 email,
                 hash,
                 now
-            ).execute(&st.pool).await {
+            )
+            .execute(&st.pool)
+            .await
+            {
                 return Html(format!("<h1>Error</h1><pre>INSERT failed: {e}</pre>"));
             }
             Html("<h1>OK</h1><p>Admin user created.</p>".into())

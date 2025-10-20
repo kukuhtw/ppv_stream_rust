@@ -7,14 +7,14 @@ use axum::{
 use serde::Deserialize;
 use tower_cookies::Cookies;
 
+use argon2::password_hash::{rand_core::OsRng, PasswordHash, SaltString};
 use argon2::{Argon2, PasswordHasher, PasswordVerifier};
-use argon2::password_hash::{PasswordHash, SaltString, rand_core::OsRng};
 
 use chrono::{Duration, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::{validators, sessions, email};
+use crate::{email, sessions, validators};
 
 #[derive(Clone)]
 pub struct AuthUserState {
@@ -44,12 +44,11 @@ pub async fn post_register(
     }
 
     // Cek email sudah terpakai
-    if let Ok(Some(_)) = sqlx::query_scalar::<_, i64>(
-        "SELECT 1 FROM users WHERE email = $1 LIMIT 1"
-    )
-    .bind(f.email.to_ascii_lowercase())
-    .fetch_optional(&st.pool)
-    .await
+    if let Ok(Some(_)) =
+        sqlx::query_scalar::<_, i64>("SELECT 1 FROM users WHERE email = $1 LIMIT 1")
+            .bind(f.email.to_ascii_lowercase())
+            .fetch_optional(&st.pool)
+            .await
     {
         return Redirect::to("/public/auth/register.html?status=fail&reason=email_taken");
     }
@@ -58,7 +57,9 @@ pub async fn post_register(
     let salt = SaltString::generate(&mut OsRng);
     let hash = match Argon2::default().hash_password(f.password.as_bytes(), &salt) {
         Ok(h) => h.to_string(),
-        Err(_) => return Redirect::to("/public/auth/register.html?status=fail&reason=server_error"),
+        Err(_) => {
+            return Redirect::to("/public/auth/register.html?status=fail&reason=server_error")
+        }
     };
 
     let uid = Uuid::new_v4().to_string();
@@ -141,7 +142,10 @@ pub async fn post_login(
         .is_ok()
     {
         let uid: &str = &row.id;
-        if sessions::create_session(&st.pool, uid, false, &cookies).await.is_err() {
+        if sessions::create_session(&st.pool, uid, false, &cookies)
+            .await
+            .is_err()
+        {
             return Redirect::to("/public/auth/login.html?status=fail&reason=server_error");
         }
         // ✅ SUKSES → ke dashboard user
@@ -149,14 +153,10 @@ pub async fn post_login(
     } else {
         Redirect::to("/public/auth/login.html?status=fail&reason=bad_credentials")
     }
-// ...
-
+    // ...
 }
 
-pub async fn post_logout(
-    State(st): State<AuthUserState>,
-    cookies: Cookies,
-) -> impl IntoResponse {
+pub async fn post_logout(State(st): State<AuthUserState>, cookies: Cookies) -> impl IntoResponse {
     let _ = sessions::destroy_session(&st.pool, &cookies).await;
     Redirect::to("/public/auth/login.html?status=ok")
 }
@@ -233,7 +233,9 @@ pub async fn post_reset(
     .await
     {
         Ok(r) => r,
-        Err(_) => return Redirect::to("/public/auth/reset_password.html?status=fail&reason=server_error"),
+        Err(_) => {
+            return Redirect::to("/public/auth/reset_password.html?status=fail&reason=server_error")
+        }
     };
 
     let Some(r) = row else {
@@ -251,7 +253,11 @@ pub async fn post_reset(
         .map(|dt| dt.with_timezone(&Utc))
     {
         Some(dt) => dt,
-        None => return Redirect::to("/public/auth/reset_password.html?status=fail&reason=invalid_token"),
+        None => {
+            return Redirect::to(
+                "/public/auth/reset_password.html?status=fail&reason=invalid_token",
+            )
+        }
     };
 
     if exp_dt < Utc::now() {
@@ -262,7 +268,9 @@ pub async fn post_reset(
     let salt = SaltString::generate(&mut OsRng);
     let hash = match Argon2::default().hash_password(f.password.as_bytes(), &salt) {
         Ok(h) => h.to_string(),
-        Err(_) => return Redirect::to("/public/auth/reset_password.html?status=fail&reason=server_error"),
+        Err(_) => {
+            return Redirect::to("/public/auth/reset_password.html?status=fail&reason=server_error")
+        }
     };
 
     let uid: &str = &r.user_id;

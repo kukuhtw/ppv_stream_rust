@@ -2,8 +2,8 @@
 pub mod admin;
 pub mod auth_admin;
 pub mod auth_user;
+pub mod me;
 pub mod setup;
 pub mod stream;
 pub mod upload;
-pub mod video;
-pub mod me;     // ✅ tambahkan baris ini
+pub mod video; // ✅ tambahkan baris ini

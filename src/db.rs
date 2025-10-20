@@ -1,6 +1,6 @@
 // src/db.rs
-use sqlx::{Pool, Postgres};
 use sqlx::postgres::PgPoolOptions;
+use sqlx::{Pool, Postgres};
 use tracing::info;
 
 pub type PgPool = Pool<Postgres>;

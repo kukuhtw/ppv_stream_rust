@@ -1,20 +1,25 @@
 // src/bin/seed_dummy.rs
+#![allow(clippy::needless_return)]
+
 use anyhow::{anyhow, Context, Result};
+use argon2::password_hash::{rand_core::OsRng, SaltString};
 use argon2::{Argon2, PasswordHasher};
-use argon2::password_hash::{SaltString, rand_core::OsRng};
 use chrono::Utc;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    dotenvy::dotenv().ok(); // kalau ada .env
-    let db_url = std::env::var("DATABASE_URL")
-        .context("Missing DATABASE_URL")?;
-    let pool = Pool::<Postgres>::connect(&db_url).await
+    // Kalau .env kamu ada baris "aneh", sementara disable saja:
+    // dotenvy::dotenv().ok();
+
+    // Lebih aman: baca langsung dari env process (export di shell/Makefile)
+    let db_url = std::env::var("DATABASE_URL").context("Missing DATABASE_URL")?;
+    let pool = Pool::<Postgres>::connect(&db_url)
+        .await
         .context("connect db")?;
 
-    // daftar 10 user dummy
+    // Siapkan 10 user dummy
     let mut users = Vec::new();
     for i in 1..=10 {
         let uname = format!("user{:02}", i);
@@ -24,49 +29,60 @@ async fn main() -> Result<()> {
     }
 
     for (username, email, plain) in users {
-        // cek eksistensi via email (UNIQUE)
-        let exists: Option<i64> = sqlx::query_scalar(
+        let email_lc = email.to_ascii_lowercase();
+
+        // Cek exist dengan query runtime (ini sudah runtime, bukan macro !)
+        let exists: Option<i32> = sqlx::query_scalar::<_, i32>(
             r#"SELECT 1 FROM users WHERE email = $1 LIMIT 1"#,
         )
-        .bind(&email.to_ascii_lowercase())
+        .bind(&email_lc)
         .fetch_optional(&pool)
         .await
         .context("query exists")?;
 
         if exists.is_some() {
-            println!("[seed] skip existing {}", email);
+            println!("[seed] skip existing {}", email_lc);
             continue;
         }
 
-        // hash argon2 (hindari .context karena error type tidak StdError)
+        // Hash Argon2
         let salt = SaltString::generate(&mut OsRng);
         let hash = Argon2::default()
             .hash_password(plain.as_bytes(), &salt)
             .map_err(|e| anyhow!("argon2 hash: {e}"))?
             .to_string();
 
+        // UUID sebagai TEXT
         let uid = Uuid::new_v4().to_string();
-        let now = Utc::now().to_rfc3339();
 
-        sqlx::query!(
+        // Timestamp RFC3339 untuk kolom TEXT created_at
+        let now_rfc3339 = Utc::now().to_rfc3339();
+
+        // Insert pakai sqlx::query (BUKAN query!)
+        let rows = sqlx::query(
             r#"
             INSERT INTO users (id, username, email, password_hash, is_admin, created_at)
-            VALUES ($1, $2, $3, $4, 0, $5)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (email) DO NOTHING
             "#,
-            uid,
-            username.trim(),
-            email.to_ascii_lowercase(),
-            hash,
-            now
         )
+        .bind(&uid)               // $1
+        .bind(username.trim())    // $2
+        .bind(&email_lc)          // $3
+        .bind(&hash)              // $4
+        .bind(0i32)               // $5
+        .bind(&now_rfc3339)       // $6
         .execute(&pool)
         .await
-        .with_context(|| format!("insert user {}", email))?;
+        .with_context(|| format!("insert user {}", username))?;
 
-        println!("[seed] inserted {} (user={})", email, username);
+        if rows.rows_affected() > 0 {
+            println!("[seed] inserted {}", username);
+        } else {
+            println!("[seed] skipped (conflict) {}", username);
+        }
     }
 
     println!("[seed] done.");
     Ok(())
 }
-

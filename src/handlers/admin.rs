@@ -1,9 +1,12 @@
 // src/handlers/admin.rs
-use axum::{extract::{Query, State}, response::Html};
+use axum::{
+    extract::{Query, State},
+    response::Html,
+};
 use serde::Deserialize;
 use sqlx::Row; // untuk akses row.get::<T,_>()
-// use crate::sessions; // jika ingin cek session admin
-// use tower_cookies::Cookies;
+               // use crate::sessions; // jika ingin cek session admin
+               // use tower_cookies::Cookies;
 
 #[derive(Clone)]
 pub struct AdminState {
@@ -34,10 +37,10 @@ pub async fn admin_data(
     // Helper escape HTML
     fn esc(s: &str) -> String {
         s.replace('&', "&amp;")
-         .replace('<', "&lt;")
-         .replace('>', "&gt;")
-         .replace('"', "&quot;")
-         .replace('\'', "&#39;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('"', "&quot;")
+            .replace('\'', "&#39;")
     }
 
     // ---- Ambil data per tabel ----
@@ -46,74 +49,98 @@ pub async fn admin_data(
         r#"SELECT id, username, email, is_admin, created_at
            FROM users
            ORDER BY created_at DESC
-           LIMIT $1"#
+           LIMIT $1"#,
     )
     .bind(limit as i64)
-    .fetch_all(&st.pool).await.unwrap_or_default();
+    .fetch_all(&st.pool)
+    .await
+    .unwrap_or_default();
 
     // sessions
     let sessions_rows = sqlx::query(
         r#"SELECT id, user_id, is_admin, created_at, expires_at
            FROM sessions
            ORDER BY created_at DESC
-           LIMIT $1"#
+           LIMIT $1"#,
     )
     .bind(limit as i64)
-    .fetch_all(&st.pool).await.unwrap_or_default();
+    .fetch_all(&st.pool)
+    .await
+    .unwrap_or_default();
 
     // videos
     let videos = sqlx::query(
         r#"SELECT id, owner_id, title, price_cents, filename, created_at
            FROM videos
            ORDER BY created_at DESC
-           LIMIT $1"#
+           LIMIT $1"#,
     )
     .bind(limit as i64)
-    .fetch_all(&st.pool).await.unwrap_or_default();
+    .fetch_all(&st.pool)
+    .await
+    .unwrap_or_default();
 
     // allowlist
     let allowlist = sqlx::query(
         r#"SELECT video_id, username
            FROM allowlist
            ORDER BY video_id, username
-           LIMIT $1"#
+           LIMIT $1"#,
     )
     .bind(limit as i64)
-    .fetch_all(&st.pool).await.unwrap_or_default();
+    .fetch_all(&st.pool)
+    .await
+    .unwrap_or_default();
 
     // purchases
     let purchases = sqlx::query(
         r#"SELECT id, user_id, video_id, created_at
            FROM purchases
            ORDER BY created_at DESC
-           LIMIT $1"#
+           LIMIT $1"#,
     )
     .bind(limit as i64)
-    .fetch_all(&st.pool).await.unwrap_or_default();
+    .fetch_all(&st.pool)
+    .await
+    .unwrap_or_default();
 
     // password_resets
     let resets = sqlx::query(
         r#"SELECT id, user_id, token, expires_at, used, created_at
            FROM password_resets
            ORDER BY created_at DESC
-           LIMIT $1"#
+           LIMIT $1"#,
     )
     .bind(limit as i64)
-    .fetch_all(&st.pool).await.unwrap_or_default();
+    .fetch_all(&st.pool)
+    .await
+    .unwrap_or_default();
 
     // ---- Hitung total per tabel (opsional, cepat & informatif) ----
     let total_users: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
-        .fetch_one(&st.pool).await.unwrap_or(0);
+        .fetch_one(&st.pool)
+        .await
+        .unwrap_or(0);
     let total_sessions: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sessions")
-        .fetch_one(&st.pool).await.unwrap_or(0);
+        .fetch_one(&st.pool)
+        .await
+        .unwrap_or(0);
     let total_videos: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM videos")
-        .fetch_one(&st.pool).await.unwrap_or(0);
+        .fetch_one(&st.pool)
+        .await
+        .unwrap_or(0);
     let total_allowlist: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM allowlist")
-        .fetch_one(&st.pool).await.unwrap_or(0);
+        .fetch_one(&st.pool)
+        .await
+        .unwrap_or(0);
     let total_purchases: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM purchases")
-        .fetch_one(&st.pool).await.unwrap_or(0);
+        .fetch_one(&st.pool)
+        .await
+        .unwrap_or(0);
     let total_resets: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM password_resets")
-        .fetch_one(&st.pool).await.unwrap_or(0);
+        .fetch_one(&st.pool)
+        .await
+        .unwrap_or(0);
 
     // ---- Builder HTML ----
     let mut html = String::new();
@@ -202,30 +229,37 @@ pub async fn admin_data(
     html.push_str("</tbody></table></div>");
 
     // allowlist
-    html.push_str(&format!(r#"
+    html.push_str(&format!(
+        r#"
 <div class="card"><h2>allowlist <span class="caps">(total: {})</span></h2>
 <table>
   <thead><tr><th>video_id</th><th>username</th></tr></thead>
   <tbody>
-"#, total_allowlist));
+"#,
+        total_allowlist
+    ));
 
     for r in &allowlist {
         let video_id: String = r.get("video_id");
         let username: String = r.get("username");
         html.push_str(&format!(
             "<tr><td class='mono'>{}</td><td>{}</td></tr>",
-            esc(&video_id), esc(&username)
+            esc(&video_id),
+            esc(&username)
         ));
     }
     html.push_str("</tbody></table></div>");
 
     // purchases
-    html.push_str(&format!(r#"
+    html.push_str(&format!(
+        r#"
 <div class="card"><h2>purchases <span class="caps">(total: {})</span></h2>
 <table>
   <thead><tr><th>id</th><th>user_id</th><th>video_id</th><th>created_at</th></tr></thead>
   <tbody>
-"#, total_purchases));
+"#,
+        total_purchases
+    ));
 
     for r in &purchases {
         let id: String = r.get("id");

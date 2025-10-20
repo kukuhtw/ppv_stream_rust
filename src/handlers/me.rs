@@ -6,7 +6,9 @@ use tower_cookies::Cookies;
 use crate::sessions;
 
 #[derive(Clone)]
-pub struct MeState { pub pool: PgPool }
+pub struct MeState {
+    pub pool: PgPool,
+}
 
 pub async fn me(State(st): State<MeState>, cookies: Cookies) -> impl IntoResponse {
     let Some((uid, _is_admin)) = sessions::current_user_id(&st.pool, &cookies).await else {
@@ -14,8 +16,12 @@ pub async fn me(State(st): State<MeState>, cookies: Cookies) -> impl IntoRespons
     };
 
     let row = match sqlx::query!(
-        r#"SELECT id, username, email FROM users WHERE id = $1 LIMIT 1"#, uid
-    ).fetch_optional(&st.pool).await {
+        r#"SELECT id, username, email FROM users WHERE id = $1 LIMIT 1"#,
+        uid
+    )
+    .fetch_optional(&st.pool)
+    .await
+    {
         Ok(r) => r,
         Err(e) => return Json(serde_json::json!({"ok": false, "error": format!("db: {e}")})),
     };

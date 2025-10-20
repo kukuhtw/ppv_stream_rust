@@ -1,4 +1,3 @@
-
 // src/email.rs
 
 use tracing::info;

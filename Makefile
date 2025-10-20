@@ -103,7 +103,10 @@ migrate:
 	
 seed:
 	@echo "==> Seeding 10 dummy users via binary..."
-	@docker exec -e RUST_LOG=info ppv_stream_app /usr/local/bin/seed_dummy || (echo "seed failed"; exit 1)
+	@docker exec \
+	  -e RUST_LOG=info \
+	  -e DATABASE_URL=postgres://ppv:secret@db:5432/ppv_stream \
+	  ppv_stream_app /usr/local/bin/seed_dummy || (echo "seed failed"; exit 1)
 
 # ----- App lifecycle -----
 # Build pakai cache (lebih cepat untuk dev). Gunakan 'rebuild' untuk no-cache.
