@@ -8,58 +8,59 @@
   <link rel="stylesheet" href="/public/styles.css">
   <style>
     :root { color-scheme: light dark; }
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Arial, sans-serif; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Arial, sans-serif; margin: 16px; }
     nav { display:flex; gap:12px; align-items:center; margin-bottom:16px; }
+    .spacer { flex: 1 1 auto; }
+    .badge { background: rgba(0,0,0,.08); padding: 4px 8px; border-radius: 8px; }
     .card { border:1px solid rgba(0,0,0,.15); border-radius:12px; padding:16px; margin:18px 0; background:rgba(0,0,0,.03); }
     label { display:block; margin:10px 0; }
-    input, select, button { font: inherit; padding:8px 10px; }
+    input, select, button, textarea { font: inherit; padding:8px 10px; }
+    textarea { width: 100%; resize: vertical; }
     button.primary { background:#0b67ff; color:#fff; border:0; border-radius:10px; padding:10px 14px; cursor:pointer; }
+    button.ghost { background:transparent; border:1px dashed rgba(0,0,0,.35); border-radius:10px; padding:8px 10px; cursor:pointer; }
     small.muted { opacity:.8; }
+    .row { display:flex; gap:12px; align-items:center; flex-wrap: wrap; }
+    .list-empty { opacity:.75; padding:8px 0; }
+    code.kbd { background: rgba(0,0,0,.08); padding: 0 6px; border-radius: 6px; }
   </style>
 </head>
 
 <body>
   <nav>
-  <a href="/public/browse.html">Browse</a>
-  <a href="/public/dashboard.html">Dashboard</a>
-  <span class="spacer"></span>
-  <span id="userbar" class="badge">Memuat user…</span>
-  <form id="logoutForm" style="display:inline" onsubmit="return false">
-    <button id="logoutBtn" class="primary" type="button" title="Logout aman (POST)">Logout</button>
-  </form>
-</nav>
-<script>
-// loadMe() sama persis
-(async function loadMe(){ try{const r=await fetch('/api/me');const j=await r.json();const el=document.getElementById('userbar');if(j.ok&&j.user){el.innerHTML=`Login: <b>${j.user.username}</b> &lt;${j.user.email}&gt;`;}else{el.innerHTML=`<a href="/public/auth/login.html">Login</a>`;}}catch{document.getElementById('userbar').textContent='User: (gagal memuat)';}})();
-</script>
-
-  <h1>Dashboard Pengguna</h1>
-
-  <nav>
-    <a href="/public/browse.html">Lihat Video</a>
-    <form id="logoutForm" style="display:inline" onsubmit="return false">
+    <a href="/public/browse.html">Browse</a>
+    <a href="/public/dashboard.html" aria-current="page">Dashboard</a>
+    <span class="spacer"></span>
+    <span id="userbar" class="badge">Memuat user…</span>
+    <form id="logoutForm" onsubmit="return false">
       <button id="logoutBtn" class="primary" type="button" title="Logout aman (POST)">Logout</button>
     </form>
   </nav>
 
-  <section>
-    <p>Selamat datang di platform streaming video berbayar!</p>
-    <p>Upload video Anda, tetapkan harga, dan dapatkan penghasilan dari penonton.</p>
-  </section>
+  <h1>Dashboard Pengguna</h1>
 
-    <!-- ================= Video Saya & Akses ================= -->
   <section class="card">
-    <h2>Video Saya & Akses</h2>
-    <div id="mine"></div>
+    <p>Selamat datang di platform streaming video berbayar! Upload video Anda, tetapkan harga, dan dapatkan penghasilan dari penonton.</p>
+    <p class="muted">Tip: tekan <code class="kbd">F</code> di halaman Tonton untuk toggle fullscreen.</p>
   </section>
 
+  <!-- ================= Video Saya & Akses ================= -->
+  <section class="card">
+    <div class="row">
+      <h2 style="margin:0">Video Saya & Akses</h2>
+      <button id="refreshBtn" class="ghost" type="button" title="Refresh daftar">↻ Refresh</button>
+    </div>
+    <div id="mine" class="list-empty">Memuat…</div>
+  </section>
 
   <!-- ================= Upload ================= -->
   <section class="card">
     <h2>Upload Video</h2>
     <form id="uploadForm" enctype="multipart/form-data">
       <label>Judul
-        <input name="title" value="Untitled" required>
+        <input name="title" value="Untitled" required maxlength="160">
+      </label>
+      <label>Deskripsi (opsional)
+        <textarea name="description" rows="3" placeholder="Tuliskan ringkasan video…"></textarea>
       </label>
       <label>Harga (cents)
         <input name="price_cents" type="number" min="0" value="0" required>
@@ -76,12 +77,9 @@
   <section class="card">
     <h2>Grant Akses (Allowlist)</h2>
     <form id="allow">
-      <!-- Select terlihat (tanpa name) -->
       <label>Video
         <select id="videoSelect" required></select>
       </label>
-
-      <!-- Field yang dikirim ke server -->
       <input type="hidden" name="video_id" id="videoIdHidden">
       <small id="videoIdEcho" class="muted" style="display:block;margin:-6px 0 8px 0"></small>
 
@@ -95,17 +93,39 @@
   </section>
 
   <script>
-  // ===== util toast sederhana =====
+  // ===== util =====
   function toast(msg, ok=true){ alert((ok ? "✅ " : "❌ ") + msg); }
+  function escapeHtml(s){
+    return String(s ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
+  }
 
-  // ===== Logout (POST /auth/logout lalu redirect ke login) =====
+  // ===== user bar =====
+  (async function loadMe(){
+    try {
+      const r = await fetch('/api/me');
+      const j = await r.json();
+      const el = document.getElementById('userbar');
+      if(j.ok && j.user){
+        el.innerHTML = `Login: <b>${escapeHtml(j.user.username)}</b> &lt;${escapeHtml(j.user.email)}&gt;`;
+      } else {
+        el.innerHTML = `<a href="/public/auth/login.html">Login</a>`;
+      }
+    } catch {
+      document.getElementById('userbar').textContent='User: (gagal memuat)';
+    }
+  })();
+
+  // ===== Logout =====
   document.getElementById('logoutBtn').addEventListener('click', async () => {
     try {
-      const r = await fetch('/auth/logout', { method: 'POST' });
-      // Terlepas dari respons, arahkan ke halaman login publik
+      await fetch('/auth/logout', { method: 'POST' });
       location.href = '/public/auth/login.html?status=ok';
-    } catch (e) {
-      // fallback
+    } catch {
       location.href = '/public/auth/login.html';
     }
   });
@@ -120,16 +140,14 @@
       const isJson = (r.headers.get('content-type')||'').includes('application/json');
       const j = isJson ? await r.json() : { error: await r.text() };
 
-      if (!r.ok) {
-        // backend kirim string error → tampilkan jelas
+      if (!r.ok || j.ok === false) {
         toast(`Upload gagal: ${j.error || 'unknown error'}`, false);
         return;
       }
-      // Sukses: backend kirim {video_id, owner_id, path}
       toast(`Upload sukses. Video ID: ${j.video_id}`);
       uploadForm.reset();
-      // Refresh dropdown video agar video baru muncul
       await loadMyVideos();
+      await renderMyVideos();
     } catch (e2) {
       toast(`Upload gagal (network/format): ${e2}`, false);
     }
@@ -146,7 +164,14 @@
   function syncVideoIdEcho(){
     const vid = videoSelect.value || "";
     videoHidden.value = vid;
-    videoEcho.textContent = vid ? `video_id: ${vid}` : '';
+    videoEcho.textContent = vid ? `video_id: ${vid} ` : '';
+    if (vid) {
+      videoEcho.innerHTML = `video_id: ${escapeHtml(vid)} <button class="ghost" type="button" id="copyVidBtn">Copy</button>`;
+      const btn = document.getElementById('copyVidBtn');
+      btn.onclick = async () => {
+        try { await navigator.clipboard.writeText(vid); toast('Video ID disalin'); } catch {}
+      };
+    }
   }
 
   async function loadMyVideos(){
@@ -155,7 +180,7 @@
       const j = await r.json();
       if (j.ok && Array.isArray(j.videos) && j.videos.length) {
         videoSelect.innerHTML = j.videos
-          .map(v => `<option value="${v.id}">${v.title} — ${v.id}</option>`)
+          .map(v => `<option value="${v.id}">${escapeHtml(v.title)} — ${v.id}</option>`)
           .join('');
       } else {
         videoSelect.innerHTML = '<option value="">(Belum ada video)</option>';
@@ -166,11 +191,7 @@
     syncVideoIdEcho();
   }
 
-  // load awal
-  loadMyVideos();
-  videoSelect.addEventListener('change', syncVideoIdEcho);
-
-  // Lookup user_id live
+  // Lookup user_id live (debounce)
   let t;
   usernameInp.addEventListener('input', () => {
     clearTimeout(t);
@@ -190,10 +211,9 @@
     }, 300);
   });
 
-  // Submit allowlist
   allowForm.onsubmit = async (e) => {
     e.preventDefault();
-    const body = new URLSearchParams(new FormData(allowForm)); // include hidden video_id
+    const body = new URLSearchParams(new FormData(allowForm));
     try {
       const r = await fetch('/api/allow', {
         method: 'POST',
@@ -201,24 +221,24 @@
         body
       });
       const j = await r.json().catch(async () => ({ ok:false, error: await r.text() }));
-
       if (!r.ok || j.ok === false) {
-        // server add_allow mengirim {ok:false, error, where?}
         toast(`Gagal allowlist${j.where ? ' ['+j.where+']' : ''}: ${j.error || 'unknown'}`, false);
         return;
       }
       toast(`Allowlist sukses: ${j.username} → video ${j.video_id}`);
       allowForm.reset();
       lookupBox.textContent = '';
-      // setelah reset, select tetap, tapi hidden kosong—sync lagi
       syncVideoIdEcho();
+      await renderMyVideos();
     } catch (e2) {
       toast(`Gagal allowlist: ${e2}`, false);
     }
   };
-async function renderMyVideos() {
+
+  // ================= Render "Video Saya" =================
+  async function renderMyVideos() {
     const box = document.getElementById('mine');
-    box.innerHTML = '<p>Memuat...</p>';
+    box.innerHTML = '<p>Memuat…</p>';
     try {
       const r = await fetch('/api/my_videos');
       const j = await r.json();
@@ -227,20 +247,37 @@ async function renderMyVideos() {
         return;
       }
       if (!Array.isArray(j.videos) || j.videos.length === 0) {
-        box.innerHTML = '<p class="muted">Belum ada video yang Anda unggah.</p>';
+        box.innerHTML = '<p class="list-empty">Belum ada video yang Anda unggah.</p>';
         return;
       }
 
       const html = j.videos.map(v => {
-        const users = (v.allow_users || []).map(u => `<code>${u}</code>`).join(', ');
-        const price = (v.price_cents/100).toLocaleString('id-ID');
+        const users = (v.allow_users || []).map(u => `<code>${escapeHtml(u)}</code>`).join(', ');
+        const priceIDR = (v.price_cents/100).toLocaleString('id-ID');
 
         return `
           <div class="card" style="background:rgba(0,0,0,.02)">
-            <h3 style="margin:0 0 6px 0">${v.title}</h3>
-            <small class="muted">ID: ${v.id} • Dibuat: ${v.created_at}</small>
-            <p style="margin:8px 0 4px 0">Harga: Rp ${price}</p>
+            <h3 style="margin:0 0 6px 0">${escapeHtml(v.title)}</h3>
+            <small class="muted">ID: ${escapeHtml(v.id)} • Dibuat: ${escapeHtml(v.created_at)}</small>
+            <p style="margin:8px 0 4px 0">Harga sekarang: Rp ${priceIDR}</p>
             <details>
+              <summary>Edit judul, deskripsi, dan harga (cent)</summary>
+              <form class="edit-form" data-video-id="${escapeHtml(v.id)}" style="margin-top:10px">
+                <input type="hidden" name="video_id" value="${escapeHtml(v.id)}">
+                <label>Judul
+                  <input name="title" required maxlength="160" value="${escapeHtml(v.title)}">
+                </label>
+                <label>Deskripsi
+                  <textarea name="description" rows="3">${escapeHtml(v.description || '')}</textarea>
+                </label>
+                <label>Harga (cents)
+                  <input name="price_cents" type="number" min="0" required value="${v.price_cents}">
+                </label>
+                <button class="primary" type="submit">Simpan Perubahan</button>
+              </form>
+            </details>
+
+            <details style="margin-top:8px">
               <summary>Allowlist (${v.allow_count})</summary>
               <div style="margin-top:6px">
                 ${users || '<span class="muted">(Belum ada user diizinkan)</span>'}
@@ -251,31 +288,57 @@ async function renderMyVideos() {
       }).join('');
 
       box.innerHTML = html;
+      // catatan: handler form dipasang via event delegation di bawah
     } catch (e) {
       box.innerHTML = `<p class="muted">Error: ${e}</p>`;
     }
   }
 
-  // panggil saat load, dan setelah upload/allow sukses
+  // ---- Event delegation: submit form edit (tanpa menyuntik <script> via innerHTML) ----
+  document.getElementById('mine').addEventListener('submit', async (e) => {
+    const form = e.target.closest('form.edit-form');
+    if (!form) return;
+    e.preventDefault();
+
+    const body = new URLSearchParams(new FormData(form));
+    const pc = Number(body.get('price_cents') || 0);
+    if (Number.isNaN(pc) || pc < 0) {
+      toast('Harga (cents) harus >= 0', false);
+      return;
+    }
+
+    try {
+      const r = await fetch('/api/video_update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body
+      });
+      const j = await r.json().catch(async ()=>({ok:false, error: await r.text()}));
+      if (!r.ok || j.ok === false) {
+        toast("Gagal update: " + (j.error || "unknown"), false);
+      } else {
+        toast("Video berhasil diupdate");
+        await renderMyVideos();
+        await loadMyVideos(); // refresh dropdown allow
+      }
+    } catch (err) {
+      toast("Gagal update: " + err, false);
+    }
+  });
+
+  // expose untuk panggil ulang bila perlu
+  window.renderMyVideos = renderMyVideos;
+
+  // ===== Inisialisasi & tombol refresh =====
   (async () => {
     await loadMyVideos();
     await renderMyVideos();
   })();
 
-  // Setelah upload sukses, panggil render ulang
-  const _oldUpload = uploadForm.onsubmit;
-  uploadForm.onsubmit = async (e) => {
-    await _oldUpload(e);
+  document.getElementById('refreshBtn').addEventListener('click', async () => {
+    await loadMyVideos();
     await renderMyVideos();
-  };
-
-  // Setelah allow sukses, panggil render ulang
-  const _oldAllow = allowForm.onsubmit;
-  allowForm.onsubmit = async (e) => {
-    await _oldAllow(e);
-    await renderMyVideos();
-  };
-  
+  });
   </script>
 </body>
 </html>

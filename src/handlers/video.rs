@@ -22,21 +22,23 @@ pub struct VideoItem {
     pub owner_id: String,
     pub owner_name: String, // nama owner untuk UI
     pub title: String,
+    pub description: String, // ← NEW
     pub price_cents: i64,
     pub filename: String,
     pub created_at: String,
 }
 
 // GET /api/videos  → listing umum (dengan owner_name)
-// GET /api/videos  → listing umum (dengan owner_name)
+// GET /api/videos  → listing umum (dengan owner_name + description)
 pub async fn list_videos(State(st): State<VideoState>) -> impl IntoResponse {
     let rows = match sqlx::query!(
         r#"
         SELECT
           v.id,
           v.owner_id,
-          COALESCE(u.username, '(tidak diketahui)') AS owner_name, -- ← selalu non-null
+          COALESCE(u.username, '(tidak diketahui)') AS owner_name,
           v.title,
+          COALESCE(v.description, '') AS description,
           v.price_cents,
           v.filename,
           v.created_at
@@ -59,10 +61,9 @@ pub async fn list_videos(State(st): State<VideoState>) -> impl IntoResponse {
         .map(|r| VideoItem {
             id: r.id,
             owner_id: r.owner_id,
-            owner_name: r
-                .owner_name
-                .unwrap_or_else(|| "(tidak diketahui)".to_string()),
+            owner_name: r.owner_name.unwrap_or_else(|| "(tidak diketahui)".to_string()),
             title: r.title,
+            description: r.description.unwrap_or_default(),
             price_cents: r.price_cents,
             filename: r.filename,
             created_at: r.created_at,
@@ -72,18 +73,21 @@ pub async fn list_videos(State(st): State<VideoState>) -> impl IntoResponse {
     Json(serde_json::json!({ "ok": true, "videos": list }))
 }
 
+
 // ==== MY VIDEOS (dengan allowlist) ====
 
 #[derive(Serialize)]
 struct MyVideo {
     id: String,
     title: String,
+    description: String, // ← NEW
     price_cents: i64,
     created_at: String,
     allow_count: usize,
     allow_users: Vec<String>,
 }
 
+// GET /api/my_videos → butuh login
 // GET /api/my_videos → butuh login
 pub async fn my_videos(State(st): State<VideoState>, cookies: Cookies) -> impl IntoResponse {
     let (uid, _is_admin) = match sessions::current_user_id(&st.pool, &cookies).await {
@@ -93,7 +97,7 @@ pub async fn my_videos(State(st): State<VideoState>, cookies: Cookies) -> impl I
 
     let vids = match sqlx::query!(
         r#"
-        SELECT id, title, price_cents, created_at
+        SELECT id, title, COALESCE(description,'') AS description, price_cents, created_at
         FROM videos
         WHERE owner_id = $1
         ORDER BY created_at DESC
@@ -128,6 +132,7 @@ pub async fn my_videos(State(st): State<VideoState>, cookies: Cookies) -> impl I
         Err(e) => return Json(serde_json::json!({"ok": false, "error": format!("db allow: {e}")})),
     };
 
+    use std::collections::HashMap;
     let mut map: HashMap<String, Vec<String>> = HashMap::new();
     for ar in allow_rows {
         map.entry(ar.video_id).or_default().push(ar.username);
@@ -140,7 +145,8 @@ pub async fn my_videos(State(st): State<VideoState>, cookies: Cookies) -> impl I
             MyVideo {
                 id: v.id,
                 title: v.title,
-                price_cents: v.price_cents, // NOT NULL
+                description: v.description.unwrap_or_default(),
+                price_cents: v.price_cents,
                 created_at: v.created_at,
                 allow_count: lst.len(),
                 allow_users: lst,
@@ -151,12 +157,86 @@ pub async fn my_videos(State(st): State<VideoState>, cookies: Cookies) -> impl I
     Json(serde_json::json!({ "ok": true, "videos": out }))
 }
 
+
 // ==== USER LOOKUP ====
 
 #[derive(Deserialize)]
 pub struct LookupQs {
     pub username: String,
 }
+
+#[derive(Deserialize)]
+pub struct UpdateVideoForm {
+    pub video_id: String,
+    pub title: String,
+    pub description: String,
+    pub price_cents: i64,
+}
+
+// POST /api/video_update (x-www-form-urlencoded)
+// Hanya boleh oleh owner video.
+pub async fn update_video(
+    State(st): State<VideoState>,
+    cookies: Cookies,
+    Form(f): Form<UpdateVideoForm>,
+) -> impl IntoResponse {
+    let (uid, _is_admin) = match sessions::current_user_id(&st.pool, &cookies).await {
+        Some(v) => v,
+        None => {
+            return Json(serde_json::json!({"ok": false, "where": "auth", "error": "not logged in"}));
+        }
+    };
+
+    let vid = f.video_id.trim();
+    if vid.is_empty() {
+        return Json(serde_json::json!({"ok": false, "where": "validation", "error": "video_id required"}));
+    }
+    if f.price_cents < 0 {
+        return Json(serde_json::json!({"ok": false, "where": "validation", "error": "price_cents must be >= 0"}));
+    }
+
+    // Pastikan video milik user
+    let owner_row = match sqlx::query_scalar::<_, String>(
+        r#"SELECT owner_id FROM videos WHERE id = $1 LIMIT 1"#,
+    )
+    .bind(vid)
+    .fetch_optional(&st.pool)
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => return Json(serde_json::json!({"ok": false, "where":"db_video", "error": e.to_string()})),
+    };
+
+    let Some(owner_id) = owner_row else {
+        return Json(serde_json::json!({"ok": false, "where":"video", "error": "video not found"}));
+    };
+    if owner_id != uid {
+        return Json(serde_json::json!({"ok": false, "where":"authz", "error": "not the owner"}));
+    }
+
+    // Update
+    let res = sqlx::query!(
+        r#"
+        UPDATE videos
+        SET title = $2,
+            description = $3,
+            price_cents = $4
+        WHERE id = $1
+        "#,
+        vid,
+        f.title.trim(),
+        f.description.trim(),
+        f.price_cents
+    )
+    .execute(&st.pool)
+    .await;
+
+    match res {
+        Ok(_) => Json(serde_json::json!({"ok": true, "video_id": vid})),
+        Err(e) => Json(serde_json::json!({"ok": false, "where":"db_update", "error": e.to_string()})),
+    }
+}
+
 
 // GET /api/user_lookup?username=...
 pub async fn user_lookup(

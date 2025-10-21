@@ -21,7 +21,6 @@ mod worker;
 
 mod handlers;
 use handlers::me::{me, MeState};
-
 use handlers::{
     admin::{admin_data, AdminState},
     auth_admin::{post_admin_login, post_admin_logout, AuthAdminState},
@@ -29,7 +28,7 @@ use handlers::{
     setup::{setup_admin, SetupState},
     stream::{request_play, serve_hls, StreamState},
     upload::{upload_video, UploadState},
-    video::{add_allow, list_videos, my_videos, user_lookup, VideoState},
+    video::{add_allow, list_videos, my_videos, user_lookup, update_video, VideoState},
 };
 
 #[tokio::main]
@@ -41,6 +40,7 @@ async fn main() -> anyhow::Result<()> {
     let pool = db::new_pool(&cfg.database_url).await?;
 
     // ==== Worker (transcode HLS pasca-upload) ====
+    // Argumen terakhir = jumlah worker paralel (sesuaikan kebutuhan)
     let worker = worker::Worker::new(pool.clone(), cfg.clone(), 2);
 
     // ==== Static files (/public) ====
@@ -49,20 +49,17 @@ async fn main() -> anyhow::Result<()> {
 
     // ==== Static HLS (/static_hls) dari MEDIA_DIR ====
     // File hasil transcode HLS disajikan langsung (cepat & non-blok).
-    // ✅ prefix diubah agar tidak bentrok dengan /hls/:video/:file
+    // Gunakan prefix berbeda agar tidak konflik dengan /hls/:video/:file
     let hls_service = ServeDir::new(&cfg.media_dir);
 
     // ===== Static/router dasar =====
     let static_router = Router::new()
         .route("/", get(|| async { Redirect::to("/public/") }))
         .route("/browse", get(|| async { Redirect::to("/public/") }))
-        .route(
-            "/dashboard",
-            get(|| async { Redirect::to("/public/dashboard.html") }),
-        )
+        .route("/dashboard", get(|| async { Redirect::to("/public/dashboard.html") }))
         .route("/health", get(|| async { "ok" }))
         .nest_service("/public", static_service)
-        .nest_service("/static_hls", hls_service); // ✅ diganti prefix agar tidak konflik
+        .nest_service("/static_hls", hls_service); // aman: tidak bentrok dengan /hls/:video/:file
 
     // ===== Admin pages =====
     let admin_pages_router = Router::new()
@@ -115,19 +112,20 @@ async fn main() -> anyhow::Result<()> {
             cfg.max_upload_bytes.try_into().unwrap_or(usize::MAX),
         ));
 
-    // ===== Video (listing, my_videos, allowlist) =====
+    // ===== Video (listing, my_videos, allowlist, update) =====
     let video_router = Router::new()
         .route("/api/videos", get(list_videos))
         .route("/api/my_videos", get(my_videos))
         .route("/api/user_lookup", get(user_lookup))
         .route("/api/allow", post(add_allow))
+        .route("/api/video_update", post(update_video))
         .with_state(VideoState { pool: pool.clone() });
 
     // ===== Streaming (request_play + serve_hls manual) =====
-    // ✅ Sekarang aman karena prefix ServeDir sudah diubah ke /static_hls
+    // Tetap pakai handler serve_hls agar bisa kontrol akses/logging.
     let streaming_router = Router::new()
         .route("/api/request_play", get(request_play))
-        .route("/hls/:video/:file", get(serve_hls)) // tetap dipakai untuk akses kontrol/logging
+        .route("/hls/:video/:file", get(serve_hls))
         .with_state(StreamState {
             pool: pool.clone(),
             cfg: cfg.clone(),

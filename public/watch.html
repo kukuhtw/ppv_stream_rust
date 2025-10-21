@@ -1,132 +1,267 @@
+<!-- public/watch.html -->
 <!doctype html>
-<meta charset="utf-8">
-<title>Tonton</title>
-<link rel="stylesheet" href="/public/styles.css">
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>Tonton</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/public/styles.css">
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Arial, sans-serif; margin:16px; }
+    nav { display:flex; gap:12px; align-items:center; margin-bottom:12px; }
+    .spacer { flex:1 1 auto; }
+    .badge { background: rgba(0,0,0,.08); padding: 4px 8px; border-radius: 8px; }
+    .muted { opacity:.8; }
 
-<style>
-  .player-wrap{
-    position:relative;
-    width:min(100%, 960px);
-    margin:12px auto;
-    aspect-ratio:16/9;          /* rapi sebelum metadata ada */
-    background:#000;
-    border-radius:10px;
-    overflow:hidden;
-  }
-  #player{
-    width:100%;
-    height:100%;
-    object-fit:contain;         /* jangan crop */
-    background:#000;
-    display:block;
-  }
-  /* sembunyikan tombol fullscreen bawaan video (kita pakai container FS) */
-  video::-webkit-media-controls-fullscreen-button { display:none; }
-  video::-webkit-media-controls-enclosure { overflow:hidden; }
-
-  /* tombol fullscreen kustom (wrapper) */
-  .fs-btn{
-    position:absolute; right:10px; top:10px; z-index:12;
-    background:rgba(0,0,0,.45); color:#fff; border:0;
-    border-radius:8px; padding:6px 10px; cursor:pointer; font-weight:600;
-  }
-  .player-wrap:fullscreen, .player-wrap:-webkit-full-screen {
-    width:100vw; height:100vh; border-radius:0;
-  }
-</style>
-
-<h1>Tonton</h1>
-
-<nav>
-  <a href="/public/browse.html">Browse</a>
-  <a href="/public/dashboard.html">Dashboard</a>
-  <span class="spacer"></span>
-  <span id="userbar" class="badge">Memuat user…</span>
-</nav>
-<script>
-(async function loadMe(){
-  try{
-    const r = await fetch('/api/me');
-    const j = await r.json();
-    const el = document.getElementById('userbar');
-    if(j.ok && j.user){
-      el.innerHTML = `Login: <b>${j.user.username}</b> &lt;${j.user.email}&gt;`;
-    }else{
-      el.innerHTML = `<a href="/public/auth/login.html">Login</a>`;
+    .player-wrap{
+      position:relative;
+      width:min(100%, 960px);
+      margin:12px auto;
+      aspect-ratio:16/9;
+      background:#000;
+      border-radius:10px;
+      overflow:hidden;
     }
-  }catch{
-    document.getElementById('userbar').textContent='User: (gagal memuat)';
+    #player{
+      width:100%;
+      height:100%;
+      object-fit:contain;
+      background:#000;
+      display:block;
+    }
+    video::-webkit-media-controls-fullscreen-button { display:none; }
+    video::-webkit-media-controls-enclosure { overflow:hidden; }
+
+    .fs-btn{
+      position:absolute; right:10px; top:10px; z-index:12;
+      background:rgba(0,0,0,.45); color:#fff; border:0;
+      border-radius:8px; padding:6px 10px; cursor:pointer; font-weight:600;
+    }
+    .player-wrap:fullscreen, .player-wrap:-webkit-full-screen { width:100vw; height:100vh; border-radius:0; }
+
+    .meta { max-width:960px; margin:10px auto; }
+    .meta h1 { margin: 8px 0 6px; font-size: 22px; }
+    .meta .price { margin: 2px 0 10px; font-weight: 600; }
+    .card { border:1px solid rgba(0,0,0,.15); border-radius:12px; padding:14px; margin:14px auto; max-width:960px; background:rgba(0,0,0,.03); }
+    label { display:block; margin:10px 0; }
+    input, textarea, button { font:inherit; padding:8px 10px; }
+    textarea { width:100%; resize:vertical; }
+    button.primary { background:#0b67ff; color:#fff; border:0; border-radius:10px; padding:10px 14px; cursor:pointer; }
+  </style>
+</head>
+
+<body>
+  <nav>
+    <a href="/public/browse.html">Browse</a>
+    <a href="/public/dashboard.html">Dashboard</a>
+    <span class="spacer"></span>
+    <span id="userbar" class="badge">Memuat user…</span>
+  </nav>
+
+  <div class="meta">
+    <a id="selfLink" class="muted" href="#">Halaman ini</a>
+    <h1 id="title">Memuat judul…</h1>
+    <div id="price" class="price muted"></div>
+    <p id="desc" class="muted" style="white-space:pre-wrap"></p>
+  </div>
+
+  <div class="player-wrap" id="wrap">
+    <video id="player" controls playsinline crossorigin="anonymous"></video>
+    <button id="fsBtn" class="fs-btn" type="button">Fullscreen</button>
+  </div>
+
+  <div id="ownerEdit" class="card" style="display:none">
+    <h3 style="margin:0 0 8px 0">Edit Video</h3>
+    <form id="editForm">
+      <input type="hidden" name="video_id" id="ev_id">
+      <label>Judul
+        <input name="title" id="ev_title" required maxlength="160">
+      </label>
+      <label>Deskripsi
+        <textarea name="description" id="ev_desc" rows="3"></textarea>
+      </label>
+      <label>Harga (cents)
+        <input name="price_cents" id="ev_price" type="number" min="0" required>
+      </label>
+      <button class="primary" type="submit">Simpan Perubahan</button>
+    </form>
+    <small class="muted">Hanya pemilik video yang dapat menyimpan perubahan.</small>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
+  <script>
+  // ==== util ====
+  function escapeHtml(s){
+    return String(s ?? '')
+      .replaceAll('&', '&amp;').replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;').replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
   }
-})();
-</script>
+  function toast(msg, ok=true){ alert((ok ? "✅ " : "❌ ") + msg); }
 
-<div class="player-wrap" id="wrap">
-  <video id="player" controls playsinline crossorigin="anonymous"></video>
-  <button id="fsBtn" class="fs-btn" type="button">Fullscreen</button>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
-<script>
-(async () => {
-  // ===== ambil video_id dari query dan minta playlist ke backend =====
-  const p = new URLSearchParams(location.search);
-  const vid = p.get('video_id');
-  if (!vid) {
-    document.body.insertAdjacentHTML('beforeend','<p>video_id kosong</p>');
-    return;
-  }
-
-  // link balik ke halaman ini
-  const back = document.createElement('a');
-  back.href = '/public/watch.html?video_id=' + encodeURIComponent(vid);
-  back.textContent = 'Halaman ini';
-  document.querySelector('nav').insertAdjacentElement('afterbegin', back);
-
-  const req = await fetch(`/api/request_play?video_id=${encodeURIComponent(vid)}`);
-  const play = await req.json();
-  if (!req.ok) { alert(play.error || 'gagal request_play'); return; }
-
-  const video = document.getElementById('player');
-  const src = play.playlist;
-
-  // ===== init HLS (m3u8) dengan fallback Safari/native =====
-  if (Hls.isSupported()) {
-    const hls = new Hls({ autoStartLoad:true });
-    hls.loadSource(src);
-    hls.attachMedia(video);
-    hls.on(Hls.Events.ERROR, (_, data) => {
-      if (data?.fatal) {
-        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
-        else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
-        else { hls.destroy(); video.src = src; }
+  // ==== user bar ====
+  (async function loadMe(){
+    try{
+      const r = await fetch('/api/me');
+      const j = await r.json();
+      const el = document.getElementById('userbar');
+      if(j.ok && j.user){
+        el.innerHTML = `Login: <b>${escapeHtml(j.user.username)}</b> &lt;${escapeHtml(j.user.email)}&gt;`;
+      }else{
+        el.innerHTML = `<a href="/public/auth/login.html">Login</a>`;
       }
-    });
-  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-    video.src = src; // Safari
-  } else {
-    document.body.insertAdjacentHTML('beforeend','<p>Browser tidak mendukung HLS.</p>');
-  }
-
-  // ===== FULLSCREEN CONTAINER (bukan native video) =====
-  const wrap = document.getElementById('wrap');
-  const fsBtn = document.getElementById('fsBtn');
-
-  async function toggleFS(){
-    const inFS = document.fullscreenElement === wrap || document.webkitFullscreenElement === wrap;
-    if (inFS) {
-      (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
-    } else {
-      (wrap.requestFullscreen || wrap.webkitRequestFullscreen)?.call(wrap);
+    }catch{
+      document.getElementById('userbar').textContent='User: (gagal memuat)';
     }
-  }
-  fsBtn.addEventListener('click', toggleFS);
-  addEventListener('keydown', (e)=>{ if(e.key==='f') toggleFS(); });
+  })();
 
-  function onFSChange(){
-    const active = document.fullscreenElement === wrap || document.webkitFullscreenElement === wrap;
-    fsBtn.textContent = active ? 'Keluar Fullscreen' : 'Fullscreen';
-  }
-  document.addEventListener('fullscreenchange', onFSChange);
-  document.addEventListener('webkitfullscreenchange', onFSChange);
-})();
-</script>
+  (async () => {
+    // ===== ambil video_id dari query dan minta playlist ke backend =====
+    const p = new URLSearchParams(location.search);
+    const vid = p.get('video_id');
+    if (!vid) {
+      document.body.insertAdjacentHTML('beforeend','<p>video_id kosong</p>');
+      return;
+    }
+    // link balik ke halaman ini
+    const selfLink = document.getElementById('selfLink');
+    selfLink.href = '/public/watch.html?video_id=' + encodeURIComponent(vid);
+
+    // --- ambil metadata video dari /api/videos (lalu filter id)
+    let meta = null;
+    try {
+      const vr = await fetch('/api/videos');
+      const vj = await vr.json();
+      if (vr.ok && vj.videos && Array.isArray(vj.videos)) {
+        meta = vj.videos.find(x => x.id === vid) || null;
+      }
+    } catch {}
+
+    // render meta awal (kalau ada)
+    const titleEl = document.getElementById('title');
+    const descEl  = document.getElementById('desc');
+    const priceEl = document.getElementById('price');
+
+    if (meta) {
+      titleEl.textContent = meta.title || '(Tanpa judul)';
+      descEl.textContent  = (meta.description || '').trim() || '(Belum ada deskripsi)';
+      // tampilkan harga dalam USD & IDR (opsional)
+      const usd = (meta.price_cents/100).toFixed(2);
+      const idr = (Number(usd) * 17000).toLocaleString('id-ID');
+      priceEl.textContent = `💰 Harga: $${usd} (~Rp ${idr}) • Owner: ${meta.owner_name}`;
+    } else {
+      titleEl.textContent = '(Memuat…)';
+      descEl.textContent  = '';
+      priceEl.textContent = '';
+    }
+
+    // --- minta playlist (authorize + URL m3u8)
+    const req = await fetch(`/api/request_play?video_id=${encodeURIComponent(vid)}`);
+    const play = await req.json();
+    if (!req.ok) { alert(play.error || 'gagal request_play'); return; }
+
+    const video = document.getElementById('player');
+    const src = play.playlist;
+
+    // ===== init HLS (m3u8) dengan fallback Safari/native =====
+    if (Hls.isSupported()) {
+      const hls = new Hls({ autoStartLoad:true });
+      hls.loadSource(src);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.ERROR, (_, data) => {
+        if (data?.fatal) {
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
+          else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+          else { hls.destroy(); video.src = src; }
+        }
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = src; // Safari
+    } else {
+      document.body.insertAdjacentHTML('beforeend','<p>Browser tidak mendukung HLS.</p>');
+    }
+
+    // ===== FULLSCREEN CONTAINER (bukan native video) =====
+    const wrap = document.getElementById('wrap');
+    const fsBtn = document.getElementById('fsBtn');
+
+    async function toggleFS(){
+      const inFS = document.fullscreenElement === wrap || document.webkitFullscreenElement === wrap;
+      if (inFS) {
+        (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
+      } else {
+        (wrap.requestFullscreen || wrap.webkitRequestFullscreen)?.call(wrap);
+      }
+    }
+    fsBtn.addEventListener('click', toggleFS);
+    addEventListener('keydown', (e)=>{ if(e.key==='f') toggleFS(); });
+
+    function onFSChange(){
+      const active = document.fullscreenElement === wrap || document.webkitFullscreenElement === wrap;
+      fsBtn.textContent = active ? 'Keluar Fullscreen' : 'Fullscreen';
+    }
+    document.addEventListener('fullscreenchange', onFSChange);
+    document.addEventListener('webkitfullscreenchange', onFSChange);
+
+    // ===== Tampilkan menu edit jika user adalah OWNER =====
+    // Strategi: panggil /api/my_videos lalu cek apakah 'vid' ada di sana
+    let isOwner = false;
+    let myMeta  = null;
+    try {
+      const mr = await fetch('/api/my_videos');
+      const mj = await mr.json();
+      if (mr.ok && mj.ok && Array.isArray(mj.videos)) {
+        myMeta = mj.videos.find(v => v.id === vid) || null;
+        isOwner = !!myMeta;
+      }
+    } catch {}
+
+    if (isOwner) {
+      const box = document.getElementById('ownerEdit');
+      const f   = document.getElementById('editForm');
+      const ev_id = document.getElementById('ev_id');
+      const ev_title = document.getElementById('ev_title');
+      const ev_desc  = document.getElementById('ev_desc');
+      const ev_price = document.getElementById('ev_price');
+
+      const seed = myMeta || meta || {};
+      ev_id.value    = vid;
+      ev_title.value = seed.title || '';
+      ev_desc.value  = (seed.description || '');
+      ev_price.value = Number(seed.price_cents || 0);
+
+      box.style.display = '';
+
+      f.onsubmit = async (e) => {
+        e.preventDefault();
+        const body = new URLSearchParams(new FormData(f));
+        const pc = Number(body.get('price_cents')||0);
+        if (Number.isNaN(pc) || pc < 0) { toast('Harga (cents) harus >= 0', false); return; }
+        try{
+          const r = await fetch('/api/video_update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body
+          });
+          const j = await r.json().catch(async ()=>({ok:false, error: await r.text()}));
+          if (!r.ok || j.ok === false) {
+            toast('Gagal update: ' + (j.error || 'unknown'), false);
+            return;
+          }
+          toast('Video berhasil diupdate');
+          // refresh meta tampilan
+          titleEl.textContent = ev_title.value || '(Tanpa judul)';
+          descEl.textContent  = (ev_desc.value || '').trim() || '(Belum ada deskripsi)';
+          const usd = (pc/100).toFixed(2);
+          const idr = (Number(usd)*17000).toLocaleString('id-ID');
+          priceEl.textContent = `💰 Harga: $${usd} (~Rp ${idr}) • Owner: ${(meta?.owner_name)||'(Anda)'}`;
+        } catch(err){
+          toast('Gagal update: ' + err, false);
+        }
+      };
+    }
+  })();
+  </script>
+</body>
+</html>

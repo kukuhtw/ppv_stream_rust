@@ -1,113 +1,170 @@
 <!-- public/browse.html -->
 <!doctype html>
 <html lang="id">
-<meta charset="utf-8">
-<title>Browse Video</title>
-<link rel="stylesheet" href="/public/styles.css">
-<style>
-  body {
-    font-family: Arial, sans-serif;
-    margin: 20px;
-    background: #fafafa;
-  }
-  nav {
-    display: flex;
-    gap: 1rem;
-    align-items: center;
-    margin-bottom: 1rem;
-  }
-  .spacer {
-    flex-grow: 1;
-  }
-  .badge {
-    background: #eee;
-    padding: 4px 8px;
-    border-radius: 4px;
-  }
-  #videos {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 1rem;
-  }
-  .card {
-    background: white;
-    padding: 1rem;
-    border-radius: 8px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-  }
-  .card h3 {
-    margin: 0 0 0.5rem 0;
-  }
-  .card p {
-    margin: 0.3rem 0;
-  }
-  .card a {
-    display: inline-block;
-    margin-top: 0.5rem;
-    padding: 6px 12px;
-    background: #007bff;
-    color: white;
-    border-radius: 4px;
-    text-decoration: none;
-  }
-  .card a:hover {
-    background: #0056b3;
-  }
-</style>
+<head>
+  <meta charset="utf-8">
+  <title>Browse Video</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/public/styles.css">
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: Arial, sans-serif; margin: 20px; background: #fafafa; }
+    nav { display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem; }
+    .spacer { flex-grow: 1; }
+    .badge { background: #eee; padding: 4px 8px; border-radius: 4px; }
+    #videos { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; }
+    .card { background: white; padding: 1rem; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+    .card h3 { margin: 0 0 0.5rem 0; }
+    .card p { margin: 0.3rem 0; }
+    .card a { display: inline-block; margin-top: 0.5rem; padding: 6px 12px; background: #007bff; color: white; border-radius: 4px; text-decoration: none; }
+    .card a:hover { background: #0056b3; }
+    .muted { opacity: .75; }
+    .toolbar { display:flex; gap:.75rem; align-items:center; margin: 12px 0 18px; }
+    .toolbar input, .toolbar select { padding:8px 10px; font: inherit; }
+    .skeleton {
+      background: linear-gradient(90deg, #eee 25%, #f5f5f5 37%, #eee 63%);
+      background-size: 400% 100%;
+      animation: shimmer 1.2s infinite;
+      border-radius:8px; height: 120px;
+    }
+    @keyframes shimmer {
+      0% { background-position: 100% 0; }
+      100% { background-position: 0 0; }
+    }
+  </style>
+</head>
 
 <body>
-<h1>Daftar Video</h1>
+  <h1>Daftar Video</h1>
 
-<nav>
-  <a href="/public/browse.html">Browse</a>
-  <a href="/public/dashboard.html">Dashboard</a>
-  <span class="spacer"></span>
-  <span id="userbar" class="badge">Memuat user…</span>
-</nav>
+  <nav>
+    <a href="/public/browse.html">Browse</a>
+    <a href="/public/dashboard.html">Dashboard</a>
+    <span class="spacer"></span>
+    <span id="userbar" class="badge">Memuat user…</span>
+  </nav>
 
-<script>
-(async function loadMe(){
-  try {
-    const r = await fetch('/api/me');
-    const j = await r.json();
-    const el = document.getElementById('userbar');
-    if(j.ok && j.user){
-      el.innerHTML = `Login: <b>${j.user.username}</b> &lt;${j.user.email}&gt;`;
-    } else {
-      el.innerHTML = `<a href="/public/auth/login.html">Login</a>`;
+  <div class="toolbar">
+    <input id="q" placeholder="Cari judul / owner / deskripsi…" aria-label="Pencarian">
+    <select id="sort">
+      <option value="newest">Terbaru</option>
+      <option value="cheapest">Termurah</option>
+      <option value="expensive">Termahal</option>
+      <option value="title">Judul (A-Z)</option>
+    </select>
+  </div>
+
+  <div id="videos">
+    <!-- loading skeletons -->
+    <div class="skeleton"></div>
+    <div class="skeleton"></div>
+    <div class="skeleton"></div>
+  </div>
+
+  <script>
+  // ==== user bar ====
+  (async function loadMe(){
+    try {
+      const r = await fetch('/api/me');
+      const j = await r.json();
+      const el = document.getElementById('userbar');
+      if (j.ok && j.user) {
+        el.innerHTML = `Login: <b>${escapeHtml(j.user.username)}</b> &lt;${escapeHtml(j.user.email)}&gt;`;
+      } else {
+        el.innerHTML = `<a href="/public/auth/login.html">Login</a>`;
+      }
+    } catch {
+      document.getElementById('userbar').textContent = 'User: (gagal memuat)';
     }
-  } catch {
-    document.getElementById('userbar').textContent = 'User: (gagal memuat)';
-  }
-})();
-</script>
+  })();
 
-<div id="videos"></div>
+  // ==== browse ====
+  const USD_TO_IDR = 17000; // 1 USD = Rp 17.000 (konversi statis)
+  const numIDR = new Intl.NumberFormat('id-ID');
+  let allVideos = [];
 
-<script>
-(async () => {
-  const USD_TO_IDR = 17000; // 1 USD = Rp 17.000
-  const res = await fetch('/api/videos');
-  const data = await res.json();
-  let html = '';
-  const list = data.videos || [];
-
-  for (const v of list) {
-    const priceUSD = (v.price_cents / 100).toFixed(2);
-    const priceIDR = (priceUSD * USD_TO_IDR).toLocaleString('id-ID');
-
-    html += `
-      <div class="card">
-        <h3>${v.title}</h3>
-        <p><strong>Owner:</strong> ${v.owner_name}</p>
-        <p>💰 Harga: $${priceUSD} (~Rp ${priceIDR})</p>
-        <a href="/public/watch.html?video_id=${encodeURIComponent(v.id)}">▶ Tonton</a>
-      </div>
-    `;
+  function escapeHtml(s){
+    return String(s ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
   }
 
-  document.getElementById('videos').innerHTML = html || '<p>Belum ada video.</p>';
-})();
-</script>
+  function render(list){
+    const wrap = document.getElementById('videos');
+    if (!list.length) {
+      wrap.innerHTML = '<p class="muted">Belum ada video atau tidak ada yang cocok dengan pencarian.</p>';
+      return;
+    }
+
+    const html = list.map(v => {
+      const priceUSD = (v.price_cents / 100).toFixed(2);
+      const priceIDR = numIDR.format((+priceUSD) * USD_TO_IDR);
+      const desc = (v.description || '').trim();
+      return `
+        <div class="card">
+          <h3>${escapeHtml(v.title)}</h3>
+          <p><strong>Owner:</strong> ${escapeHtml(v.owner_name)}</p>
+          <p>💰 Harga: $${priceUSD} (~Rp ${priceIDR})</p>
+          ${desc ? `<p style="white-space:pre-wrap">${escapeHtml(desc)}</p>` : `<p class="muted">(Belum ada deskripsi)</p>`}
+          <a href="/public/watch.html?video_id=${encodeURIComponent(v.id)}">▶ Tonton</a>
+        </div>
+      `;
+    }).join('');
+    wrap.innerHTML = html;
+  }
+
+  function applyFilters(){
+    const q = document.getElementById('q').value.trim().toLowerCase();
+    const sort = document.getElementById('sort').value;
+
+    let list = [...allVideos];
+
+    if (q) {
+      list = list.filter(v => {
+        const hay = `${v.title} ${v.owner_name} ${v.description||''}`.toLowerCase();
+        return hay.includes(q);
+      });
+    }
+
+    switch (sort) {
+      case 'cheapest':
+        list.sort((a,b) => a.price_cents - b.price_cents); break;
+      case 'expensive':
+        list.sort((a,b) => b.price_cents - a.price_cents); break;
+      case 'title':
+        list.sort((a,b) => a.title.localeCompare(b.title)); break;
+      default: // newest
+        list.sort((a,b) => (b.created_at > a.created_at) ? 1 : (b.created_at < a.created_at ? -1 : 0));
+    }
+
+    render(list);
+  }
+
+  // Debounce kecil untuk input pencarian
+  let t;
+  document.getElementById('q').addEventListener('input', () => {
+    clearTimeout(t);
+    t = setTimeout(applyFilters, 200);
+  });
+  document.getElementById('sort').addEventListener('change', applyFilters);
+
+  (async function init(){
+    try {
+      const res = await fetch('/api/videos');
+      const data = await res.json();
+      if (!res.ok || data.ok === false) {
+        throw new Error(data.error || 'Gagal memuat /api/videos');
+      }
+      allVideos = Array.isArray(data.videos) ? data.videos : [];
+      applyFilters();
+    } catch (e) {
+      document.getElementById('videos').innerHTML =
+        `<p class="muted">Gagal memuat video: ${escapeHtml(String(e))}</p>`;
+    }
+  })();
+  </script>
 </body>
 </html>
