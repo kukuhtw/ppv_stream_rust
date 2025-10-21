@@ -54,17 +54,69 @@ This model allows:
 
 ```
 ppv_stream/
-├── src/                    # Rust source code (Axum handlers, config, db, ffmpeg)
-│   ├── handlers/           # Route logic (auth, upload, stream, video, admin)
-│   ├── ffmpeg.rs           # Async HLS transcoding with watermark
-│   ├── main.rs             # Application entry point
-│   └── config.rs           # App configuration
-├── sql/                    # Migration files
-├── public/                 # Frontend pages (HTML, CSS, JS)
-├── Dockerfile              # Multi-stage Docker build
-├── docker-compose.yml      # Local dev setup with PostgreSQL
-├── Makefile                # Common dev commands
-└── README.md
+.
+├── Cargo.lock
+├── Cargo.toml
+├── Dockerfile
+├── Makefile
+├── README.md
+├── a
+├── docker-compose.yml
+├── public
+│   ├── admin
+│   │   ├── dashboard.html
+│   │   └── login.html
+│   ├── auth
+│   │   ├── forgot_password.html
+│   │   ├── login.html
+│   │   ├── register.html
+│   │   └── reset_password.html
+│   ├── browse.html
+│   ├── dashboard.html
+│   ├── index.html
+│   ├── styles.css
+│   └── watch.html
+├── sql
+│   ├── 001_init.sql
+│   ├── 002_admins.sql
+│   ├── 003_password_resets.sql
+│   ├── 004_sessions.sql
+│   ├── 005_allowlist.sql
+│   ├── 006_indexes.sql
+│   ├── 007_perf_and_fk.sql
+│   ├── 008_price_cents_bigint.sql
+│   └── 009_users_username_unique.sql
+└── src
+    ├── a
+    ├── auth.rs
+    ├── bootstrap.rs
+    ├── config.rs
+    ├── db.rs
+    ├── email.rs
+    ├── ffmpeg.rs
+    ├── handlers
+    │   ├── admin.rs
+    │   ├── auth_admin.rs
+    │   ├── auth_user.rs
+    │   ├── mod.rs
+    │   ├── pages.rs
+    │   ├── password.rs
+    │   ├── setup.rs
+    │   ├── stream.rs
+    │   ├── upload.rs
+    │   ├── users.rs
+    │   └── video.rs
+    ├── hls.rs
+    ├── main.rs
+    ├── middleware.rs
+    ├── models.rs
+    ├── schema.sql
+    ├── sessions.rs
+    ├── token.rs
+    ├── util.rs
+    └── validators.rs
+
+7 directories, 54 files
 ```
 
 ---
