@@ -1,10 +1,8 @@
 <!-- public/index.html -->
 <!doctype html>
 <meta charset="utf-8">
-<title>Login</title>
+<title>Beranda</title>
 <link rel="stylesheet" href="/public/styles.css">
-<!-- (opsional) backend bisa isi meta ini saat render statis -->
-<!-- <meta name="usd_to_idr" content="1700"> -->
 
 <style>
   body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial,sans-serif;margin:16px}
@@ -82,7 +80,7 @@ toggleUserPass.addEventListener('mouseleave',() => { userPass.type = 'password';
 
 /* ==== Util & Kurs ==== */
 const numIDR = new Intl.NumberFormat('id-ID');
-let USD_TO_IDR = 1700; // fallback
+let USD_TO_IDR = 17000; // fallback yang benar
 
 function escapeHtml(s){
   return String(s ?? '')
@@ -91,27 +89,14 @@ function escapeHtml(s){
 }
 
 async function resolveUsdToIdr(){
-  // 1) window.APP_CONFIG.usd_to_idr (jika disuntik backend)
-  if (window.APP_CONFIG && typeof window.APP_CONFIG.usd_to_idr === 'number') {
-    USD_TO_IDR = window.APP_CONFIG.usd_to_idr;
-    return;
-  }
-  // 2) <meta name="usd_to_idr" content="...">
-  const m = document.querySelector('meta[name="usd_to_idr"]');
-  if (m && m.content && !isNaN(+m.content)) {
-    USD_TO_IDR = +m.content;
-    return;
-  }
-  // 3) /api/config → { ok:true, usd_to_idr:number }
   try{
-    const r = await fetch('/api/config');
+    // Endpoint backend wajib: /api/kurs -> { ok:true, usd_to_idr:number }
+    const r = await fetch('/api/kurs');
     const j = await r.json();
-    if (j && j.ok && typeof j.usd_to_idr === 'number') {
+    if (r.ok && j && typeof j.usd_to_idr === 'number') {
       USD_TO_IDR = j.usd_to_idr;
-      return;
     }
-  }catch {}
-  // 4) fallback 1700
+  }catch {/* pakai fallback 17000 */}
 }
 
 let allVideos = [];
@@ -123,7 +108,6 @@ function render(list){
     return;
   }
   const html = list.map(v => {
-    // price_cents (USD cents) → USD → IDR
     const priceIDR = Math.round((v.price_cents || 0) / 100 * USD_TO_IDR);
     const desc = (v.description || '').trim();
     return `
