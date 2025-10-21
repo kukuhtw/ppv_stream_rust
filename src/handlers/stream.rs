@@ -18,6 +18,8 @@ use crate::handlers::video::user_has_view_access;
 use crate::sessions;
 use crate::ffmpeg::transcode_hls;
 
+
+
 #[derive(Clone)]
 pub struct StreamState {
     pub pool: PgPool,

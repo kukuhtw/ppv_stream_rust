@@ -3,13 +3,25 @@
 <meta charset="utf-8">
 <title>Login</title>
 <link rel="stylesheet" href="/public/styles.css">
+<!-- (opsional) backend bisa isi meta ini saat render statis -->
+<!-- <meta name="usd_to_idr" content="1700"> -->
 
 <style>
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial,sans-serif;margin:16px}
   .alert{padding:10px;border-radius:8px;margin:12px 0;font-size:14px;line-height:1.4}
   .alert.ok{background:#e8f5e9;border:1px solid #a5d6a7}
   .alert.fail{background:#ffebee;border:1px solid #ef9a9a}
   .field{display:block;margin:8px 0}
   .row{display:flex;align-items:center;gap:6px}
+  h2{margin-top:28px}
+  .toolbar{display:flex;gap:.75rem;align-items:center;margin:12px 0 18px}
+  .toolbar input{padding:8px 10px;font:inherit;width:320px;max-width:100%}
+  #videos{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+  .card{background:#fff;border:1px solid rgba(0,0,0,.12);border-radius:10px;padding:12px}
+  .card h3{margin:0 0 6px}
+  .muted{opacity:.75}
+  .skeleton{background:linear-gradient(90deg,#eee 25%,#f5f5f5 37%,#eee 63%);background-size:400% 100%;animation:shimmer 1.2s infinite;border-radius:10px;height:110px}
+  @keyframes shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
 </style>
 
 <h1>Login</h1>
@@ -31,36 +43,130 @@
 <p>Lupa password? <a href="/auth/forgot">Reset</a></p>
 <p>Belum punya akun? <a href="/auth/register">Daftar</a></p>
 
+<h2>Daftar Video</h2>
+<div class="toolbar">
+  <input id="q" placeholder="Cari judul / owner / deskripsi…" aria-label="Pencarian">
+</div>
+<div id="videos">
+  <div class="skeleton"></div>
+  <div class="skeleton"></div>
+  <div class="skeleton"></div>
+</div>
+
 <script>
-/* Toggle password */
+/* ==== Toggle password ==== */
 const userPass = document.getElementById('userPassword');
 const toggleUserPass = document.getElementById('toggleUserPass');
 toggleUserPass.addEventListener('mousedown', () => { userPass.type = 'text'; toggleUserPass.textContent = '🙈'; });
 toggleUserPass.addEventListener('mouseup',   () => { userPass.type = 'password'; toggleUserPass.textContent = '👁️'; });
 toggleUserPass.addEventListener('mouseleave',() => { userPass.type = 'password'; toggleUserPass.textContent = '👁️'; });
 
-/* Alert status & reason */
+/* ==== Alert dari query ==== */
 (function () {
   const box = document.getElementById('alert');
   const p = new URLSearchParams(location.search);
   const status = p.get('status');
   const reason = p.get('reason');
-
   if (!status) return;
-
   const map = {
     missing_field: 'Lengkapi semua field.',
     invalid_email: 'Format email tidak valid.',
     bad_credentials: 'Email atau password salah.',
     server_error: 'Terjadi masalah di server. Coba lagi.',
   };
-
-  let msg = status === 'ok'
-    ? 'Login berhasil.'
-    : (map[reason] || `Login gagal. (${reason || 'unknown'})`);
-
+  let msg = status === 'ok' ? 'Login berhasil.' : (map[reason] || `Login gagal. (${reason || 'unknown'})`);
   box.textContent = msg;
   box.classList.add(status === 'ok' ? 'ok' : 'fail');
   box.style.display = 'block';
+})();
+
+/* ==== Util & Kurs ==== */
+const numIDR = new Intl.NumberFormat('id-ID');
+let USD_TO_IDR = 1700; // fallback
+
+function escapeHtml(s){
+  return String(s ?? '')
+    .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
+    .replaceAll('"','&quot;').replaceAll("'",'&#039;');
+}
+
+async function resolveUsdToIdr(){
+  // 1) window.APP_CONFIG.usd_to_idr (jika disuntik backend)
+  if (window.APP_CONFIG && typeof window.APP_CONFIG.usd_to_idr === 'number') {
+    USD_TO_IDR = window.APP_CONFIG.usd_to_idr;
+    return;
+  }
+  // 2) <meta name="usd_to_idr" content="...">
+  const m = document.querySelector('meta[name="usd_to_idr"]');
+  if (m && m.content && !isNaN(+m.content)) {
+    USD_TO_IDR = +m.content;
+    return;
+  }
+  // 3) /api/config → { ok:true, usd_to_idr:number }
+  try{
+    const r = await fetch('/api/config');
+    const j = await r.json();
+    if (j && j.ok && typeof j.usd_to_idr === 'number') {
+      USD_TO_IDR = j.usd_to_idr;
+      return;
+    }
+  }catch {}
+  // 4) fallback 1700
+}
+
+let allVideos = [];
+
+function render(list){
+  const wrap = document.getElementById('videos');
+  if (!list.length){
+    wrap.innerHTML = '<p class="muted">Belum ada video atau tidak ada yang cocok.</p>';
+    return;
+  }
+  const html = list.map(v => {
+    // price_cents (USD cents) → USD → IDR
+    const priceIDR = Math.round((v.price_cents || 0) / 100 * USD_TO_IDR);
+    const desc = (v.description || '').trim();
+    return `
+      <div class="card">
+        <h3>${escapeHtml(v.title)}</h3>
+        <div>👤 ${escapeHtml(v.owner_name)}</div>
+        <div>💰 Rp ${numIDR.format(priceIDR)}</div>
+        ${desc ? `<p style="white-space:pre-wrap;margin-top:6px">${escapeHtml(desc)}</p>` : `<p class="muted" style="margin-top:6px">(Belum ada deskripsi)</p>`}
+      </div>
+    `;
+  }).join('');
+  wrap.innerHTML = html;
+}
+
+function applyFilters(){
+  const q = document.getElementById('q').value.trim().toLowerCase();
+  let list = [...allVideos];
+  if (q){
+    list = list.filter(v => {
+      const hay = `${v.title} ${v.owner_name} ${v.description||''}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }
+  list.sort((a,b) => (b.created_at > a.created_at) ? 1 : (b.created_at < a.created_at ? -1 : 0));
+  render(list);
+}
+
+let t;
+document.getElementById('q').addEventListener('input', ()=>{
+  clearTimeout(t); t = setTimeout(applyFilters, 200);
+});
+
+(async function init(){
+  await resolveUsdToIdr();
+  try{
+    const res = await fetch('/api/videos');
+    const data = await res.json();
+    if (!res.ok || data.ok === false) throw new Error(data.error || 'Gagal memuat /api/videos');
+    allVideos = Array.isArray(data.videos) ? data.videos : [];
+    applyFilters();
+  }catch(e){
+    document.getElementById('videos').innerHTML =
+      `<p class="muted">Gagal memuat video: ${escapeHtml(String(e))}</p>`;
+  }
 })();
 </script>

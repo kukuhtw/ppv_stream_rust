@@ -1,4 +1,5 @@
 <!-- public/browse.html -->
+<!-- public/browse.html -->
 <!doctype html>
 <html lang="id">
 <head>
@@ -62,6 +63,15 @@
   </div>
 
   <script>
+  function escapeHtml(s){
+    return String(s ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
+  }
+
   // ==== user bar ====
   (async function loadMe(){
     try {
@@ -79,17 +89,41 @@
   })();
 
   // ==== browse ====
-  const USD_TO_IDR = 17000; // 1 USD = Rp 17.000 (konversi statis)
+  let USD_TO_IDR = 17000; // fallback jika /api/kurs gagal
   const numIDR = new Intl.NumberFormat('id-ID');
   let allVideos = [];
 
-  function escapeHtml(s){
-    return String(s ?? '')
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&#039;');
+  async function loadKurs() {
+    try {
+      const r = await fetch('/api/kurs');
+      const j = await r.json();
+      if (r.ok && j && (typeof j.usd_to_idr === 'number')) {
+        USD_TO_IDR = j.usd_to_idr;
+      }
+    } catch {}
+  }
+
+  function makeContactHtml(v){
+    const waDigits = (v.owner_whatsapp || '').replace(/\D/g, '');
+    const waLink = waDigits ? `https://wa.me/${waDigits}` : null;
+    const bank = v.owner_bank ? escapeHtml(v.owner_bank) : '';
+    const wallet = v.owner_wallet ? escapeHtml(v.owner_wallet) : '';
+    const email = v.owner_email ? escapeHtml(v.owner_email) : '';
+    const prof  = v.owner_profile_desc ? escapeHtml(v.owner_profile_desc) : '';
+
+    if (!email && !waDigits && !bank && !wallet && !prof) return '';
+
+    return `
+      <div style="margin-top:10px;padding:10px;border:1px dashed #ccc;border-radius:8px;background:rgba(0,0,0,.02)">
+        <div style="font-weight:600;margin-bottom:4px">Kontak Owner</div>
+        <div>👤 ${escapeHtml(v.owner_name)}</div>
+        ${email ? `<div>✉️ ${email}</div>` : ``}
+        ${waDigits ? `<div>📱 <a href="${waLink}" target="_blank" rel="noopener">WhatsApp</a> (${escapeHtml(v.owner_whatsapp)})</div>` : ``}
+        ${bank ? `<div>🏦 ${bank}</div>` : ``}
+        ${wallet ? `<div>💳 ${wallet}</div>` : ``}
+        ${prof ? `<div style="margin-top:6px;white-space:pre-wrap">${prof}</div>` : ``}
+      </div>
+    `;
   }
 
   function render(list){
@@ -100,16 +134,18 @@
     }
 
     const html = list.map(v => {
-      const priceUSD = (v.price_cents / 100).toFixed(2);
-      const priceIDR = numIDR.format((+priceUSD) * USD_TO_IDR);
+      const idr = Math.round((v.price_cents / 100) * USD_TO_IDR);
       const desc = (v.description || '').trim();
+      const contactHtml = makeContactHtml(v);
+
       return `
         <div class="card">
           <h3>${escapeHtml(v.title)}</h3>
           <p><strong>Owner:</strong> ${escapeHtml(v.owner_name)}</p>
-          <p>💰 Harga: $${priceUSD} (~Rp ${priceIDR})</p>
+          <p>💰 Harga: Rp ${numIDR.format(idr)}</p>
           ${desc ? `<p style="white-space:pre-wrap">${escapeHtml(desc)}</p>` : `<p class="muted">(Belum ada deskripsi)</p>`}
           <a href="/public/watch.html?video_id=${encodeURIComponent(v.id)}">▶ Tonton</a>
+          ${contactHtml}
         </div>
       `;
     }).join('');
@@ -124,7 +160,7 @@
 
     if (q) {
       list = list.filter(v => {
-        const hay = `${v.title} ${v.owner_name} ${v.description||''}`.toLowerCase();
+        const hay = `${v.title} ${v.owner_name} ${v.description||''} ${v.owner_profile_desc||''}`.toLowerCase();
         return hay.includes(q);
       });
     }
@@ -152,6 +188,7 @@
   document.getElementById('sort').addEventListener('change', applyFilters);
 
   (async function init(){
+    await loadKurs();
     try {
       const res = await fetch('/api/videos');
       const data = await res.json();

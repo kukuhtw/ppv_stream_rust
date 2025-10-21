@@ -6,4 +6,6 @@ pub mod me;
 pub mod setup;
 pub mod stream;
 pub mod upload;
-pub mod video; // ✅ tambahkan baris ini
+pub mod video;
+pub mod users; // <-- TAMBAHKAN BARIS INI
+pub mod kurs; // <-- WAJIB: expose router /api/kurs

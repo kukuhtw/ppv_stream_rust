@@ -28,8 +28,12 @@ use handlers::{
     setup::{setup_admin, SetupState},
     stream::{request_play, serve_hls, StreamState},
     upload::{upload_video, UploadState},
-    video::{add_allow, list_videos, my_videos, user_lookup, update_video, VideoState},
+    video::{add_allow, list_videos, my_videos, update_video, user_lookup, VideoState},
+    users::{get_my_profile, public_profile, update_my_profile, UsersState},
 };
+
+// 👉 pastikan modul handlers::kurs sudah dibuat dan diexport (pub mod kurs; di handlers/mod.rs)
+use handlers::kurs::{router as kurs_router, KursState};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -37,7 +41,12 @@ async fn main() -> anyhow::Result<()> {
 
     // ==== Config & DB ====
     let cfg = config::Config::from_env();
+    // Catatan: sesuaikan signature new_pool dengan implementasi kamu.
+    // Di sini diasumsikan new_pool(&str) -> PgPool
     let pool = db::new_pool(&cfg.database_url).await?;
+
+    // ==== States ====
+    let users_state = UsersState { pool: pool.clone() };
 
     // ==== Worker (transcode HLS pasca-upload) ====
     // Argumen terakhir = jumlah worker paralel (sesuaikan kebutuhan)
@@ -121,6 +130,13 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/video_update", post(update_video))
         .with_state(VideoState { pool: pool.clone() });
 
+    // ===== Users (profile) =====
+    let users_router = Router::new()
+        .route("/api/profile", get(get_my_profile))
+        .route("/api/profile_update", post(update_my_profile))
+        .route("/api/user_profile", get(public_profile))
+        .with_state(users_state);
+
     // ===== Streaming (request_play + serve_hls manual) =====
     // Tetap pakai handler serve_hls agar bisa kontrol akses/logging.
     let streaming_router = Router::new()
@@ -136,6 +152,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/me", get(me))
         .with_state(MeState { pool: pool.clone() });
 
+    // ===== Kurs (expose kurs dari Config ke frontend) =====
+    // pastikan handlers::kurs::router tersedia
+    let kurs_router = kurs_router(KursState { cfg: cfg.clone() });
+
     // ===== Merge + cookies =====
     let app = static_router
         .merge(admin_pages_router)
@@ -144,8 +164,11 @@ async fn main() -> anyhow::Result<()> {
         .merge(setup_router)
         .merge(upload_router)
         .merge(video_router)
+        .merge(users_router)
         .merge(streaming_router)
         .merge(me_router)
+        // 👉 mount kurs agar /api/kurs tersedia untuk watch/browse (harga Rupiah sinkron .env)
+        .merge(kurs_router)
         .layer(CookieManagerLayer::new());
 
     // ==== Start server ====

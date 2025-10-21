@@ -1,4 +1,5 @@
 // src/config.rs
+// src/config.rs
 use std::{env, fs, path::PathBuf};
 
 #[derive(Clone, Debug)]
@@ -18,7 +19,7 @@ pub struct Config {
     pub hls_root: String,
 
     // ===== Parameter HLS & watermark =====
-    pub hls_segment_seconds: u32, // ← hanya sekali, sebagai u32
+    pub hls_segment_seconds: u32,
     pub watermark_font: String,
 
     // ===== Session & security =====
@@ -30,6 +31,9 @@ pub struct Config {
 
     // ===== Batas upload =====
     pub max_upload_bytes: u64,
+
+    // ===== Kurs Dollar ke Rupiah =====
+    pub dollar_usd_to_rupiah: f64,
 }
 
 impl Config {
@@ -77,6 +81,12 @@ impl Config {
             .and_then(|s| s.parse::<u64>().ok())
             .unwrap_or(1_024 * 1_024 * 1_024);
 
+        // Kurs Dollar ke Rupiah (default 17000)
+        let dollar_usd_to_rupiah = env::var("DOLLAR_USD_TO_RUPIAH")
+            .ok()
+            .and_then(|s| s.parse::<f64>().ok())
+            .unwrap_or(17000.0);
+
         let cfg = Self {
             database_url,
             bind,
@@ -92,12 +102,13 @@ impl Config {
             hmac_secret,
             hwaccel,
             max_upload_bytes,
+            dollar_usd_to_rupiah,
         };
 
         cfg.ensure_dirs();
 
         println!(
-            "[config] bind={}, db_url={}, upload_dir={}, media_dir={}, tmp_dir={}, public_dir={}, hls_segment={}s, hwaccel={}, max_upload={}MB",
+            "[config] bind={}, db_url={}, upload_dir={}, media_dir={}, tmp_dir={}, public_dir={}, hls_segment={}s, hwaccel={}, kurs_usd_to_idr={}, max_upload={}MB",
             cfg.bind,
             redacted(&cfg.database_url),
             cfg.upload_dir,
@@ -106,6 +117,7 @@ impl Config {
             cfg.public_dir,
             cfg.hls_segment_seconds,
             cfg.hwaccel,
+            cfg.dollar_usd_to_rupiah,
             cfg.max_upload_bytes / (1024 * 1024)
         );
 

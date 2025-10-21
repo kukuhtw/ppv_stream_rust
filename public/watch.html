@@ -1,4 +1,5 @@
 <!-- public/watch.html -->
+<!-- public/watch.html -->
 <!doctype html>
 <html lang="id">
 <head>
@@ -14,7 +15,7 @@
     .badge { background: rgba(0,0,0,.08); padding: 4px 8px; border-radius: 8px; }
     .muted { opacity:.8; }
 
-    .player-wrap{
+    .player-wrap {
       position:relative;
       width:min(100%, 960px);
       margin:12px auto;
@@ -23,7 +24,7 @@
       border-radius:10px;
       overflow:hidden;
     }
-    #player{
+    #player {
       width:100%;
       height:100%;
       object-fit:contain;
@@ -33,7 +34,7 @@
     video::-webkit-media-controls-fullscreen-button { display:none; }
     video::-webkit-media-controls-enclosure { overflow:hidden; }
 
-    .fs-btn{
+    .fs-btn {
       position:absolute; right:10px; top:10px; z-index:12;
       background:rgba(0,0,0,.45); color:#fff; border:0;
       border-radius:8px; padding:6px 10px; cursor:pointer; font-weight:600;
@@ -71,6 +72,13 @@
     <button id="fsBtn" class="fs-btn" type="button">Fullscreen</button>
   </div>
 
+  <!-- Blok kontak owner -->
+  <div id="ownerContact" class="card" style="display:none">
+    <h3 style="margin:0 0 8px 0">Kontak Owner</h3>
+    <div id="oc_body" style="white-space:pre-wrap"></div>
+  </div>
+
+  <!-- Form edit untuk owner -->
   <div id="ownerEdit" class="card" style="display:none">
     <h3 style="margin:0 0 8px 0">Edit Video</h3>
     <form id="editForm">
@@ -81,9 +89,13 @@
       <label>Deskripsi
         <textarea name="description" id="ev_desc" rows="3"></textarea>
       </label>
-      <label>Harga (cents)
-        <input name="price_cents" id="ev_price" type="number" min="0" required>
+
+      <!-- Harga Rupiah (UI), tetap kirim price_cents ke backend -->
+      <label>Harga (Rp)
+        <input id="ev_price_idr" type="number" min="0" step="100" placeholder="contoh: 25000">
       </label>
+      <input name="price_cents" id="ev_price_cents" type="hidden">
+
       <button class="primary" type="submit">Simpan Perubahan</button>
     </form>
     <small class="muted">Hanya pemilik video yang dapat menyimpan perubahan.</small>
@@ -91,14 +103,24 @@
 
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
   <script>
-  // ==== util ====
   function escapeHtml(s){
-    return String(s ?? '')
-      .replaceAll('&', '&amp;').replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;').replaceAll('"', '&quot;')
-      .replaceAll("'", '&#039;');
+    return String(s ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;')
+      .replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;");
   }
   function toast(msg, ok=true){ alert((ok ? "✅ " : "❌ ") + msg); }
+
+  const numIDR = new Intl.NumberFormat('id-ID');
+  let USD_TO_IDR = 17000; // fallback jika /api/kurs gagal
+
+  async function loadKurs() {
+    try {
+      const r = await fetch('/api/kurs');
+      const j = await r.json();
+      if (r.ok && j && (typeof j.usd_to_idr === 'number')) {
+        USD_TO_IDR = j.usd_to_idr;
+      }
+    } catch {}
+  }
 
   // ==== user bar ====
   (async function loadMe(){
@@ -116,149 +138,140 @@
     }
   })();
 
+  function renderOwnerContact(meta){
+    if(!meta) return;
+    const box = document.getElementById('ownerContact');
+    const body = document.getElementById('oc_body');
+    const waDigits = (meta.owner_whatsapp || '').replace(/\D/g, '');
+    const waLink = waDigits ? `https://wa.me/${waDigits}` : null;
+    const lines = [];
+    lines.push(`👤 ${escapeHtml(meta.owner_name)}`);
+    if (meta.owner_email) lines.push(`✉️ ${escapeHtml(meta.owner_email)}`);
+    if (waDigits) lines.push(`📱 WhatsApp: ${escapeHtml(meta.owner_whatsapp)}${waLink?` — ${waLink}`:''}`);
+    if (meta.owner_bank)   lines.push(`🏦 ${escapeHtml(meta.owner_bank)}`);
+    if (meta.owner_wallet) lines.push(`💳 ${escapeHtml(meta.owner_wallet)}`);
+    if (meta.owner_profile_desc) lines.push(`\n${escapeHtml(meta.owner_profile_desc)}`);
+    if(lines.length){ body.textContent = lines.join('\n'); box.style.display = ''; }
+  }
+
   (async () => {
-    // ===== ambil video_id dari query dan minta playlist ke backend =====
+    await loadKurs();
+
     const p = new URLSearchParams(location.search);
     const vid = p.get('video_id');
-    if (!vid) {
-      document.body.insertAdjacentHTML('beforeend','<p>video_id kosong</p>');
-      return;
-    }
-    // link balik ke halaman ini
-    const selfLink = document.getElementById('selfLink');
-    selfLink.href = '/public/watch.html?video_id=' + encodeURIComponent(vid);
+    if (!vid) return document.body.insertAdjacentHTML('beforeend','<p>video_id kosong</p>');
+    document.getElementById('selfLink').href = '/public/watch.html?video_id='+encodeURIComponent(vid);
 
-    // --- ambil metadata video dari /api/videos (lalu filter id)
     let meta = null;
     try {
       const vr = await fetch('/api/videos');
       const vj = await vr.json();
-      if (vr.ok && vj.videos && Array.isArray(vj.videos)) {
-        meta = vj.videos.find(x => x.id === vid) || null;
-      }
+      if (vr.ok && vj.videos) meta = vj.videos.find(x=>x.id===vid) || null;
     } catch {}
 
-    // render meta awal (kalau ada)
-    const titleEl = document.getElementById('title');
-    const descEl  = document.getElementById('desc');
-    const priceEl = document.getElementById('price');
+    const titleEl=document.getElementById('title'),
+          descEl=document.getElementById('desc'),
+          priceEl=document.getElementById('price');
 
     if (meta) {
       titleEl.textContent = meta.title || '(Tanpa judul)';
       descEl.textContent  = (meta.description || '').trim() || '(Belum ada deskripsi)';
-      // tampilkan harga dalam USD & IDR (opsional)
-      const usd = (meta.price_cents/100).toFixed(2);
-      const idr = (Number(usd) * 17000).toLocaleString('id-ID');
-      priceEl.textContent = `💰 Harga: $${usd} (~Rp ${idr}) • Owner: ${meta.owner_name}`;
-    } else {
-      titleEl.textContent = '(Memuat…)';
-      descEl.textContent  = '';
-      priceEl.textContent = '';
+      const idr = Math.round((meta.price_cents/100) * USD_TO_IDR);
+      priceEl.textContent=`💰 Harga: Rp ${numIDR.format(idr)} • Owner: ${meta.owner_name}`;
+      renderOwnerContact(meta);
     }
 
-    // --- minta playlist (authorize + URL m3u8)
+    // ===== Playlist (HLS) =====
     const req = await fetch(`/api/request_play?video_id=${encodeURIComponent(vid)}`);
     const play = await req.json();
-    if (!req.ok) { alert(play.error || 'gagal request_play'); return; }
-
-    const video = document.getElementById('player');
-    const src = play.playlist;
-
-    // ===== init HLS (m3u8) dengan fallback Safari/native =====
-    if (Hls.isSupported()) {
-      const hls = new Hls({ autoStartLoad:true });
-      hls.loadSource(src);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.ERROR, (_, data) => {
-        if (data?.fatal) {
-          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
-          else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
-          else { hls.destroy(); video.src = src; }
+    if (!req.ok) return alert(play.error||'gagal request_play');
+    const video=document.getElementById('player');
+    const src=play.playlist;
+    if(Hls.isSupported()){
+      const hls=new Hls({autoStartLoad:true});
+      hls.loadSource(src); hls.attachMedia(video);
+      hls.on(Hls.Events.ERROR,(_,d)=>{
+        if(d?.fatal){
+          if(d.type===Hls.ErrorTypes.NETWORK_ERROR)hls.startLoad();
+          else if(d.type===Hls.ErrorTypes.MEDIA_ERROR)hls.recoverMediaError();
+          else{hls.destroy(); video.src=src;}
         }
       });
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = src; // Safari
-    } else {
-      document.body.insertAdjacentHTML('beforeend','<p>Browser tidak mendukung HLS.</p>');
-    }
+    }else if(video.canPlayType('application/vnd.apple.mpegurl')) video.src=src;
+    else document.body.insertAdjacentHTML('beforeend','<p>Browser tidak mendukung HLS.</p>');
 
-    // ===== FULLSCREEN CONTAINER (bukan native video) =====
-    const wrap = document.getElementById('wrap');
-    const fsBtn = document.getElementById('fsBtn');
-
+    // ===== Fullscreen =====
+    const wrap=document.getElementById('wrap'), fsBtn=document.getElementById('fsBtn');
     async function toggleFS(){
-      const inFS = document.fullscreenElement === wrap || document.webkitFullscreenElement === wrap;
-      if (inFS) {
-        (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
-      } else {
-        (wrap.requestFullscreen || wrap.webkitRequestFullscreen)?.call(wrap);
-      }
+      const inFS=document.fullscreenElement===wrap||document.webkitFullscreenElement===wrap;
+      if(inFS)(document.exitFullscreen||document.webkitExitFullscreen)?.call(document);
+      else(wrap.requestFullscreen||wrap.webkitRequestFullscreen)?.call(wrap);
     }
-    fsBtn.addEventListener('click', toggleFS);
-    addEventListener('keydown', (e)=>{ if(e.key==='f') toggleFS(); });
-
+    fsBtn.addEventListener('click',toggleFS);
+    addEventListener('keydown',e=>{if(e.key==='f')toggleFS();});
     function onFSChange(){
-      const active = document.fullscreenElement === wrap || document.webkitFullscreenElement === wrap;
-      fsBtn.textContent = active ? 'Keluar Fullscreen' : 'Fullscreen';
+      const active=document.fullscreenElement===wrap||document.webkitFullscreenElement===wrap;
+      fsBtn.textContent=active?'Keluar Fullscreen':'Fullscreen';
     }
-    document.addEventListener('fullscreenchange', onFSChange);
-    document.addEventListener('webkitfullscreenchange', onFSChange);
+    document.addEventListener('fullscreenchange',onFSChange);
+    document.addEventListener('webkitfullscreenchange',onFSChange);
 
-    // ===== Tampilkan menu edit jika user adalah OWNER =====
-    // Strategi: panggil /api/my_videos lalu cek apakah 'vid' ada di sana
-    let isOwner = false;
-    let myMeta  = null;
-    try {
-      const mr = await fetch('/api/my_videos');
-      const mj = await mr.json();
-      if (mr.ok && mj.ok && Array.isArray(mj.videos)) {
-        myMeta = mj.videos.find(v => v.id === vid) || null;
-        isOwner = !!myMeta;
+    // ===== Menu edit (hanya owner) =====
+    let isOwner=false,myMeta=null;
+    try{
+      const mr=await fetch('/api/my_videos');
+      const mj=await mr.json();
+      if(mr.ok&&mj.ok&&Array.isArray(mj.videos)){
+        myMeta=mj.videos.find(v=>v.id===vid)||null;
+        isOwner=!!myMeta;
       }
-    } catch {}
+    }catch{}
 
-    if (isOwner) {
-      const box = document.getElementById('ownerEdit');
-      const f   = document.getElementById('editForm');
-      const ev_id = document.getElementById('ev_id');
-      const ev_title = document.getElementById('ev_title');
-      const ev_desc  = document.getElementById('ev_desc');
-      const ev_price = document.getElementById('ev_price');
+    if(isOwner){
+      const box=document.getElementById('ownerEdit');
+      const f=document.getElementById('editForm');
+      const ev_id=document.getElementById('ev_id');
+      const ev_title=document.getElementById('ev_title');
+      const ev_desc=document.getElementById('ev_desc');
+      const ev_price_cents=document.getElementById('ev_price_cents');
+      const ev_price_idr=document.getElementById('ev_price_idr');
+      const seed=myMeta||meta||{};
 
-      const seed = myMeta || meta || {};
-      ev_id.value    = vid;
-      ev_title.value = seed.title || '';
-      ev_desc.value  = (seed.description || '');
-      ev_price.value = Number(seed.price_cents || 0);
+      ev_id.value=vid;
+      ev_title.value=seed.title||'';
+      ev_desc.value=seed.description||'';
 
-      box.style.display = '';
+      // Pre-fill Harga (Rp)
+      const seed_idr = Math.round((Number(seed.price_cents||0)/100) * USD_TO_IDR);
+      ev_price_idr.value = seed_idr > 0 ? seed_idr : '';
 
-      f.onsubmit = async (e) => {
+      box.style.display='';
+
+      f.onsubmit=async(e)=>{
         e.preventDefault();
-        const body = new URLSearchParams(new FormData(f));
-        const pc = Number(body.get('price_cents')||0);
-        if (Number.isNaN(pc) || pc < 0) { toast('Harga (cents) harus >= 0', false); return; }
+        // Konversi Rupiah -> price_cents
+        const idr = Number(ev_price_idr.value || 0);
+        if(Number.isNaN(idr) || idr < 0) return toast('Harga (Rp) harus >= 0', false);
+
+        const usd = idr / USD_TO_IDR;               // dalam USD
+        const cents = Math.round(usd * 100);        // USD cents
+        ev_price_cents.value = String(cents);
+
+        const body=new URLSearchParams(new FormData(f));
         try{
-          const r = await fetch('/api/video_update', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          const r=await fetch('/api/video_update',{
+            method:'POST',
+            headers:{'Content-Type':'application/x-www-form-urlencoded'},
             body
           });
-          const j = await r.json().catch(async ()=>({ok:false, error: await r.text()}));
-          if (!r.ok || j.ok === false) {
-            toast('Gagal update: ' + (j.error || 'unknown'), false);
-            return;
-          }
+          const j=await r.json().catch(async()=>({ok:false,error:await r.text()}));
+          if(!r.ok||j.ok===false) return toast('Gagal update: '+(j.error||'unknown'),false);
+
           toast('Video berhasil diupdate');
-          // refresh meta tampilan
-          titleEl.textContent = ev_title.value || '(Tanpa judul)';
-          descEl.textContent  = (ev_desc.value || '').trim() || '(Belum ada deskripsi)';
-          const usd = (pc/100).toFixed(2);
-          const idr = (Number(usd)*17000).toLocaleString('id-ID');
-          priceEl.textContent = `💰 Harga: $${usd} (~Rp ${idr}) • Owner: ${(meta?.owner_name)||'(Anda)'}`;
-        } catch(err){
-          toast('Gagal update: ' + err, false);
-        }
+          titleEl.textContent=ev_title.value||'(Tanpa judul)';
+          descEl.textContent=(ev_desc.value||'').trim()||'(Belum ada deskripsi)';
+          priceEl.textContent=`💰 Harga: Rp ${numIDR.format(idr)} • Owner: ${(meta?.owner_name)||'(Anda)'}`;
+        }catch(err){ toast('Gagal update: '+err,false); }
       };
     }
   })();
