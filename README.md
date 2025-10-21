@@ -126,12 +126,14 @@ ppv_stream/
 ```bash
 # 1️⃣ Build and start database
 make db-up
+make migrate
 
 # 2️⃣ Build Rust app (release)
-make build
+make build 
 
 # 3️⃣ Run application
 make run
+make seed
 ```
 
 The service will start on **http://localhost:8080**
