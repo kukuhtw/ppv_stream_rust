@@ -221,10 +221,7 @@ The service will start on **http://localhost:8080**
 
 ## 💡 License
 
-Open source for educational and non-commercial use.
-
-© 2025 Kukuh Tripamungkas Wicaksono (Kukuh TW)  
-All rights reserved.
+Apache 2.0 license
 
 ---
 
