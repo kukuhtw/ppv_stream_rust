@@ -25,24 +25,6 @@ PPV Stream Rust is **open-source**, **self-hosted**, and **built for creators wh
 
 ## 💡 New Feature: C2C Marketplace
 
-PPV Stream Rust makes it easy for anyone to create a **video streaming marketplace** — similar to **OnlyFans**, but **consumer-to-consumer (C2C)**.  
-
-Users can **pay other users directly** to watch exclusive content, tutorials, music performances, religious broadcasts, short films, or personal vlogs.
-
-This model allows:
-
-- 💸 **Direct payments** between viewers and creators (no middleman)  
-- 🧾 **Transparent transactions** for every pay-per-view event  
-- 🌐 **Independent video portals** that anyone can host and brand as their own marketplace  
-
----
-
-Berikut versi revisi dengan tambahan penjelasan fitur **X402 Smart Contract Payment** di bawah bagian *C2C Marketplace*:
-
----
-
-## 💡 New Feature: C2C Marketplace
-
 PPV Stream Rust makes it easy for anyone to create a **video streaming marketplace** — similar to **OnlyFans**, but **consumer-to-consumer (C2C)**.
 
 Users can **pay other users directly** to watch exclusive content, tutorials, music performances, religious broadcasts, short films, or personal vlogs.
