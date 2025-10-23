@@ -92,7 +92,31 @@ ppv_stream/
 ├── Makefile
 ├── README.md
 ├── a
+├── contracts
+│   ├── Dockerfile
+│   ├── contracts
+│   │   └── X402Splitter.sol
+│   ├── guidance_smartcontract_deployment
+│   ├── hardhat.config.js
+│   ├── package.json
+│   └── scripts
+│       ├── check_balance.js
+│       ├── deploy_x402.js
+│       └── estimate_gas_cost.js
 ├── docker-compose.yml
+├── migrations
+│   ├── 013_tokens.sql
+│   ├── 014_x402_invoice.sql
+│   ├── 015_users_wallet_chain.sql
+│   ├── 016_purchases_fk_video.sql
+│   ├── 017_allowlist_idx_username.sql
+│   ├── 018_invoice_uid_hash.sql
+│   ├── 019_x402_core.sql
+│   ├── 020_x402_invoice_hash.sql
+│   ├── 021_pay_tokens.sql
+│   ├── 022_pay_tokens_rename_erc20.sql
+│   ├── 023_x402_underpay_and_quote.sql
+│   └── 024_pay_tokens_compat_view.sql
 ├── public
 │   ├── admin
 │   │   ├── dashboard.html
@@ -116,38 +140,49 @@ ppv_stream/
 │   ├── 006_indexes.sql
 │   ├── 007_perf_and_fk.sql
 │   ├── 008_price_cents_bigint.sql
-│   └── 009_users_username_unique.sql
-└── src
-    ├── a
-    ├── auth.rs
-    ├── bootstrap.rs
-    ├── config.rs
-    ├── db.rs
-    ├── email.rs
-    ├── ffmpeg.rs
-    ├── handlers
-    │   ├── admin.rs
-    │   ├── auth_admin.rs
-    │   ├── auth_user.rs
-    │   ├── mod.rs
-    │   ├── pages.rs
-    │   ├── password.rs
-    │   ├── setup.rs
-    │   ├── stream.rs
-    │   ├── upload.rs
-    │   ├── users.rs
-    │   └── video.rs
-    ├── hls.rs
-    ├── main.rs
-    ├── middleware.rs
-    ├── models.rs
-    ├── schema.sql
-    ├── sessions.rs
-    ├── token.rs
-    ├── util.rs
-    └── validators.rs
+│   ├── 009_users_username_unique.sql
+│   ├── 010_videos_hls.sql
+│   ├── 011_videos_description.sql
+│   └── 012_user_profile.sql
+├── src
+│   ├── a
+│   ├── auth.rs
+│   ├── bin
+│   │   └── seed_dummy.rs
+│   ├── bootstrap.rs
+│   ├── config.rs
+│   ├── db.rs
+│   ├── email.rs
+│   ├── ffmpeg.rs
+│   ├── handlers
+│   │   ├── admin.rs
+│   │   ├── auth_admin.rs
+│   │   ├── auth_user.rs
+│   │   ├── kurs.rs
+│   │   ├── me.rs
+│   │   ├── mod.rs
+│   │   ├── pages.rs
+│   │   ├── password.rs
+│   │   ├── pay.rs
+│   │   ├── setup.rs
+│   │   ├── stream.rs
+│   │   ├── upload.rs
+│   │   ├── users.rs
+│   │   └── video.rs
+│   ├── hls.rs
+│   ├── main.rs
+│   ├── middleware.rs
+│   ├── models.rs
+│   ├── schema.sql
+│   ├── services
+│   │   └── x402_watcher.rs
+│   ├── sessions.rs
+│   ├── token.rs
+│   ├── util.rs
+│   ├── validators.rs
+│   └── worker.rs
 
-7 directories, 54 files
+13 directories, 74 files
 ```
 
 ---
