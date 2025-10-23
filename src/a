@@ -1,8 +1,28 @@
 // placeholder module file (intentionally minimal)
 .
+├── Cargo.lock
 ├── Cargo.toml
+├── Dockerfile
+├── Makefile
 ├── README.md
 ├── a
+├── contracts
+│   ├── Dockerfile
+│   ├── contracts
+│   │   └── X402Splitter.sol
+│   ├── guidance_smartcontract_deployment
+│   ├── hardhat.config.js
+│   ├── package.json
+│   └── scripts
+│       ├── deploy_x402.js
+│       └── estimate_gas_cost.js
+├── docker-compose.yml
+├── migrations
+│   ├── 013_tokens.sql
+│   ├── 014_x402_invoice.sql
+│   ├── 015_users_wallet_chain.sql
+│   ├── 016_purchases_fk_video.sql
+│   └── 017_allowlist_idx_username.sql
 ├── public
 │   ├── admin
 │   │   ├── dashboard.html
@@ -14,26 +34,44 @@
 │   │   └── reset_password.html
 │   ├── browse.html
 │   ├── dashboard.html
+│   ├── index.html
 │   ├── styles.css
 │   └── watch.html
 ├── sql
+│   ├── 001_init.sql
 │   ├── 002_admins.sql
 │   ├── 003_password_resets.sql
 │   ├── 004_sessions.sql
-│   └── init.sql
+│   ├── 005_allowlist.sql
+│   ├── 006_indexes.sql
+│   ├── 007_perf_and_fk.sql
+│   ├── 008_price_cents_bigint.sql
+│   ├── 009_users_username_unique.sql
+│   ├── 010_videos_hls.sql
+│   ├── 011_videos_description.sql
+│   └── 012_user_profile.sql
 └── src
     ├── a
     ├── auth.rs
+    ├── bin
+    │   └── seed_dummy.rs
+    ├── bootstrap.rs
     ├── config.rs
     ├── db.rs
     ├── email.rs
     ├── ffmpeg.rs
     ├── handlers
+    │   ├── New folder
     │   ├── admin.rs
     │   ├── auth_admin.rs
     │   ├── auth_user.rs
+    │   ├── kurs.rs
+    │   ├── me.rs
+    │   ├── mod.rs
     │   ├── pages.rs
     │   ├── password.rs
+    │   ├── pay.rs
+    │   ├── setup.rs
     │   ├── stream.rs
     │   ├── upload.rs
     │   ├── users.rs
@@ -42,13 +80,17 @@
     ├── main.rs
     ├── middleware.rs
     ├── models.rs
+    ├── schema.sql
     ├── sessions.rs
     ├── token.rs
     ├── util.rs
-    └── validators.rs
+    ├── validators.rs
+    └── worker.rs
 
-7 directories, 40 files
+13 directories, 74 files
 kukuhtw@KukuhTW-Lenovo:~/rust/ppv_stream$
+
+
 
 make db-up
 make wait-db

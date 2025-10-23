@@ -1,10 +1,10 @@
 <!-- public/watch.html -->
 <!-- public/watch.html -->
 <!doctype html>
-<html lang="id">
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Tonton</title>
+  <title>Watch</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="/public/styles.css">
   <style>
@@ -24,13 +24,7 @@
       border-radius:10px;
       overflow:hidden;
     }
-    #player {
-      width:100%;
-      height:100%;
-      object-fit:contain;
-      background:#000;
-      display:block;
-    }
+    #player { width:100%; height:100%; object-fit:contain; background:#000; display:block; }
     video::-webkit-media-controls-fullscreen-button { display:none; }
     video::-webkit-media-controls-enclosure { overflow:hidden; }
 
@@ -57,12 +51,12 @@
     <a href="/public/browse.html">Browse</a>
     <a href="/public/dashboard.html">Dashboard</a>
     <span class="spacer"></span>
-    <span id="userbar" class="badge">Memuat user…</span>
+    <span id="userbar" class="badge">Loading user…</span>
   </nav>
 
   <div class="meta">
-    <a id="selfLink" class="muted" href="#">Halaman ini</a>
-    <h1 id="title">Memuat judul…</h1>
+    <a id="selfLink" class="muted" href="#">This page</a>
+    <h1 id="title">Loading title…</h1>
     <div id="price" class="price muted"></div>
     <p id="desc" class="muted" style="white-space:pre-wrap"></p>
   </div>
@@ -72,36 +66,54 @@
     <button id="fsBtn" class="fs-btn" type="button">Fullscreen</button>
   </div>
 
-  <!-- Blok kontak owner -->
+  <!-- X402 pay CTA (shown on 403) -->
+  <div id="x402Pay" class="card" style="display:none; max-width:960px;">
+    <h3 style="margin:0 0 8px 0">Access locked</h3>
+    <p id="x402Price" class="muted" style="margin:4px 0 10px"></p>
+
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <label style="margin:0">
+        <span class="muted">Token:</span>
+        <select id="x402Token" style="padding:8px 10px"></select>
+      </label>
+      <button id="btnX402" class="primary" type="button">Buy with Crypto (X402)</button>
+    </div>
+
+    <small class="muted">Auto split: 90% creator / 10% admin.</small>
+  </div>
+
+  <!-- Owner contact block -->
   <div id="ownerContact" class="card" style="display:none">
-    <h3 style="margin:0 0 8px 0">Kontak Owner</h3>
+    <h3 style="margin:0 0 8px 0">Owner Contact</h3>
     <div id="oc_body" style="white-space:pre-wrap"></div>
   </div>
 
-  <!-- Form edit untuk owner -->
+  <!-- Owner edit form -->
   <div id="ownerEdit" class="card" style="display:none">
     <h3 style="margin:0 0 8px 0">Edit Video</h3>
     <form id="editForm">
       <input type="hidden" name="video_id" id="ev_id">
-      <label>Judul
+      <label>Title
         <input name="title" id="ev_title" required maxlength="160">
       </label>
-      <label>Deskripsi
+      <label>Description
         <textarea name="description" id="ev_desc" rows="3"></textarea>
       </label>
 
-      <!-- Harga Rupiah (UI), tetap kirim price_cents ke backend -->
-      <label>Harga (Rp)
-        <input id="ev_price_idr" type="number" min="0" step="100" placeholder="contoh: 25000">
+      <!-- Price in USD (owner inputs USD, backend receives price_cents) -->
+      <label>Price (USD)
+        <input id="ev_price_usd" type="number" min="0" step="0.01" placeholder="e.g. 1.99">
       </label>
       <input name="price_cents" id="ev_price_cents" type="hidden">
 
-      <button class="primary" type="submit">Simpan Perubahan</button>
+      <button class="primary" type="submit">Save Changes</button>
     </form>
-    <small class="muted">Hanya pemilik video yang dapat menyimpan perubahan.</small>
+    <small class="muted">Only the video owner can save changes.</small>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+
   <script>
   function escapeHtml(s){
     return String(s ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;')
@@ -109,18 +121,19 @@
   }
   function toast(msg, ok=true){ alert((ok ? "✅ " : "❌ ") + msg); }
 
-  const numIDR = new Intl.NumberFormat('id-ID');
-  let USD_TO_IDR = 17000; // fallback jika /api/kurs gagal
+  // ===== Currency formatters =====
+  const numUSD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+  const numIDR = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
+  let USD_TO_IDR = 17000; // fallback
 
-  async function loadKurs() {
+  // (Optional) load rate from backend if available
+  (async () => {
     try {
-      const r = await fetch('/api/kurs');
+      const r = await fetch('/api/usd_to_idr'); // return { rate: 17000 }
       const j = await r.json();
-      if (r.ok && j && (typeof j.usd_to_idr === 'number')) {
-        USD_TO_IDR = j.usd_to_idr;
-      }
+      if (r.ok && (j.rate || j.usd_to_idr)) USD_TO_IDR = Number(j.rate || j.usd_to_idr) || USD_TO_IDR;
     } catch {}
-  }
+  })();
 
   // ==== user bar ====
   (async function loadMe(){
@@ -128,13 +141,13 @@
       const r = await fetch('/api/me');
       const j = await r.json();
       const el = document.getElementById('userbar');
-      if(j.ok && j.user){
-        el.innerHTML = `Login: <b>${escapeHtml(j.user.username)}</b> &lt;${escapeHtml(j.user.email)}&gt;`;
-      }else{
-        el.innerHTML = `<a href="/public/auth/login.html">Login</a>`;
+      if (j.ok && j.user) {
+        el.innerHTML = `Logged in: <b>${escapeHtml(j.user.username)}</b> &lt;${escapeHtml(j.user.email)}&gt;`;
+      } else {
+        el.innerHTML = `<a href="/public/auth/login.html">Log in</a>`;
       }
     }catch{
-      document.getElementById('userbar').textContent='User: (gagal memuat)';
+      document.getElementById('userbar').textContent = 'User: (failed to load)';
     }
   })();
 
@@ -154,12 +167,238 @@
     if(lines.length){ body.textContent = lines.join('\n'); box.style.display = ''; }
   }
 
-  (async () => {
-    await loadKurs();
+  // ====== X402 / EVM helpers ======
+  const X402_ABI = [
+    "event Paid(bytes32 indexed invoiceUid, address indexed payer, address indexed creator, address admin, address token, uint256 amountWei, string videoId)",
+    "function payNative(bytes32 invoiceUid, address creator, uint16 creatorBp, string calldata videoId) payable",
+    "function payERC20(bytes32 invoiceUid, address token, uint256 amountWei, address creator, uint16 creatorBp, string calldata videoId)"
+  ];
 
+  // RPC map (extend as needed)
+  const CHAIN_MAP = {
+    6342: {
+      hex: "0x18C6",
+      name: "Mega Testnet",
+      rpcUrls: ["https://carrot.megaeth.com/rpc"],
+      currency: { name: "MEGA", symbol: "MEGA", decimals: 18 }
+    }
+  };
+
+  async function ensureNetwork(provider, chainId) {
+    const cfg = CHAIN_MAP[Number(chainId)];
+    if (!cfg) throw new Error(`Unsupported chainId=${chainId}`);
+    try {
+      await provider.send("wallet_switchEthereumChain", [{ chainId: cfg.hex }]);
+    } catch (e) {
+      if (e?.code === 4902) {
+        await provider.send("wallet_addEthereumChain", [{
+          chainId: cfg.hex,
+          chainName: cfg.name,
+          nativeCurrency: cfg.currency,
+          rpcUrls: cfg.rpcUrls,
+          blockExplorerUrls: []
+        }]);
+      } else {
+        throw e;
+      }
+      await provider.send("wallet_switchEthereumChain", [{ chainId: cfg.hex }]);
+    }
+  }
+
+  // helpers dari ethers v5
+  const { isAddress, getAddress, id: keccakId } =
+    ethers.utils ? {...ethers, ...ethers.utils} : ethers;
+
+  // util kecil untuk tarik pesan error yang paling informatif
+  function pickErr(e){
+    return (
+      e?.error?.message ||
+      e?.error?.data?.message ||
+      e?.data?.message ||
+      e?.reason ||
+      e?.message ||
+      'Reverted (no reason)'
+    );
+  }
+
+  async function showPayCTA(videoId, meta){
+    const box = document.getElementById('x402Pay');
+    const sel = document.getElementById('x402Token');
+    const priceEl = document.getElementById('x402Price');
+    const btn = document.getElementById('btnX402');
+
+    // Price label (USD + IDR)
+    const usd = (Number(meta?.price_cents || 0) / 100) || 0;
+    const idr = Math.round(usd * USD_TO_IDR);
+    priceEl.textContent = `Price: ${numUSD.format(usd)} (~${numIDR.format(idr)}) • payable with crypto token`;
+
+    // Load token options
+    let opt=null;
+    try{
+      const r = await fetch('/api/pay/options?video_id='+encodeURIComponent(videoId));
+      opt = await r.json();
+    }catch{}
+    if(!opt || opt.ok!==true){
+      sel.innerHTML = `<option value="">(failed to load tokens)</option>`;
+      box.style.display=''; btn.disabled = true; return;
+    }
+
+    const tokens = Array.isArray(opt.tokens)? opt.tokens : [];
+    sel.innerHTML = tokens.map(t=>{
+      const val = JSON.stringify({chain_id:t.chain_id, symbol:t.symbol, erc20:t.erc20||null});
+      return `<option value='${val}'>${t.chain} • ${t.symbol}${t.erc20?' (ERC-20)':''}</option>`;
+    }).join('') || `<option value="">(no active tokens)</option>`;
+    if(sel.value==='' && tokens.length){
+      const idx = tokens.findIndex(t=>t.symbol==='USDC');
+      sel.selectedIndex = (idx>=0 ? idx : 0);
+    }
+
+    box.style.display='';
+
+    btn.onclick = async ()=>{
+      const choice = sel.value ? JSON.parse(sel.value) : null;
+      if(!choice) return alert('Please select a token.');
+
+      // 1) Create invoice
+      const invRes = await fetch('/api/pay/x402/start', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          video_id: videoId,
+          chain_id: choice.chain_id,
+          symbol: choice.symbol,
+          token_address: choice.erc20
+        })
+      });
+      const inv = await invRes.json().catch(()=>({}));
+      if(!invRes.ok || inv.ok!==true) return alert(inv.error||'Failed to create invoice.');
+
+      // 2) Connect MetaMask & switch network
+      if(!window.ethereum) return alert('MetaMask not detected.');
+      const provider = new ethers.providers.Web3Provider(window.ethereum, 'any');
+      await provider.send('eth_requestAccounts', []);
+      await ensureNetwork(provider, inv.chain_id);
+
+      // Validate addresses (avoid ENS)
+      if (!isAddress(inv.x402_contract)) return alert('Invalid X402 contract address from server.');
+      if (!isAddress(inv.creator_wallet)) return alert('Invalid creator wallet address from server.');
+      if (inv.token_address && !isAddress(inv.token_address)) return alert('Invalid token address.');
+
+      const x402Addr = getAddress(inv.x402_contract);
+      const creatorAddr = getAddress(inv.creator_wallet);
+      const tokenAddr = inv.token_address ? getAddress(inv.token_address) : null;
+
+      // 3) Ensure contract exists on this chain
+      const code = await provider.getCode(x402Addr);
+      if (!code || code === "0x") return alert(`X402 contract not deployed on chainId=${inv.chain_id}.`);
+
+      // 4) Call contract (with callStatic simulation + overrides gasLimit)
+      const signer = provider.getSigner();
+      const contract = new ethers.Contract(x402Addr, X402_ABI, signer);
+      const invoiceUidBytes32 = keccakId(inv.invoice_uid);
+
+      try{
+        if(tokenAddr){ // ====== ERC-20 flow ======
+          const erc20 = new ethers.Contract(tokenAddr, [
+            "function allowance(address owner, address spender) view returns (uint256)",
+            "function approve(address spender, uint256 value) returns (bool)"
+          ], signer);
+
+          const me = await signer.getAddress();
+          const need = ethers.BigNumber.from(inv.amount_wei);
+          const allowance = await erc20.allowance(me, x402Addr);
+
+          if(allowance.lt(need)){
+            const txA = await erc20.approve(x402Addr, need);
+            await txA.wait();
+          }
+
+          // --- overrides untuk ERC-20 (tanpa value) ---
+          const overridesERC20 = { gasLimit: ethers.BigNumber.from(300000) };
+
+          // Simulasi dulu (tidak menghabiskan gas)
+          try {
+            await contract.callStatic.payERC20(
+              invoiceUidBytes32,
+              tokenAddr,
+              need,
+              creatorAddr,
+              9000,
+              inv.video_id,
+              overridesERC20
+            );
+          } catch (e) {
+            const msg = pickErr(e);
+            alert('Simulation failed (ERC-20): ' + msg);
+            console.error('callStatic payERC20 revert:', e);
+            return;
+          }
+
+          // Jika simulasi ok, kirim tx sesungguhnya
+          const tx = await contract.payERC20(
+            invoiceUidBytes32,
+            tokenAddr,
+            need,
+            creatorAddr,
+            9000,
+            inv.video_id,
+            overridesERC20
+          );
+          await tx.wait();
+
+        }else{ // ====== native flow ======
+          // --- overrides untuk native: value + gasLimit ---
+          const overridesNative = {
+            value: ethers.BigNumber.from(inv.amount_wei),
+            gasLimit: ethers.BigNumber.from(300000)
+          };
+
+          // Simulasi dulu (tidak menghabiskan gas)
+          try {
+            await contract.callStatic.payNative(
+              invoiceUidBytes32,
+              creatorAddr,
+              9000,
+              inv.video_id,
+              overridesNative
+            );
+          } catch (e) {
+            const msg = pickErr(e);
+            alert('Simulation failed (native): ' + msg);
+            console.error('callStatic payNative revert:', e);
+            return;
+          }
+
+          // Jika simulasi ok, kirim tx sesungguhnya
+          const tx = await contract.payNative(
+            invoiceUidBytes32,
+            creatorAddr,
+            9000,
+            inv.video_id,
+            overridesNative
+          );
+          await tx.wait();
+        }
+      }catch(err){
+        console.error("pay error:", err);
+        return alert('Transaction cancelled/failed: ' + (pickErr(err)));
+      }
+
+      // 5) Poll until access is granted
+      toast('Payment sent. Verifying access…');
+      for(let i=0;i<20;i++){
+        await new Promise(r=>setTimeout(r, 2000));
+        const rq = await fetch(`/api/request_play?video_id=${encodeURIComponent(videoId)}`);
+        if(rq.ok){ location.reload(); return; }
+      }
+      alert('Payment succeeded but access has not been recorded yet. Please refresh again in a few seconds.');
+    };
+  }
+
+  (async () => {
     const p = new URLSearchParams(location.search);
     const vid = p.get('video_id');
-    if (!vid) return document.body.insertAdjacentHTML('beforeend','<p>video_id kosong</p>');
+    if (!vid) return document.body.insertAdjacentHTML('beforeend','<p>video_id is missing</p>');
     document.getElementById('selfLink').href = '/public/watch.html?video_id='+encodeURIComponent(vid);
 
     let meta = null;
@@ -174,17 +413,23 @@
           priceEl=document.getElementById('price');
 
     if (meta) {
-      titleEl.textContent = meta.title || '(Tanpa judul)';
-      descEl.textContent  = (meta.description || '').trim() || '(Belum ada deskripsi)';
-      const idr = Math.round((meta.price_cents/100) * USD_TO_IDR);
-      priceEl.textContent=`💰 Harga: Rp ${numIDR.format(idr)} • Owner: ${meta.owner_name}`;
+      titleEl.textContent = meta.title || '(Untitled)';
+      descEl.textContent  = (meta.description || '').trim() || '(No description yet)';
+      const usd = (Number(meta.price_cents||0) / 100) || 0;
+      const idr = Math.round(usd * USD_TO_IDR);
+      priceEl.textContent=`💰 Price: ${numUSD.format(usd)} (~${numIDR.format(idr)}) • Owner: ${meta.owner_name}`;
       renderOwnerContact(meta);
     }
 
-    // ===== Playlist (HLS) =====
+    // ===== HLS playlist =====
     const req = await fetch(`/api/request_play?video_id=${encodeURIComponent(vid)}`);
-    const play = await req.json();
-    if (!req.ok) return alert(play.error||'gagal request_play');
+    const play = await req.json().catch(()=>({}));
+    if (req.status === 403) {
+      await showPayCTA(vid, meta);
+      return;
+    }
+    if (!req.ok) return alert(play.error||'Failed to request playback.');
+
     const video=document.getElementById('player');
     const src=play.playlist;
     if(Hls.isSupported()){
@@ -198,7 +443,7 @@
         }
       });
     }else if(video.canPlayType('application/vnd.apple.mpegurl')) video.src=src;
-    else document.body.insertAdjacentHTML('beforeend','<p>Browser tidak mendukung HLS.</p>');
+    else document.body.insertAdjacentHTML('beforeend','<p>Your browser does not support HLS.</p>');
 
     // ===== Fullscreen =====
     const wrap=document.getElementById('wrap'), fsBtn=document.getElementById('fsBtn');
@@ -211,12 +456,12 @@
     addEventListener('keydown',e=>{if(e.key==='f')toggleFS();});
     function onFSChange(){
       const active=document.fullscreenElement===wrap||document.webkitFullscreenElement===wrap;
-      fsBtn.textContent=active?'Keluar Fullscreen':'Fullscreen';
+      fsBtn.textContent=active?'Exit Fullscreen':'Fullscreen';
     }
     document.addEventListener('fullscreenchange',onFSChange);
     document.addEventListener('webkitfullscreenchange',onFSChange);
 
-    // ===== Menu edit (hanya owner) =====
+    // ===== Owner menu =====
     let isOwner=false,myMeta=null;
     try{
       const mr=await fetch('/api/my_videos');
@@ -234,45 +479,54 @@
       const ev_title=document.getElementById('ev_title');
       const ev_desc=document.getElementById('ev_desc');
       const ev_price_cents=document.getElementById('ev_price_cents');
-      const ev_price_idr=document.getElementById('ev_price_idr');
+      const ev_price_usd=document.getElementById('ev_price_usd');
       const seed=myMeta||meta||{};
 
       ev_id.value=vid;
       ev_title.value=seed.title||'';
       ev_desc.value=seed.description||'';
 
-      // Pre-fill Harga (Rp)
-      const seed_idr = Math.round((Number(seed.price_cents||0)/100) * USD_TO_IDR);
-      ev_price_idr.value = seed_idr > 0 ? seed_idr : '';
+      const seed_usd = (Number(seed.price_cents||0) / 100) || 0;
+      ev_price_usd.value = seed_usd > 0 ? seed_usd.toFixed(2) : '';
 
       box.style.display='';
 
       f.onsubmit=async(e)=>{
         e.preventDefault();
-        // Konversi Rupiah -> price_cents
-        const idr = Number(ev_price_idr.value || 0);
-        if(Number.isNaN(idr) || idr < 0) return toast('Harga (Rp) harus >= 0', false);
+        const usd = Number(ev_price_usd.value || 0);
+        if(Number.isNaN(usd) || usd < 0) return toast('Price (USD) must be ≥ 0', false);
 
-        const usd = idr / USD_TO_IDR;               // dalam USD
-        const cents = Math.round(usd * 100);        // USD cents
+        const cents = Math.round(usd * 100);
         ev_price_cents.value = String(cents);
 
-        const body=new URLSearchParams(new FormData(f));
-        try{
-          const r=await fetch('/api/video_update',{
-            method:'POST',
-            headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        const body = new URLSearchParams(new FormData(f));
+        try {
+          const resp = await fetch('/api/videos/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body
           });
-          const j=await r.json().catch(async()=>({ok:false,error:await r.text()}));
-          if(!r.ok||j.ok===false) return toast('Gagal update: '+(j.error||'unknown'),false);
+          const data = await resp.json().catch(()=> ({}));
 
-          toast('Video berhasil diupdate');
-          titleEl.textContent=ev_title.value||'(Tanpa judul)';
-          descEl.textContent=(ev_desc.value||'').trim()||'(Belum ada deskripsi)';
-          priceEl.textContent=`💰 Harga: Rp ${numIDR.format(idr)} • Owner: ${(meta?.owner_name)||'(Anda)'}`;
-        }catch(err){ toast('Gagal update: '+err,false); }
+          if (!resp.ok || data?.ok !== true) {
+            return toast(data?.error || 'Failed to save changes.', false);
+          }
+
+          toast('Changes saved successfully. Reloading…', true);
+          location.reload();
+        } catch (e) {
+          console.error('save error:', e);
+          toast('Network error while saving. Please try again.', false);
+        }
       };
+
+      // Live helper: preview USD + IDR while typing
+      ev_price_usd.addEventListener('input', () => {
+        const usd = Number(ev_price_usd.value || 0);
+        if (Number.isNaN(usd) || usd < 0) return;
+        const idr = Math.round(usd * USD_TO_IDR);
+        priceEl.textContent = `💰 Price (preview): ${numUSD.format(usd)} (~${numIDR.format(idr)}) • Owner: ${seed.owner_name || meta?.owner_name || 'You'}`;
+      });
     }
   })();
   </script>

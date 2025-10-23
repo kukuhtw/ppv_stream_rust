@@ -1,11 +1,20 @@
 //src/handlers/users.rs
+// src/handlers/users.rs
 
-use axum::{extract::{Query, State}, response::IntoResponse, Json, Form};
+use axum::{
+    extract::{Query, State},
+    response::IntoResponse,
+    Json, Form,
+};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tower_cookies::Cookies;
 
 use crate::sessions;
+
+// === tambahan untuk validasi alamat EVM ===
+use ethers_core::types::Address;
+use std::str::FromStr;
 
 #[derive(Clone)]
 pub struct UsersState { pub pool: PgPool }
@@ -17,6 +26,7 @@ pub struct PublicProfile {
     pub email: String,
     pub bank_account: Option<String>,
     pub wallet_account: Option<String>,
+    pub wallet_chain_id: Option<i64>,
     pub whatsapp: Option<String>,
     pub profile_desc: String,
 }
@@ -28,6 +38,7 @@ pub struct MeProfile {
     pub email: String,
     pub bank_account: String,
     pub wallet_account: String,
+    pub wallet_chain_id: Option<i64>,
     pub whatsapp: String,
     pub profile_desc: String,
 }
@@ -41,10 +52,11 @@ pub async fn get_my_profile(State(st): State<UsersState>, cookies: Cookies) -> i
     let row = match sqlx::query!(
         r#"
         SELECT id, username, email,
-               COALESCE(bank_account,'') as bank_account,
-               COALESCE(wallet_account,'') as wallet_account,
-               COALESCE(whatsapp,'') as whatsapp,
-               COALESCE(profile_desc,'') as profile_desc
+               COALESCE(bank_account,'')     AS bank_account,
+               COALESCE(wallet_account,'')   AS wallet_account,
+               wallet_chain_id,
+               COALESCE(whatsapp,'')         AS whatsapp,
+               COALESCE(profile_desc,'')     AS profile_desc
         FROM users
         WHERE id = $1
         LIMIT 1
@@ -64,6 +76,7 @@ pub async fn get_my_profile(State(st): State<UsersState>, cookies: Cookies) -> i
                 email: u.email,
                 bank_account: u.bank_account.unwrap_or_default(),
                 wallet_account: u.wallet_account.unwrap_or_default(),
+                wallet_chain_id: u.wallet_chain_id, // Option<i64>
                 whatsapp: u.whatsapp.unwrap_or_default(),
                 profile_desc: u.profile_desc.unwrap_or_default(),
             }
@@ -76,7 +89,8 @@ pub async fn get_my_profile(State(st): State<UsersState>, cookies: Cookies) -> i
 #[derive(Deserialize)]
 pub struct UpdateProfileForm {
     pub bank_account: String,
-    pub wallet_account: String,
+    pub wallet_account: String,     // alamat EVM (boleh kosong)
+    pub wallet_chain_id: Option<i64>, // chainId preferensi kreator (boleh null)
     pub whatsapp: String,
     pub profile_desc: String,
 }
@@ -92,20 +106,37 @@ pub async fn update_my_profile(
         None => return Json(serde_json::json!({"ok": false, "where":"auth", "error": "not logged in"})),
     };
 
+    // --- Normalisasi & validasi wallet EVM ---
+    let wa_trim = f.wallet_account.trim();
+    if !wa_trim.is_empty() {
+        // Validasi: harus 0x + 40 hex
+        if Address::from_str(wa_trim).is_err() {
+            return Json(serde_json::json!({
+                "ok": false,
+                "where": "validation",
+                "error": "wallet_account must be a valid EVM address (0x + 40 hex)"
+            }));
+        }
+    }
+    // Simpan versi lowercase (lebih konsisten untuk perbandingan)
+    let wallet_to_save = if wa_trim.is_empty() { "".to_string() } else { wa_trim.to_lowercase() };
+
     let res = sqlx::query!(
         r#"
         UPDATE users
-        SET bank_account = NULLIF($2,''),
+        SET bank_account   = NULLIF($2,''),
             wallet_account = NULLIF($3,''),
-            whatsapp = NULLIF($4,''),
-            profile_desc = $5
+            whatsapp       = NULLIF($4,''),
+            profile_desc   = $5,
+            wallet_chain_id = $6
         WHERE id = $1
         "#,
         uid,
         f.bank_account.trim(),
-        f.wallet_account.trim(),
+        wallet_to_save.as_str(),
         f.whatsapp.trim(),
-        f.profile_desc.trim()
+        f.profile_desc.trim(),
+        f.wallet_chain_id  // Option<i64> → akan menjadi NULL jika None
     ).execute(&st.pool).await;
 
     match res {
@@ -129,7 +160,7 @@ pub async fn public_profile(State(st): State<UsersState>, Query(q): Query<Public
     let row = sqlx::query!(
         r#"
         SELECT id, username, email,
-               bank_account, wallet_account, whatsapp,
+               bank_account, wallet_account, wallet_chain_id, whatsapp,
                COALESCE(profile_desc,'') AS profile_desc
         FROM users
         WHERE ($1::text IS NOT NULL AND id = $1)
@@ -154,6 +185,7 @@ pub async fn public_profile(State(st): State<UsersState>, Query(q): Query<Public
             email: u.email,
             bank_account: u.bank_account,
             wallet_account: u.wallet_account,
+            wallet_chain_id: u.wallet_chain_id, // diekspos untuk publik juga (opsional)
             whatsapp: u.whatsapp,
             profile_desc: u.profile_desc.unwrap_or_default(),
         }}))

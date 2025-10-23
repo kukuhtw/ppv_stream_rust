@@ -1,0 +1,16 @@
+{
+  "name": "x402-contracts",
+  "private": true,
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "dotenv": "^16.4.5",
+    "hardhat": "^2.22.7"
+  },
+  "scripts": {
+    "compile": "hardhat compile",
+    "deploy:test": "hardhat run --network megaTestnet scripts/deploy_x402.js",
+    "deploy:mainnet": "hardhat run --network polygonMainnet scripts/deploy_x402.js",
+    "estimate:test": "hardhat run --network megaTestnet scripts/estimate_gas_cost.js",
+    "estimate:mainnet": "hardhat run --network polygonMainnet scripts/estimate_gas_cost.js"
+  }
+}

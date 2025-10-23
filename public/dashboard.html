@@ -55,9 +55,26 @@
       <label>Rekening Bank
         <input name="bank_account" placeholder="BCA 1234567890 a/n Nama">
       </label>
-      <label>Rekening Wallet (OVO/DANA/GoPay/USDT)
-        <input name="wallet_account" placeholder="DANA 08xxxxxxxxxx">
+
+      <!-- === PERUBAHAN: tetap pakai name="wallet_account", tetapi validasi sebagai EVM address === -->
+      <label>Creator EVM Wallet (payout)
+        <input
+          name="wallet_account"
+          placeholder="0x1234...abcd (42 chars)"
+          pattern="^$|^0x[a-fA-F0-9]{40}$"
+          title="Kosongkan, atau isi alamat EVM valid: 0x diikuti 40 karakter heksadesimal">
       </label>
+
+      <!-- === PERUBAHAN: pilih preferensi chain untuk payout (opsional) === -->
+      <label>Preferred Chain
+        <select name="wallet_chain_id" id="wallet_chain_id">
+          <option value="">(Pilih chain)</option>
+          <option value="6342">Mega Testnet (6342)</option>
+          <option value="137">Polygon Mainnet (137)</option>
+          <option value="1">Ethereum Mainnet (1)</option>
+        </select>
+      </label>
+
       <label>Deskripsi Profil
         <textarea name="profile_desc" rows="3" placeholder="Tuliskan deskripsi singkat tentang Anda atau cara konfirmasi transfer."></textarea>
       </label>
@@ -165,12 +182,24 @@
         f.bank_account.value = j.profile.bank_account || '';
         f.wallet_account.value = j.profile.wallet_account || '';
         f.profile_desc.value = j.profile.profile_desc || '';
+        // === PERUBAHAN: isi preferensi chain bila ada ===
+        const sel = document.getElementById('wallet_chain_id');
+        if (sel && j.profile.wallet_chain_id != null) {
+          sel.value = String(j.profile.wallet_chain_id);
+        }
       }
     } catch {}
     document.getElementById('profileForm').addEventListener('submit', async (e)=>{
       e.preventDefault();
       const fd = new FormData(e.target);
       fd.delete('email'); // jangan kirim email
+
+      // === PERUBAHAN: validasi client-side untuk EVM address ===
+      const addr = (fd.get('wallet_account')||'').toString().trim();
+      if (addr && !/^0x[a-fA-F0-9]{40}$/.test(addr)) {
+        return toast('Wallet harus alamat EVM valid: 0x + 40 hex', false);
+      }
+
       const body = new URLSearchParams(fd);
       try {
         const r = await fetch('/api/profile_update', {

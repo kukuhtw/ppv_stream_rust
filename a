@@ -9,7 +9,40 @@ make seed
 # buka http://localhost:8080/
 
 
+make checkx402 NET=megaTestnet
+make checkx402 mainnet
 
+make estimatex402 NET=megaTestnet
+make estimatex402 NET=polygonMainnet
+
+make deployx402 NET=megaTestnet
+make deployx402-mainnet
+
+kukuhtw@KukuhTW-Lenovo:~/rust/ppv_stream$ make deployx402 NET=megaTestnet
+
+==> Deploy X402Splitter ke network: megaTestnet
+Downloading compiler 0.8.20
+Compiled 1 Solidity file successfully (evm target: paris).
+==============================================
+🚀 Deploying X402Splitter...
+Network: megaTestnet
+Chain ID: 6342
+Admin Wallet: 0xB7256FB6fe96b8aDB4B4280E459fBED02C8db6f0
+==============================================
+X402Splitter deployed at: 0xa16bcF1D0Fd77A36ED4e2e0aC73fD36d5c7B3c96
+==> Kontrak ter-deploy di: 0xa16bcF1D0Fd77A36ED4e2e0aC73fD36d5c7B3c96
+✅ Disimpan ke .env: X402_CONTRACT_ADDRESS=0xa16bcF1D0Fd77A36ED4e2e0aC73fD36d5c7B3c96
+kukuhtw@KukuhTW-Lenovo:~/rust/ppv_stream$
+
+
+
+
+curl -X POST https://carrot.megaeth.com/rpc \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"eth_getCode","params":["0xa16bcF1D0Fd77A36ED4e2e0aC73fD36d5c7B3c96","latest"],"id":1}'
+
+
+make adminer-up  
 kukuhtw@KukuhTW-Lenovo:~/rust/ppv_stream$ tree
 .
 ├── Cargo.lock
@@ -18,7 +51,23 @@ kukuhtw@KukuhTW-Lenovo:~/rust/ppv_stream$ tree
 ├── Makefile
 ├── README.md
 ├── a
+├── contracts
+│   ├── Dockerfile
+│   ├── contracts
+│   │   └── X402Splitter.sol
+│   ├── guidance_smartcontract_deployment
+│   ├── hardhat.config.js
+│   ├── package.json
+│   └── scripts
+│       ├── deploy_x402.js
+│       └── estimate_gas_cost.js
 ├── docker-compose.yml
+├── migrations
+│   ├── 013_tokens.sql
+│   ├── 014_x402_invoice.sql
+│   ├── 015_users_wallet_chain.sql
+│   ├── 016_purchases_fk_video.sql
+│   └── 017_allowlist_idx_username.sql
 ├── public
 │   ├── admin
 │   │   ├── dashboard.html
@@ -42,22 +91,31 @@ kukuhtw@KukuhTW-Lenovo:~/rust/ppv_stream$ tree
 │   ├── 006_indexes.sql
 │   ├── 007_perf_and_fk.sql
 │   ├── 008_price_cents_bigint.sql
-│   └── 009_users_username_unique.sql
+│   ├── 009_users_username_unique.sql
+│   ├── 010_videos_hls.sql
+│   ├── 011_videos_description.sql
+│   └── 012_user_profile.sql
 └── src
     ├── a
     ├── auth.rs
+    ├── bin
+    │   └── seed_dummy.rs
     ├── bootstrap.rs
     ├── config.rs
     ├── db.rs
     ├── email.rs
     ├── ffmpeg.rs
     ├── handlers
+    │   ├── New folder
     │   ├── admin.rs
     │   ├── auth_admin.rs
     │   ├── auth_user.rs
+    │   ├── kurs.rs
+    │   ├── me.rs
     │   ├── mod.rs
     │   ├── pages.rs
     │   ├── password.rs
+    │   ├── pay.rs
     │   ├── setup.rs
     │   ├── stream.rs
     │   ├── upload.rs
@@ -71,10 +129,13 @@ kukuhtw@KukuhTW-Lenovo:~/rust/ppv_stream$ tree
     ├── sessions.rs
     ├── token.rs
     ├── util.rs
-    └── validators.rs
+    ├── validators.rs
+    └── worker.rs
 
-7 directories, 54 files
+13 directories, 74 files
 kukuhtw@KukuhTW-Lenovo:~/rust/ppv_stream$
+
+
 
 ┌───────────────┐
 │ User Browser  │
@@ -133,14 +194,6 @@ docker build --no-cache \
   --build-arg BUILD_REV=$(date +%s) \
   -t ppv_stream:dev .
 
-
-
-kukuhtw+user1@gmail.com
-user1Yfji477EGG1444
-
-
-kukuhtw+user2@gmail.com
-user2ji477EGG1444
 
 ADMIN_BOOTSTRAP_EMAIL=admin@example.com
 ADMIN_BOOTSTRAP_PASSWORD=ChangeMe123!

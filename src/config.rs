@@ -34,6 +34,12 @@ pub struct Config {
 
     // ===== Kurs Dollar ke Rupiah =====
     pub dollar_usd_to_rupiah: f64,
+
+    // ===== X402 =====
+    pub x402_contract: String,
+    pub x402_admin_wallet: String,
+    pub x402_rpc_wss: String, // untuk watcher (WebSocket RPC)
+    pub x402_chain_id: u64,   // chain default (mis: 137)
 }
 
 impl Config {
@@ -87,6 +93,15 @@ impl Config {
             .and_then(|s| s.parse::<f64>().ok())
             .unwrap_or(17000.0);
 
+        // ===== X402 =====
+        let x402_contract = env::var("X402_CONTRACT_ADDRESS").unwrap_or_default();
+        let x402_admin_wallet = env::var("X402_ADMIN_WALLET").unwrap_or_default();
+        let x402_rpc_wss = env::var("X402_RPC_WSS").unwrap_or_default();
+        let x402_chain_id = env::var("X402_CHAIN_ID")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(0);
+
         let cfg = Self {
             database_url,
             bind,
@@ -103,12 +118,18 @@ impl Config {
             hwaccel,
             max_upload_bytes,
             dollar_usd_to_rupiah,
+            x402_contract,
+            x402_admin_wallet,
+            x402_rpc_wss,
+            x402_chain_id,
         };
 
         cfg.ensure_dirs();
 
         println!(
-            "[config] bind={}, db_url={}, upload_dir={}, media_dir={}, tmp_dir={}, public_dir={}, hls_segment={}s, hwaccel={}, kurs_usd_to_idr={}, max_upload={}MB",
+            "[config] bind={}, db_url={}, upload_dir={}, media_dir={}, tmp_dir={}, public_dir={}, \
+             hls_segment={}s, hwaccel={}, kurs_usd_to_idr={}, max_upload={}MB, \
+             x402_contract={}, x402_chain_id={}, watcher_wss={}",
             cfg.bind,
             redacted(&cfg.database_url),
             cfg.upload_dir,
@@ -118,19 +139,17 @@ impl Config {
             cfg.hls_segment_seconds,
             cfg.hwaccel,
             cfg.dollar_usd_to_rupiah,
-            cfg.max_upload_bytes / (1024 * 1024)
+            cfg.max_upload_bytes / (1024 * 1024),
+            cfg.x402_contract,
+            cfg.x402_chain_id,
+            if cfg.x402_rpc_wss.is_empty() { "-" } else { "set" }
         );
 
         cfg
     }
 
     fn ensure_dirs(&self) {
-        for d in [
-            &self.upload_dir,
-            &self.media_dir,
-            &self.tmp_dir,
-            &self.public_dir,
-        ] {
+        for d in [&self.upload_dir, &self.media_dir, &self.tmp_dir, &self.public_dir] {
             if let Err(e) = fs::create_dir_all(d) {
                 eprintln!("[config] WARNING: gagal membuat dir {}: {}", d, e);
             }

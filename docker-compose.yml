@@ -6,8 +6,10 @@ services:
       POSTGRES_DB: ppv_stream
       POSTGRES_USER: ppv
       POSTGRES_PASSWORD: secret
+      TZ: Asia/Jakarta
+      PGTZ: Asia/Jakarta
     ports:
-      - "5432:5432"          # publish agar builder bisa akses via host.docker.internal:5432
+      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -22,42 +24,46 @@ services:
       context: .
       args:
         - BUILD_REV=${BUILD_REV:-dev}
-        # ⚠️ penting untuk SQLx ONLINE MODE saat cargo build
+        # Hanya diperlukan jika SQLX_OFFLINE=false saat build
         - DATABASE_URL=${DATABASE_URL_BUILD}
+        # Build binary dengan fitur watcher (0=off, 1=on)
+        - ENABLE_WATCHER=${ENABLE_WATCHER:-0}
     image: ppv_stream:dev
     container_name: ppv_stream_app
     depends_on:
       db:
         condition: service_healthy
-    # Pastikan file .env berisi: DATABASE_URL (runtime) & DATABASE_URL_BUILD (build time)
     env_file:
       - .env
     environment:
+      # Runtime env (penting!)
+      DATABASE_URL: ${DATABASE_URL}
+      BIND: ${BIND:-0.0.0.0:8080}
       PUBLIC_DIR: /app/public
-      # (opsional) override spesifik:
-      # BIND: ${BIND}
-      # RUST_LOG: ${RUST_LOG}
-    # Pastikan host.docker.internal bisa di-resolve (khusus Linux)
+      RUST_LOG: ${RUST_LOG:-info}
+      # ✅ X402 settings
+      X402_CONTRACT_ADDRESS: ${X402_CONTRACT_ADDRESS}
+      X402_ADMIN_WALLET: ${X402_ADMIN_WALLET}
+      X402_RPC_WSS: ${X402_RPC_WSS}
+      X402_CHAIN_ID: ${X402_CHAIN_ID}
+      # Opsional: jalankan watcher dalam proses server
+      WATCHER_ENABLE: ${WATCHER_ENABLE:-0}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
       - "8080:8080"
     volumes:
-      # Persist upload & HLS (path sesuai .env -> config.rs)
       - appdata:${STORAGE_DIR:-/data}
       - hlstmp:${HLS_ROOT:-/tmp/hls}
+    # devices:
+    #   - /dev/dri:/dev/dri
     restart: unless-stopped
     healthcheck:
-      # pastikan image runtime punya curl (Dockerfile sudah install)
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
       interval: 10s
       timeout: 3s
       retries: 5
-    # (opsional) kalau trafik tinggi:
-    # ulimits:
-    #   nofile:
-    #     soft: 65536
-    #     hard: 65536
+    # init: true
 
   adminer:
     image: adminer:4
@@ -69,6 +75,44 @@ services:
       ADMINER_DEFAULT_SERVER: db
     ports:
       - "8081:8080"
+    restart: unless-stopped
+
+ 
+  # ✅ Deployer Hardhat (on-demand)
+  x402-deployer:
+    build:
+      context: .
+      dockerfile: contracts/Dockerfile
+    image: x402-deployer:latest
+    working_dir: /app
+    profiles: ["deployer"]   # tidak ikut 'up' default
+    env_file:
+      - .env
+    environment:
+      PRIVATE_KEY: ${PRIVATE_KEY}
+      ADMIN_WALLET: ${X402_ADMIN_WALLET}
+      MEGA_RPC_HTTP: ${MEGA_RPC_HTTP:-https://carrot.megaeth.com/rpc}
+      MEGA_CHAIN_ID: ${MEGA_CHAIN_ID:-6342}
+    command: ["npx", "hardhat", "--help"]
+
+
+  # ✅ Sidecar watcher (recommended untuk production)
+  watcher:
+    image: ppv_stream:dev
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # Jika kamu pakai pola RUN_MODE watcher-only (kalau sudah ditambahkan)
+      # RUN_MODE: watcher
+      # Atau gunakan watcher dalam process yang sama (kode sudah support WATCHER_ENABLE)
+      WATCHER_ENABLE: "1"
+      DATABASE_URL: ${DATABASE_URL}
+      X402_RPC_WSS: ${X402_RPC_WSS}
+      X402_CONTRACT_ADDRESS: ${X402_CONTRACT_ADDRESS}
+      RUST_LOG: info
     restart: unless-stopped
 
 volumes:

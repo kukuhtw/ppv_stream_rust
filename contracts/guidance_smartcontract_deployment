@@ -1,0 +1,6 @@
+// Deploy testnet:
+docker compose run --rm x402-deployer npx hardhat run --network megaTestnet scripts/deploy_x402.js
+
+
+ // Deploy mainnet:
+docker compose run --rm x402-deployer npx hardhat run --network polygonMainnet scripts/deploy_x402.js
