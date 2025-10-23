@@ -37,6 +37,53 @@ This model allows:
 
 ---
 
+Berikut versi revisi dengan tambahan penjelasan fitur **X402 Smart Contract Payment** di bawah bagian *C2C Marketplace*:
+
+---
+
+## 💡 New Feature: C2C Marketplace
+
+PPV Stream Rust makes it easy for anyone to create a **video streaming marketplace** — similar to **OnlyFans**, but **consumer-to-consumer (C2C)**.
+
+Users can **pay other users directly** to watch exclusive content, tutorials, music performances, religious broadcasts, short films, or personal vlogs.
+
+This model allows:
+
+* 💸 **Direct payments** between viewers and creators (no middleman)
+* 🧾 **Transparent transactions** for every pay-per-view event
+* 🌐 **Independent video portals** that anyone can host and brand as their own marketplace
+
+---
+
+## ⚙️ Built-in X402 Smart Contract Payment
+
+The C2C system is powered by the **X402 payment contract**, a Solidity-based module integrated into PPV Stream Rust.
+
+With **X402**, every video purchase is securely processed on the blockchain, ensuring **trust, transparency, and automation**.
+
+Key features of the X402 integration:
+
+* 🔐 **Decentralized Settlement** — funds are transferred directly from viewer → creator via on-chain transaction.
+* ⚖️ **Auto-Split Fees** — payments are automatically divided between the **creator (e.g., 90%)** and **platform admin (e.g., 10%)**.
+* 💰 **Multi-Token Support** — users can pay using **native coins (MEGA, MATIC, ETH)** or **ERC-20 tokens (USDC, USDT, etc.)**.
+* 🪙 **Transparent Ledger** — all `Paid` events are logged on-chain with invoice UID, payer, creator, and amount in wei.
+* 🧾 **Invoice Hashing (Keccak256)** — every invoice has a unique hash (`invoice_uid_hash`) that binds the payment to the specific video ID.
+
+---
+
+**Example workflow:**
+
+1. Viewer clicks *Buy with Crypto (X402)*.
+2. System creates an on-chain invoice (`invoice_uid`).
+3. MetaMask opens and executes `payNative` or `payERC20`.
+4. The smart contract emits a `Paid` event — funds automatically go to the creator and admin wallets.
+5. Viewer instantly gains access to the video (`allowlist` updated).
+
+---
+
+This makes PPV Stream Rust not only a **decentralized pay-per-view platform**, but also a **ready-to-use C2C video marketplace** with **trustless crypto payments** and **full ownership control** for every creator.
+
+
 ## 🚀 Key Features
 
 * 🔐 **User & Admin Authentication** (login/register/reset password)  
