@@ -49,4 +49,14 @@ SET chain          = EXCLUDED.chain,
     decimals       = EXCLUDED.decimals,
     is_active      = TRUE;
 
+-- +++ Tambahan: seed Polygon Amoy (native)
+INSERT INTO pay_tokens (symbol, chain, chain_id, erc20_address, decimals, is_active)
+VALUES ('POL', 'Polygon Amoy Testnet', 80002, NULL, 18, TRUE)
+ON CONFLICT ON CONSTRAINT pay_tokens_chain_symbol_uq DO UPDATE
+SET chain          = EXCLUDED.chain,
+    erc20_address  = EXCLUDED.erc20_address,
+    decimals       = EXCLUDED.decimals,
+    is_active      = TRUE;
+    
+
 COMMIT;

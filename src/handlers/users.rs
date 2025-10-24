@@ -13,8 +13,9 @@ use tower_cookies::Cookies;
 use crate::sessions;
 
 // === tambahan untuk validasi alamat EVM ===
-use ethers_core::types::Address;
+use ethers::types::Address;
 use std::str::FromStr;
+
 
 #[derive(Clone)]
 pub struct UsersState { pub pool: PgPool }

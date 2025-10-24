@@ -114,28 +114,29 @@
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 
-  <script>
+   <script>
+  // ========= utils =========
   function escapeHtml(s){
-    return String(s ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;')
-      .replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;");
+    return String(s ?? '')
+      .replaceAll('&','&amp;').replaceAll('<','&lt;')
+      .replaceAll('>','&gt;').replaceAll('"','&quot;')
+      .replaceAll("'","&#039;");
   }
   function toast(msg, ok=true){ alert((ok ? "✅ " : "❌ ") + msg); }
-
-  // ===== Currency formatters =====
   const numUSD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
   const numIDR = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
   let USD_TO_IDR = 17000; // fallback
 
-  // (Optional) load rate from backend if available
+  // Optional: load FX rate from backend
   (async () => {
     try {
-      const r = await fetch('/api/usd_to_idr'); // return { rate: 17000 }
+      const r = await fetch('/api/usd_to_idr');
       const j = await r.json();
       if (r.ok && (j.rate || j.usd_to_idr)) USD_TO_IDR = Number(j.rate || j.usd_to_idr) || USD_TO_IDR;
     } catch {}
   })();
 
-  // ==== user bar ====
+  // user bar
   (async function loadMe(){
     try{
       const r = await fetch('/api/me');
@@ -167,49 +168,26 @@
     if(lines.length){ body.textContent = lines.join('\n'); box.style.display = ''; }
   }
 
-  // ====== X402 / EVM helpers ======
+  // ========= X402 / EVM helpers =========
   const X402_ABI = [
     "event Paid(bytes32 indexed invoiceUid, address indexed payer, address indexed creator, address admin, address token, uint256 amountWei, string videoId)",
-    "function payNative(bytes32 invoiceUid, address creator, uint16 creatorBp, string calldata videoId) payable",
-    "function payERC20(bytes32 invoiceUid, address token, uint256 amountWei, address creator, uint16 creatorBp, string calldata videoId)"
+    "function payNativeSigned(bytes32,address,uint16,string,uint256,uint256,uint8,bytes32,bytes32) payable",
+    "function payERC20Signed(bytes32,address,uint256,address,uint16,string,uint256,uint256,uint8,bytes32,bytes32)"
   ];
-
-  // RPC map (extend as needed)
-  const CHAIN_MAP = {
-    6342: {
-      hex: "0x18C6",
-      name: "Mega Testnet",
-      rpcUrls: ["https://carrot.megaeth.com/rpc"],
-      currency: { name: "MEGA", symbol: "MEGA", decimals: 18 }
-    }
+  const { isAddress, getAddress } = ethers.utils ? {...ethers, ...ethers.utils} : ethers;
+  const KNOWN_CHAINS = {
+    80002: {
+      name: "Polygon Amoy Testnet",
+      currency: { name: "MATIC", symbol: "MATIC", decimals: 18 },
+      rpcUrls: ["https://rpc-amoy.polygon.technology"],
+      explorerUrls: ["https://amoy.polygonscan.com"],
+    },
   };
-
-  async function ensureNetwork(provider, chainId) {
-    const cfg = CHAIN_MAP[Number(chainId)];
-    if (!cfg) throw new Error(`Unsupported chainId=${chainId}`);
-    try {
-      await provider.send("wallet_switchEthereumChain", [{ chainId: cfg.hex }]);
-    } catch (e) {
-      if (e?.code === 4902) {
-        await provider.send("wallet_addEthereumChain", [{
-          chainId: cfg.hex,
-          chainName: cfg.name,
-          nativeCurrency: cfg.currency,
-          rpcUrls: cfg.rpcUrls,
-          blockExplorerUrls: []
-        }]);
-      } else {
-        throw e;
-      }
-      await provider.send("wallet_switchEthereumChain", [{ chainId: cfg.hex }]);
-    }
-  }
-
-  // helpers dari ethers v5
-  const { isAddress, getAddress, id: keccakId } =
-    ethers.utils ? {...ethers, ...ethers.utils} : ethers;
-
-  // util kecil untuk tarik pesan error yang paling informatif
+  const toHexChain = n => {
+    n = Number(n);
+    if(!Number.isFinite(n) || n<=0) throw new Error('Invalid chainId');
+    return '0x'+n.toString(16);
+  };
   function pickErr(e){
     return (
       e?.error?.message ||
@@ -221,18 +199,235 @@
     );
   }
 
+  // switch / add network
+  async function ensureNetwork(provider, inv) {
+    const targetNum = Number(inv.chain_id);
+    if (!Number.isFinite(targetNum) || targetNum <= 0) throw new Error('Invalid chain id');
+    const hex = toHexChain(targetNum);
+
+    const meta = inv?.chain_meta ?? KNOWN_CHAINS[targetNum] ?? {
+      name: `Chain ${targetNum}`,
+      currency: { name: "Native", symbol: "NATIVE", decimals: 18 },
+      rpcUrls: [],
+      explorerUrls: [],
+    };
+
+    try {
+      await provider.send("wallet_switchEthereumChain", [{ chainId: hex }]);
+    } catch (e) {
+      if (e?.code === 4001) throw e; // user rejected
+      if (e?.code === 4902) {
+        const rpcUrls = (meta.rpcUrls && meta.rpcUrls.length) ? meta.rpcUrls : (KNOWN_CHAINS[targetNum]?.rpcUrls || []);
+        if (!rpcUrls.length) throw new Error(`Missing RPC URL for chain ${targetNum}`);
+        await provider.send("wallet_addEthereumChain", [{
+          chainId: hex,
+          chainName: meta.name || `Chain ${targetNum}`,
+          nativeCurrency: meta.currency || { name: "Native", symbol: "NATIVE", decimals: 18 },
+          rpcUrls,
+          blockExplorerUrls: meta.explorerUrls || [],
+        }]);
+        await provider.send("wallet_switchEthereumChain", [{ chainId: hex }]);
+      } else {
+        throw e;
+      }
+    }
+
+    // Confirm chain actually switched
+    await new Promise((resolve, reject) => {
+      const eth = provider.provider || window.ethereum;
+      const done = (cid)=> (cid||'').toLowerCase() === hex.toLowerCase();
+      const t = setTimeout(()=>reject(new Error('Switch chain timed out')), 8000);
+      provider.send('eth_chainId',[]).then(cid=>{
+        if(done(cid)){ clearTimeout(t); resolve(); return; }
+        const onChanged = (newHex)=>{
+          if(done(newHex)){ clearTimeout(t); eth?.removeListener?.('chainChanged', onChanged); resolve(); }
+        };
+        eth?.on?.('chainChanged', onChanged);
+      }).catch(err=>{ clearTimeout(t); reject(err); });
+    });
+  }
+
+  // ====== Invoice + Tx helpers ======
+  async function createInvoice(videoId, choice, payer) {
+    const invRes = await fetch('/api/pay/x402/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        video_id: videoId,
+        chain_id: choice.chain_id,
+        symbol: choice.symbol,      // kirim symbol asli dari backend (bukan label)
+        token_address: choice.erc20,
+        payer_address: payer
+      })
+    });
+    const inv = await invRes.json().catch(() => ({}));
+    if (!invRes.ok || inv.ok !== true) throw new Error(inv.error || 'Failed to create invoice.');
+    return inv;
+  }
+
+  async function sendPayment(inv, provider, signer, payer) {
+    if (!isAddress(inv.x402_contract)) throw new Error('Invalid X402 contract address from server.');
+    if (!isAddress(inv.creator_wallet)) throw new Error('Invalid creator wallet address from server.');
+    if (inv.token_address && !isAddress(inv.token_address)) throw new Error('Invalid token address.');
+
+    const x402Addr = getAddress(inv.x402_contract);
+    const creatorAddr = getAddress(inv.creator_wallet);
+    const tokenAddr = inv.token_address ? getAddress(inv.token_address) : null;
+
+    const code = await provider.getCode(x402Addr);
+    if (!code || code === '0x') throw new Error(`X402 contract not deployed on chainId=${inv.chain_id}.`);
+
+    const contract = new ethers.Contract(x402Addr, X402_ABI, signer);
+    const invoiceUidBytes32 = inv.invoice_uid_bytes32 || inv.invoice_uid;
+    const creatorBp = Number(inv.split_creator_bp || 9000);
+
+    const net = await provider.getNetwork();
+    if (Number(net.chainId) !== Number(inv.chain_id)) {
+      throw new Error(`Wrong network: wallet on ${net.chainId}, invoice requires ${inv.chain_id}`);
+    }
+
+    // Precheck Native balance
+    if (!tokenAddr) {
+      const bal = await provider.getBalance(payer);
+      const gasPrice = await provider.getGasPrice();
+      const gasLimitGuess = ethers.BigNumber.from(300000);
+      const need = ethers.BigNumber.from(inv.amount_wei).add(gasPrice.mul(gasLimitGuess));
+      if (bal.lt(need)) {
+        throw new Error(
+          `Insufficient MATIC: have ${ethers.utils.formatEther(bal)}; need ~${ethers.utils.formatEther(need)}`
+        );
+      }
+    }
+
+    // estimateGas to surface revert reasons early
+    try {
+      if (tokenAddr) {
+        await contract.estimateGas.payERC20Signed(
+          invoiceUidBytes32, tokenAddr, ethers.BigNumber.from(inv.amount_wei),
+          creatorAddr, creatorBp, inv.video_id,
+          ethers.BigNumber.from(inv.min_amount_wei),
+          ethers.BigNumber.from(inv.deadline), inv.v, inv.r, inv.s,
+          { from: payer }
+        );
+      } else {
+        await contract.estimateGas.payNativeSigned(
+          invoiceUidBytes32, creatorAddr, creatorBp, inv.video_id,
+          ethers.BigNumber.from(inv.min_amount_wei),
+          ethers.BigNumber.from(inv.deadline), inv.v, inv.r, inv.s,
+          { from: payer, value: ethers.BigNumber.from(inv.amount_wei) }
+        );
+      }
+    } catch (eg) {
+      throw new Error('Preflight failed: ' + (pickErr(eg)));
+    }
+
+    // Execute tx
+    if (tokenAddr) {
+      const erc20 = new ethers.Contract(tokenAddr, [
+        "function allowance(address owner, address spender) view returns (uint256)",
+        "function approve(address spender, uint256 value) returns (bool)"
+      ], signer);
+      const need = ethers.BigNumber.from(inv.amount_wei);
+      const allowance = await erc20.allowance(payer, x402Addr);
+      if (allowance.lt(need)) {
+        const txA = await erc20.approve(x402Addr, need);
+        await txA.wait();
+      }
+      const overrides = { gasLimit: ethers.BigNumber.from(300000) };
+      const tx = await contract.payERC20Signed(
+        invoiceUidBytes32, tokenAddr, need, creatorAddr, creatorBp, inv.video_id,
+        ethers.BigNumber.from(inv.min_amount_wei),
+        ethers.BigNumber.from(inv.deadline), inv.v, inv.r, inv.s, overrides
+      );
+      return await tx.wait();
+    } else {
+      const overrides = { value: ethers.BigNumber.from(inv.amount_wei), gasLimit: ethers.BigNumber.from(300000) };
+      const tx = await contract.payNativeSigned(
+        invoiceUidBytes32, creatorAddr, creatorBp, inv.video_id,
+        ethers.BigNumber.from(inv.min_amount_wei),
+        ethers.BigNumber.from(inv.deadline), inv.v, inv.r, inv.s, overrides
+      );
+      return await tx.wait();
+    }
+  }
+
+  // Orchestrator with retry
+  async function payFlowWithRetry(videoId, choice, btn) {
+    const MAX_ATTEMPTS = 3;
+
+    if (!window.ethereum) return alert('MetaMask not detected.');
+    let provider = new ethers.providers.Web3Provider(window.ethereum, 'any');
+    await provider.send('eth_requestAccounts', []);
+    let signer = provider.getSigner();
+    const payer = await signer.getAddress();
+
+    btn.disabled = true; btn.textContent = 'Processing…';
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        const inv = await createInvoice(videoId, choice, payer);
+        if (Number(inv.deadline || 0) <= Math.floor(Date.now() / 1000)) {
+          throw new Error('Invoice has expired. Please try again.');
+        }
+
+        await ensureNetwork(provider, inv);
+        provider = new ethers.providers.Web3Provider(window.ethereum, 'any');
+        await provider.ready;
+        signer = provider.getSigner();
+
+        await sendPayment(inv, provider, signer, payer);
+
+        toast('Payment sent. Verifying access…');
+        for (let i = 0; i < 20; i++) {
+          await new Promise(r => setTimeout(r, 2000));
+          const rq = await fetch(`/api/request_play?video_id=${encodeURIComponent(videoId)}`);
+          if (rq.ok) { location.reload(); return; }
+        }
+        alert('Payment succeeded but access has not been recorded yet. Please refresh in a few seconds.');
+        return;
+
+      } catch (err) {
+        const msg = (pickErr(err) || '').toLowerCase();
+        console.warn(`attempt ${attempt} failed:`, err);
+
+        if (msg.includes('user rejected') || msg.includes('user denied') || err?.code === 4001) {
+          alert('Transaction cancelled by user.');
+          break;
+        }
+
+        const retryable =
+          msg.includes('invoice') ||
+          msg.includes('expired') ||
+          msg.includes('already used') ||
+          msg.includes('json-rpc') ||
+          msg.includes('replacement') ||
+          msg.includes('nonce') ||
+          msg.includes('dropped') ||
+          msg.includes('reverted');
+
+        if (!retryable || attempt === MAX_ATTEMPTS) {
+          alert('Transaction cancelled/failed: ' + (pickErr(err)));
+          break;
+        }
+        await new Promise(r => setTimeout(r, 1200)); // small backoff
+      }
+    }
+
+    btn.disabled = false; btn.textContent = 'Buy with Crypto (X402)';
+  }
+
+  // ====== UI: showPayCTA ======
   async function showPayCTA(videoId, meta){
     const box = document.getElementById('x402Pay');
     const sel = document.getElementById('x402Token');
     const priceEl = document.getElementById('x402Price');
     const btn = document.getElementById('btnX402');
 
-    // Price label (USD + IDR)
     const usd = (Number(meta?.price_cents || 0) / 100) || 0;
     const idr = Math.round(usd * USD_TO_IDR);
     priceEl.textContent = `Price: ${numUSD.format(usd)} (~${numIDR.format(idr)}) • payable with crypto token`;
 
-    // Load token options
+    // load token options
     let opt=null;
     try{
       const r = await fetch('/api/pay/options?video_id='+encodeURIComponent(videoId));
@@ -243,11 +438,15 @@
       box.style.display=''; btn.disabled = true; return;
     }
 
-    const tokens = Array.isArray(opt.tokens)? opt.tokens : [];
-    sel.innerHTML = tokens.map(t=>{
-      const val = JSON.stringify({chain_id:t.chain_id, symbol:t.symbol, erc20:t.erc20||null});
-      return `<option value='${val}'>${t.chain} • ${t.symbol}${t.erc20?' (ERC-20)':''}</option>`;
+    const tokens = Array.isArray(opt.tokens) ? opt.tokens : [];
+    sel.innerHTML = tokens.map(t => {
+      const isNative = !t.erc20;
+      const displaySym = (isNative && t.chain_id === 80002) ? 'MATIC' : (t.native_symbol || t.symbol);
+      // yang DIKIRIM = t.symbol apa adanya dari backend
+      const val = JSON.stringify({ chain_id: t.chain_id, symbol: t.symbol, erc20: t.erc20 || null });
+      return `<option value='${val}'>${t.chain} • ${displaySym}${t.erc20 ? ' (ERC-20)' : ''}</option>`;
     }).join('') || `<option value="">(no active tokens)</option>`;
+
     if(sel.value==='' && tokens.length){
       const idx = tokens.findIndex(t=>t.symbol==='USDC');
       sel.selectedIndex = (idx>=0 ? idx : 0);
@@ -255,146 +454,19 @@
 
     box.style.display='';
 
-    btn.onclick = async ()=>{
+    // ✅ handler baru: gunakan flow dengan retry
+    btn.onclick = async () => {
       const choice = sel.value ? JSON.parse(sel.value) : null;
-      if(!choice) return alert('Please select a token.');
-
-      // 1) Create invoice
-      const invRes = await fetch('/api/pay/x402/start', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({
-          video_id: videoId,
-          chain_id: choice.chain_id,
-          symbol: choice.symbol,
-          token_address: choice.erc20
-        })
-      });
-      const inv = await invRes.json().catch(()=>({}));
-      if(!invRes.ok || inv.ok!==true) return alert(inv.error||'Failed to create invoice.');
-
-      // 2) Connect MetaMask & switch network
-      if(!window.ethereum) return alert('MetaMask not detected.');
-      const provider = new ethers.providers.Web3Provider(window.ethereum, 'any');
-      await provider.send('eth_requestAccounts', []);
-      await ensureNetwork(provider, inv.chain_id);
-
-      // Validate addresses (avoid ENS)
-      if (!isAddress(inv.x402_contract)) return alert('Invalid X402 contract address from server.');
-      if (!isAddress(inv.creator_wallet)) return alert('Invalid creator wallet address from server.');
-      if (inv.token_address && !isAddress(inv.token_address)) return alert('Invalid token address.');
-
-      const x402Addr = getAddress(inv.x402_contract);
-      const creatorAddr = getAddress(inv.creator_wallet);
-      const tokenAddr = inv.token_address ? getAddress(inv.token_address) : null;
-
-      // 3) Ensure contract exists on this chain
-      const code = await provider.getCode(x402Addr);
-      if (!code || code === "0x") return alert(`X402 contract not deployed on chainId=${inv.chain_id}.`);
-
-      // 4) Call contract (with callStatic simulation + overrides gasLimit)
-      const signer = provider.getSigner();
-      const contract = new ethers.Contract(x402Addr, X402_ABI, signer);
-      const invoiceUidBytes32 = keccakId(inv.invoice_uid);
-
-      try{
-        if(tokenAddr){ // ====== ERC-20 flow ======
-          const erc20 = new ethers.Contract(tokenAddr, [
-            "function allowance(address owner, address spender) view returns (uint256)",
-            "function approve(address spender, uint256 value) returns (bool)"
-          ], signer);
-
-          const me = await signer.getAddress();
-          const need = ethers.BigNumber.from(inv.amount_wei);
-          const allowance = await erc20.allowance(me, x402Addr);
-
-          if(allowance.lt(need)){
-            const txA = await erc20.approve(x402Addr, need);
-            await txA.wait();
-          }
-
-          // --- overrides untuk ERC-20 (tanpa value) ---
-          const overridesERC20 = { gasLimit: ethers.BigNumber.from(300000) };
-
-          // Simulasi dulu (tidak menghabiskan gas)
-          try {
-            await contract.callStatic.payERC20(
-              invoiceUidBytes32,
-              tokenAddr,
-              need,
-              creatorAddr,
-              9000,
-              inv.video_id,
-              overridesERC20
-            );
-          } catch (e) {
-            const msg = pickErr(e);
-            alert('Simulation failed (ERC-20): ' + msg);
-            console.error('callStatic payERC20 revert:', e);
-            return;
-          }
-
-          // Jika simulasi ok, kirim tx sesungguhnya
-          const tx = await contract.payERC20(
-            invoiceUidBytes32,
-            tokenAddr,
-            need,
-            creatorAddr,
-            9000,
-            inv.video_id,
-            overridesERC20
-          );
-          await tx.wait();
-
-        }else{ // ====== native flow ======
-          // --- overrides untuk native: value + gasLimit ---
-          const overridesNative = {
-            value: ethers.BigNumber.from(inv.amount_wei),
-            gasLimit: ethers.BigNumber.from(300000)
-          };
-
-          // Simulasi dulu (tidak menghabiskan gas)
-          try {
-            await contract.callStatic.payNative(
-              invoiceUidBytes32,
-              creatorAddr,
-              9000,
-              inv.video_id,
-              overridesNative
-            );
-          } catch (e) {
-            const msg = pickErr(e);
-            alert('Simulation failed (native): ' + msg);
-            console.error('callStatic payNative revert:', e);
-            return;
-          }
-
-          // Jika simulasi ok, kirim tx sesungguhnya
-          const tx = await contract.payNative(
-            invoiceUidBytes32,
-            creatorAddr,
-            9000,
-            inv.video_id,
-            overridesNative
-          );
-          await tx.wait();
-        }
-      }catch(err){
-        console.error("pay error:", err);
-        return alert('Transaction cancelled/failed: ' + (pickErr(err)));
+      if (!choice) return alert('Please select a token.');
+      try {
+        await payFlowWithRetry(videoId, choice, btn);
+      } catch (e) {
+        alert('Failed: ' + (pickErr(e)));
       }
-
-      // 5) Poll until access is granted
-      toast('Payment sent. Verifying access…');
-      for(let i=0;i<20;i++){
-        await new Promise(r=>setTimeout(r, 2000));
-        const rq = await fetch(`/api/request_play?video_id=${encodeURIComponent(videoId)}`);
-        if(rq.ok){ location.reload(); return; }
-      }
-      alert('Payment succeeded but access has not been recorded yet. Please refresh again in a few seconds.');
     };
   }
 
+  // ====== bootstrap halaman ======
   (async () => {
     const p = new URLSearchParams(location.search);
     const vid = p.get('video_id');
@@ -421,7 +493,7 @@
       renderOwnerContact(meta);
     }
 
-    // ===== HLS playlist =====
+    // request playlist / gate
     const req = await fetch(`/api/request_play?video_id=${encodeURIComponent(vid)}`);
     const play = await req.json().catch(()=>({}));
     if (req.status === 403) {
@@ -430,6 +502,7 @@
     }
     if (!req.ok) return alert(play.error||'Failed to request playback.');
 
+    // init HLS
     const video=document.getElementById('player');
     const src=play.playlist;
     if(Hls.isSupported()){
@@ -445,7 +518,7 @@
     }else if(video.canPlayType('application/vnd.apple.mpegurl')) video.src=src;
     else document.body.insertAdjacentHTML('beforeend','<p>Your browser does not support HLS.</p>');
 
-    // ===== Fullscreen =====
+    // fullscreen
     const wrap=document.getElementById('wrap'), fsBtn=document.getElementById('fsBtn');
     async function toggleFS(){
       const inFS=document.fullscreenElement===wrap||document.webkitFullscreenElement===wrap;
@@ -461,7 +534,7 @@
     document.addEventListener('fullscreenchange',onFSChange);
     document.addEventListener('webkitfullscreenchange',onFSChange);
 
-    // ===== Owner menu =====
+    // owner edit section
     let isOwner=false,myMeta=null;
     try{
       const mr=await fetch('/api/my_videos');
@@ -514,13 +587,12 @@
 
           toast('Changes saved successfully. Reloading…', true);
           location.reload();
-        } catch (e) {
-          console.error('save error:', e);
+        } catch (e2) {
+          console.error('save error:', e2);
           toast('Network error while saving. Please try again.', false);
         }
       };
 
-      // Live helper: preview USD + IDR while typing
       ev_price_usd.addEventListener('input', () => {
         const usd = Number(ev_price_usd.value || 0);
         if (Number.isNaN(usd) || usd < 0) return;
@@ -529,6 +601,8 @@
       });
     }
   })();
-  </script>
+</script>
+
+
 </body>
 </html>

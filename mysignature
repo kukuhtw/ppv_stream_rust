@@ -1,26 +1,25 @@
 /*
-=============================================================================
-Project : PPV Stream - Secure Pay-Per-View Video Platform
+==============================================================================
+Project : PPV Stream Rust
+Version : 0.2.0
 Author  : Kukuh Tripamungkas Wicaksono (Kukuh TW)
 Email   : kukuhtw@gmail.com
 WhatsApp: https://wa.me/628129893706
 LinkedIn: https://id.linkedin.com/in/kukuhtw
+License : MIT (see LICENSE)
 
-=============================================================================
-Description:
-PPV Stream is a secure Rust-based Pay-Per-View (PPV) video streaming platform.
-It allows independent creators to upload, sell, and stream encrypted videos
-with dynamic watermarking to prevent piracy. Built with Rust (Axum), PostgreSQL,
-and FFmpeg (HLS transcoding), it provides fast, safe, and transparent streaming.
-
-Main Features:
-- User & Admin Authentication
-- Video Upload and Management
-- Pay-Per-View Monetization
-- Randomly Moving Watermark per 5 seconds
-- HLS (HTTP Live Streaming) with FFmpeg
-- Allowlist-based Access Control
-- USD to IDR Conversion ($1 = Rp17,000)
-- Responsive Frontend (HTML + JS)
-=============================================================================
+Summary : Self-hosted video streaming marketplace (C2C) dengan sistem
+          pembayaran blockchain X402.
+          
+          Fitur utama:
+          - Pembayaran otomatis via smart contract (X402Splitter.sol).
+          - Pembagian hasil 90% kreator, 10% admin.
+          - Watermark dinamis (on-the-fly) untuk keamanan video.
+          - Transcoding HLS (480p/720p/1080p) dan streaming via Axum.
+          - Verifikasi invoice dan signature di backend (Rust server).
+          - Frontend watch.html terhubung langsung ke kontrak blockchain.
+          - Dukungan testnet (Mega, Polygon Amoy, Sepolia).
+          
+          - Source code: https://github.com/kukuhtw/ppv_stream_rust
+==============================================================================
 */

@@ -41,11 +41,13 @@ services:
       BIND: ${BIND:-0.0.0.0:8080}
       PUBLIC_DIR: /app/public
       RUST_LOG: ${RUST_LOG:-info}
-      # ✅ X402 settings
+
+      # ✅ X402 settings (dibaca aplikasi)
       X402_CONTRACT_ADDRESS: ${X402_CONTRACT_ADDRESS}
       X402_ADMIN_WALLET: ${X402_ADMIN_WALLET}
       X402_RPC_WSS: ${X402_RPC_WSS}
       X402_CHAIN_ID: ${X402_CHAIN_ID}
+
       # Opsional: jalankan watcher dalam proses server
       WATCHER_ENABLE: ${WATCHER_ENABLE:-0}
     extra_hosts:
@@ -77,7 +79,6 @@ services:
       - "8081:8080"
     restart: unless-stopped
 
- 
   # ✅ Deployer Hardhat (on-demand)
   x402-deployer:
     build:
@@ -89,12 +90,18 @@ services:
     env_file:
       - .env
     environment:
+      # Wallet & admin
       PRIVATE_KEY: ${PRIVATE_KEY}
       ADMIN_WALLET: ${X402_ADMIN_WALLET}
-      MEGA_RPC_HTTP: ${MEGA_RPC_HTTP:-https://carrot.megaeth.com/rpc}
-      MEGA_CHAIN_ID: ${MEGA_CHAIN_ID:-6342}
-    command: ["npx", "hardhat", "--help"]
 
+      # ===== Polygon Amoy Testnet (default) =====
+      AMOY_RPC_HTTP: ${AMOY_RPC_HTTP:-https://rpc-amoy.polygon.technology}
+      AMOY_CHAIN_ID: ${AMOY_CHAIN_ID:-80002}
+
+      # ===== Polygon Mainnet (opsional, diambil dari .env bila NET=polygonMainnet) =====
+      POLYGON_RPC_HTTP: ${POLYGON_RPC_HTTP:-https://polygon-rpc.com}
+      POLYGON_CHAIN_ID: ${POLYGON_CHAIN_ID:-137}
+    command: ["npx", "hardhat", "--help"]
 
   # ✅ Sidecar watcher (recommended untuk production)
   watcher:

@@ -1,0 +1,107 @@
+# ======================================
+# 🦀 Rust build & tooling
+# ======================================
+/target/
+**/*.rs.bk
+**/*.rs.swp
+
+# Cargo lockfile opsional — commit jika ingin reproducible build
+# Cargo.lock
+
+# ======================================
+# 🐳 Docker & container artifacts
+# ======================================
+docker-compose.override.yml
+*.log
+*.pid
+*.seed
+*.tmp
+*.bak
+*.swp
+*.lock
+
+# ======================================
+# ⚙️ Environment & secrets
+# ======================================
+.env
+.env.local
+.env.*.local
+.envrc
+.env.contracts
+contracts/.env
+
+# Jangan pernah commit private key!
+**/*_privkey*
+**/private_key*
+**/PRIVATE_KEY*
+**/X402_ADMIN_PRIVKEY*
+**/*.pem
+**/*.key
+**/*.crt
+**/secrets*
+
+# ======================================
+# 🗄️ Database & storage
+# ======================================
+/pgdata/
+/data/
+/tmp/
+/hls/
+/storage/
+/mnt/data/
+/var/
+/*.db
+*.sqlite3
+
+# ======================================
+# 💻 Frontend & public assets (generated)
+# ======================================
+/public/uploads/
+/public/tmp/
+/public/hls/
+/public/cache/
+/public/*.log
+
+# ======================================
+# 📦 Dependencies / vendor dirs
+# ======================================
+vendor/
+node_modules/
+
+# ======================================
+# 🧪 Test & coverage artifacts
+# ======================================
+coverage/
+*.profraw
+*.profdata
+test-results/
+*.test.log
+
+# ======================================
+# 💻 IDE & editor configs
+# ======================================
+# VSCode
+.vscode/
+*.code-workspace
+
+# JetBrains (CLion / IntelliJ)
+.idea/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# Linux
+*~
+
+# ======================================
+# 🧱 Build outputs
+# ======================================
+/build/
+dist/
+release/
+debug/

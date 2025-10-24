@@ -20,16 +20,15 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-// ===== keccak256 untuk invoice_uid_hash =====
-use sha3::{Digest, Keccak256};
+// ===== HEX utils =====
 use hex;
 
 // ===== tipe untuk NUMERIC =====
 use sqlx::types::BigDecimal;
 use std::str::FromStr;
 
-// ===== eth log decoding =====
-use ethabi::{Event, EventParam, ParamType, RawLog, Token};
+// ===== eth log decoding (ethabi) =====
+use ethabi::{Event, EventParam, ParamType, RawLog, Token as EvtToken};
 use ethereum_types::H256;
 
 // Gunakan VideoState dari modul video.
@@ -112,24 +111,36 @@ pub struct StartPayReq {
     pub chain_id: i64,
     pub symbol: String,
     pub token_address: Option<String>,
+    pub payer_address: String, // <— diperlukan untuk payload signature
 }
 
 #[derive(Serialize)]
 pub struct StartPayResp {
     pub ok: bool,
     pub invoice_uid: String,
+    pub invoice_uid_bytes32: String, // 0x…32 bytes keccak(invoice_uid)
     pub video_id: String,
     pub chain_id: i64,
     pub symbol: String,
     pub token_address: Option<String>,
-    pub amount_wei: String,
+    pub amount_wei: String,          // nominal yang harus dibayar (string decimal)
+    pub min_amount_wei: String,      // sama dengan amount_wei, untuk verifikasi onchain
+    pub deadline: u64,               // unix ts
+    pub v: u8,
+    pub r: String,
+    pub s: String,
     pub split_creator_bp: i32,
     pub split_admin_bp: i32,
     pub x402_contract: String,
     pub creator_wallet: String,
 }
 
-/// POST /api/pay/x402/start
+// ===== ethers untuk keccak256, abi-encode & signing =====
+use ethers::abi::{encode as abi_encode, Token as AbiToken};
+use ethers::core::utils::keccak256;
+use ethers::signers::{LocalWallet, Signer};
+use ethers::types::{Address, Signature, U256};
+
 pub async fn x402_start(
     State(st): State<VideoState>,
     cookies: Cookies,
@@ -144,7 +155,13 @@ pub async fn x402_start(
         return Json(json!({"ok": false, "error": "invalid params"}));
     }
 
-    // Video + kreator
+    // ===== validasi payer_address dari frontend =====
+    let payer_addr = match Address::from_str(&body.payer_address) {
+        Ok(a) => a,
+        Err(_) => return Json(json!({"ok": false, "error": "invalid payer_address"})),
+    };
+
+    // ===== ambil meta video & kreator =====
     let vmeta = sqlx::query(
         r#"
         SELECT v.price_cents, v.owner_id, u.wallet_account
@@ -163,12 +180,16 @@ pub async fn x402_start(
         return Json(json!({"ok": false, "error": "video not found"}));
     };
 
-    let creator_wallet = match vmeta.try_get::<Option<String>, _>("wallet_account") {
+    let creator_wallet_str = match vmeta.try_get::<Option<String>, _>("wallet_account") {
         Ok(Some(w)) if !w.is_empty() => w,
         _ => return Json(json!({"ok": false, "error": "creator has no wallet"})),
     };
+    let creator_addr = match Address::from_str(&creator_wallet_str) {
+        Ok(a) => a,
+        Err(_) => return Json(json!({"ok": false, "error": "invalid creator wallet"})),
+    };
 
-    // Token info (kompatibel erc20_address / erc20)
+    // ===== token info =====
     let tinfo = sqlx::query(
         r#"
         SELECT decimals,
@@ -194,31 +215,26 @@ pub async fn x402_start(
     let decimals = tinfo.try_get::<i32, _>("decimals").unwrap_or(18) as u32;
     let price_cents: i64 = vmeta.try_get::<i64, _>("price_cents").unwrap_or(0);
 
-    // cents -> wei dengan ceil division: ceil(price_cents * 10^decimals / 100)
+    // cents -> wei (ceil)
     let token_amount_wei: u128 = if price_cents <= 0 {
         0
     } else {
         let num = (price_cents as u128).saturating_mul(10u128.pow(decimals));
-        num.saturating_add(99) / 100  // ceil(num/100)
+        num.saturating_add(99) / 100
     };
-
     if token_amount_wei == 0 {
         return Json(json!({"ok": false, "error": "calculated amount is zero"}));
     }
 
+    // ===== buat invoice uid + hash =====
     let invoice_uid = Uuid::new_v4().to_string();
+    let invoice_uid_bytes32 = H256::from_slice(&keccak256(invoice_uid.as_bytes()));
 
-    // Hash (keccak256) dari invoice_uid -> untuk dicocokkan dengan event on-chain
-    let mut hasher = Keccak256::new();
-    hasher.update(invoice_uid.as_bytes());
-    let hash = hasher.finalize();
-    let invoice_uid_hash = format!("0x{}", hex::encode(hash));
-
-    // Simpan ke DB (status: pending) — kolom NUMERIC pakai BigDecimal
+    // simpan ke DB
     let token_amount_bd = BigDecimal::from_str(&token_amount_wei.to_string())
         .unwrap_or_else(|_| BigDecimal::from(0));
+    let invoice_uid_hash_hex = format!("{:#066x}", invoice_uid_bytes32);
 
-    // Simpan required_amount_wei & expires_at (quote 10 menit)
     let _ = sqlx::query(
         r#"
         INSERT INTO x402_invoices
@@ -234,7 +250,7 @@ pub async fn x402_start(
         "#,
     )
     .bind(&invoice_uid)
-    .bind(&invoice_uid_hash)
+    .bind(&invoice_uid_hash_hex)
     .bind(&buyer_id)
     .bind(&body.video_id)
     .bind(vmeta.try_get::<String, _>("owner_id").unwrap_or_default())
@@ -242,26 +258,80 @@ pub async fn x402_start(
     .bind(&body.symbol)
     .bind(&body.token_address)
     .bind(price_cents)
-    .bind(&token_amount_bd)   // legacy "token_amount"
-    .bind(&token_amount_bd)   // NEW: required_amount_wei
+    .bind(&token_amount_bd)
+    .bind(&token_amount_bd)
     .execute(&st.pool)
     .await;
 
-    // Ambil alamat kontrak dari env
+    // ===== siapkan nilai yang ditandatangani =====
     let x402_contract = std::env::var("X402_CONTRACT_ADDRESS").unwrap_or_default();
+    let _contract_addr = match Address::from_str(&x402_contract) {
+        Ok(a) => a,
+        Err(_) => Address::zero(), // front-end juga mengecek code!=0
+    };
+
+    let token_addr = if let Some(t) = &body.token_address {
+        Address::from_str(t).unwrap_or(Address::zero())
+    } else {
+        Address::zero() // native
+    };
+
+    let creator_bp: u16 = 9000;
+    let min_amount_wei = U256::from_dec_str(&token_amount_wei.to_string()).unwrap();
+    let deadline: u64 = (chrono::Utc::now().timestamp() as u64) + 900; // 15 menit
+    let video_hash = H256::from_slice(&keccak256(body.video_id.as_bytes()));
+
+    // ABI-encode sesuai _verify(...) di kontrak
+    // (invoiceUid, token, minAmountWei, creator, creatorBp, keccak256(videoId), payer, deadline)
+    let encoded = abi_encode(&[
+        AbiToken::FixedBytes(invoice_uid_bytes32.as_bytes().to_vec()),
+        AbiToken::Address(token_addr),
+        AbiToken::Uint(min_amount_wei),
+        AbiToken::Address(creator_addr),
+        AbiToken::Uint(U256::from(creator_bp)),
+        AbiToken::FixedBytes(video_hash.as_bytes().to_vec()),
+        AbiToken::Address(payer_addr),
+        AbiToken::Uint(U256::from(deadline)),
+    ]);
+    let msg_hash = H256::from_slice(&keccak256(&encoded));
+    // EIP-191 "\x19Ethereum Signed Message:\n32"
+    let eth_hash = H256::from_slice(
+        &keccak256([b"\x19Ethereum Signed Message:\n32", msg_hash.as_bytes()].concat()),
+    );
+
+    // Sign pakai private key admin
+    let admin_pk = std::env::var("X402_ADMIN_PRIVKEY").unwrap_or_default();
+    if admin_pk.is_empty() {
+        return Json(json!({"ok": false, "error": "X402_ADMIN_PRIVKEY not set"}));
+    }
+    let admin_wallet: LocalWallet = match admin_pk.parse() {
+        Ok(w) => w,
+        Err(_) => return Json(json!({"ok": false, "error": "bad admin privkey"})),
+    };
+    // sign_hash adalah sinkron (tidak perlu .await)
+    let sig: Signature = match admin_wallet.sign_hash(eth_hash) {
+        Ok(s) => s,
+        Err(e) => return Json(json!({"ok": false, "error": format!("sign: {e}")})),
+    };
 
     let resp = StartPayResp {
         ok: true,
         invoice_uid,
+        invoice_uid_bytes32: format!("{:#066x}", invoice_uid_bytes32),
         video_id: body.video_id,
         chain_id: body.chain_id,
         symbol: body.symbol,
         token_address: body.token_address,
         amount_wei: token_amount_wei.to_string(),
+        min_amount_wei: min_amount_wei.to_string(),
+        deadline,
+        v: sig.v as u8,
+        r: format!("{:#066x}", sig.r),
+        s: format!("{:#066x}", sig.s),
         split_creator_bp: 9000,
         split_admin_bp: 1000,
         x402_contract,
-        creator_wallet,
+        creator_wallet: creator_wallet_str,
     };
 
     Json(json!(resp))
@@ -481,13 +551,14 @@ pub async fn x402_confirm(
         if let Ok(parsed) = paid_ev.parse_log(raw) {
             // Ambil amountWei & videoId by name (lebih aman daripada by index)
             if let Some(p) = parsed.params.iter().find(|p| p.name == "amountWei") {
-                if let Token::Uint(u) = &p.value {
+                if let EvtToken::Uint(u) = &p.value {
                     let amt_str = u.to_string();
-                    matched_amount_wei = Some(BigDecimal::from_str(&amt_str).unwrap_or(BigDecimal::from(0)));
+                    matched_amount_wei =
+                        Some(BigDecimal::from_str(&amt_str).unwrap_or(BigDecimal::from(0)));
                 }
             }
             if let Some(p) = parsed.params.iter().find(|p| p.name == "videoId") {
-                if let Token::String(s) = &p.value {
+                if let EvtToken::String(s) = &p.value {
                     matched_video_id = Some(s.clone());
                 }
             }

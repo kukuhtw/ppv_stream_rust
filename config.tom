@@ -1,0 +1,11 @@
+# .cargo/config.toml
+[net]
+git-fetch-with-cli = true
+retry = 10
+timeout = 600
+
+[http]
+multiplexing = false
+
+[registries.crates-io]
+protocol = "sparse"

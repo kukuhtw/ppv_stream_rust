@@ -5,20 +5,49 @@ make migrate
 make build      # (build online sqlx)
 make run-all
 make seed
+docker compose up -d app watcher
+
 
 # buka http://localhost:8080/
 
+make checkx402 NET=polygonAmoyTestnet 
+make checkx402 NET=polygonMainnet
 
-make checkx402 NET=megaTestnet
-make checkx402 mainnet
-
-make estimatex402 NET=megaTestnet
+make estimatex402 NET=polygonAmoyTestnet
 make estimatex402 NET=polygonMainnet
 
-make deployx402 NET=megaTestnet
-make deployx402-mainnet
+make deployx402 NET=polygonAmoyTestnet
+make deployx402 polygonMainnet
+
+kukuhtw@KukuhTW-Lenovo:~/rust/ppv_stream$ make deployx402 NET=polygonAmoyTestnet
+==> Deploy X402Splitter ke network: polygonAmoyTestnet
+Downloading compiler 0.8.20
+Compiled 1 Solidity file successfully (evm target: paris).
+==============================================
+🚀 Deploying X402Splitter...
+🌐 Network   : polygonAmoyTestnet (chainId: 80002)
+👤 Admin     : 0xB7256FB6fe96b8aDB4B4280E459fBED02C8db6f0
+==============================================
+🧾 Deploy tx : 0x407f74740b0347dacf45c6069439322084acdbb97129a70bbe4fbe0297a93e47
+⏳ Waiting for deployment...
+✅ Deployed!
+🏷  Address  : 0xe375691C0a45db07c9DD7843d12eF283C084AE8A
+📦 Block    : 28110063
+🧑‍💻 Deployer: 0xB7256FB6fe96b8aDB4B4280E459fBED02C8db6f0
+🔗 Explorer : https://amoy.polygonscan.com/address/0xe375691C0a45db07c9DD7843d12eF283C084AE8A
+🔗 Tx       : https://amoy.polygonscan.com/tx/0x407f74740b0347dacf45c6069439322084acdbb97129a70bbe4fbe0297a93e47
+📝 Written to: deployed.json
+
+==> Kontrak ter-deploy di: 0x407f74740b0347dacf45c6069439322084acdbb9
+/bin/bash: line 30: @awk: command not found
+✅ Disimpan ke .env: X402_CONTRACT_ADDRESS=0x407f74740b0347dacf45c6069439322084acdbb9
+kukuhtw@KukuhTW-Lenovo:~/rust/ppv_stream$
+
+
 
 kukuhtw@KukuhTW-Lenovo:~/rust/ppv_stream$ make deployx402 NET=megaTestnet
+
+
 
 ==> Deploy X402Splitter ke network: megaTestnet
 Downloading compiler 0.8.20
@@ -59,6 +88,7 @@ kukuhtw@KukuhTW-Lenovo:~/rust/ppv_stream$ tree
 │   ├── hardhat.config.js
 │   ├── package.json
 │   └── scripts
+│       ├── check_balance.js
 │       ├── deploy_x402.js
 │       └── estimate_gas_cost.js
 ├── docker-compose.yml
@@ -67,7 +97,14 @@ kukuhtw@KukuhTW-Lenovo:~/rust/ppv_stream$ tree
 │   ├── 014_x402_invoice.sql
 │   ├── 015_users_wallet_chain.sql
 │   ├── 016_purchases_fk_video.sql
-│   └── 017_allowlist_idx_username.sql
+│   ├── 017_allowlist_idx_username.sql
+│   ├── 018_invoice_uid_hash.sql
+│   ├── 019_x402_core.sql
+│   ├── 020_x402_invoice_hash.sql
+│   ├── 021_pay_tokens.sql
+│   ├── 022_pay_tokens_rename_erc20.sql
+│   ├── 023_x402_underpay_and_quote.sql
+│   └── 024_pay_tokens_compat_view.sql
 ├── public
 │   ├── admin
 │   │   ├── dashboard.html
@@ -95,42 +132,43 @@ kukuhtw@KukuhTW-Lenovo:~/rust/ppv_stream$ tree
 │   ├── 010_videos_hls.sql
 │   ├── 011_videos_description.sql
 │   └── 012_user_profile.sql
-└── src
-    ├── a
-    ├── auth.rs
-    ├── bin
-    │   └── seed_dummy.rs
-    ├── bootstrap.rs
-    ├── config.rs
-    ├── db.rs
-    ├── email.rs
-    ├── ffmpeg.rs
-    ├── handlers
-    │   ├── New folder
-    │   ├── admin.rs
-    │   ├── auth_admin.rs
-    │   ├── auth_user.rs
-    │   ├── kurs.rs
-    │   ├── me.rs
-    │   ├── mod.rs
-    │   ├── pages.rs
-    │   ├── password.rs
-    │   ├── pay.rs
-    │   ├── setup.rs
-    │   ├── stream.rs
-    │   ├── upload.rs
-    │   ├── users.rs
-    │   └── video.rs
-    ├── hls.rs
-    ├── main.rs
-    ├── middleware.rs
-    ├── models.rs
-    ├── schema.sql
-    ├── sessions.rs
-    ├── token.rs
-    ├── util.rs
-    ├── validators.rs
-    └── worker.rs
+├── src
+│   ├── a
+│   ├── auth.rs
+│   ├── bin
+│   │   └── seed_dummy.rs
+│   ├── bootstrap.rs
+│   ├── config.rs
+│   ├── db.rs
+│   ├── email.rs
+│   ├── ffmpeg.rs
+│   ├── handlers
+│   │   ├── admin.rs
+│   │   ├── auth_admin.rs
+│   │   ├── auth_user.rs
+│   │   ├── kurs.rs
+│   │   ├── me.rs
+│   │   ├── mod.rs
+│   │   ├── pages.rs
+│   │   ├── password.rs
+│   │   ├── pay.rs
+│   │   ├── setup.rs
+│   │   ├── stream.rs
+│   │   ├── upload.rs
+│   │   ├── users.rs
+│   │   └── video.rs
+│   ├── hls.rs
+│   ├── main.rs
+│   ├── middleware.rs
+│   ├── models.rs
+│   ├── schema.sql
+│   ├── services
+│   │   └── x402_watcher.rs
+│   ├── sessions.rs
+│   ├── token.rs
+│   ├── util.rs
+│   ├── validators.rs
+│   └── worker.rs
 
 13 directories, 74 files
 kukuhtw@KukuhTW-Lenovo:~/rust/ppv_stream$
@@ -194,6 +232,14 @@ docker build --no-cache \
   --build-arg BUILD_REV=$(date +%s) \
   -t ppv_stream:dev .
 
+
+
+kukuhtw+user1@gmail.com
+user1Yfji477EGG1444
+
+
+kukuhtw+user2@gmail.com
+user2ji477EGG1444
 
 ADMIN_BOOTSTRAP_EMAIL=admin@example.com
 ADMIN_BOOTSTRAP_PASSWORD=ChangeMe123!
