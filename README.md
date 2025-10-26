@@ -6,7 +6,7 @@ It features watermark-protected HLS streaming, authentication, upload management
 
 **PPV Stream Rust** empowers anyone to build their own secure video streaming platform — like having your own version of **OnlyFans or Netflix**, but fully **open-source** and **privacy-controlled**.  
 
-Videos are securely streamed rather than downloaded, enabling smooth real-time playback while protecting creators’ content from unauthorized copying, redistribution, or piracy.
+Each video is streamed via encrypted HLS with forensic watermarking to discourage piracy.
 
 🎥 **Demo on YouTube:**  
 🔗 [https://www.youtube.com/watch?v=WOsDwBcD03A](https://www.youtube.com/watch?v=WOsDwBcD03A)
