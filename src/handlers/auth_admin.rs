@@ -13,10 +13,12 @@ use argon2::{Argon2, PasswordVerifier};
 use sqlx::PgPool;
 
 use crate::sessions;
+use crate::config::Config;
 
 #[derive(Clone)]
 pub struct AuthAdminState {
     pub pool: PgPool,
+    pub cfg:  Config, // <-- penting: untuk create_session/destroy_session
 }
 
 #[derive(Deserialize)]
@@ -43,7 +45,9 @@ pub async fn post_admin_login(
     .await
     {
         Ok(r) => r,
-        Err(_) => return Redirect::to("/public/admin/login.html?status=fail&reason=server_error"),
+        Err(_) => {
+            return Redirect::to("/public/admin/login.html?status=fail&reason=server_error")
+        }
     };
 
     let Some(r) = row else {
@@ -69,7 +73,7 @@ pub async fn post_admin_login(
         .is_ok()
     {
         let uid: &str = &r.id;
-        if sessions::create_session(&st.pool, uid, true, &cookies)
+        if sessions::create_session(&st.pool, &st.cfg, uid, true, &cookies)
             .await
             .is_err()
         {
@@ -86,6 +90,6 @@ pub async fn post_admin_logout(
     State(st): State<AuthAdminState>,
     cookies: Cookies,
 ) -> impl IntoResponse {
-    let _ = sessions::destroy_session(&st.pool, &cookies).await;
+    let _ = sessions::destroy_session(&st.pool, &st.cfg, &cookies).await;
     Redirect::to("/public/admin/login.html?status=ok")
 }

@@ -1,4 +1,5 @@
 // src/handlers/video.rs
+// src/handlers/video.rs
 use axum::{
     extract::{Query, State},
     response::IntoResponse,
@@ -8,14 +9,14 @@ use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, Row};
 use tower_cookies::Cookies;
 
+use crate::config::Config;
 use crate::sessions;
 
 #[derive(Clone)]
 pub struct VideoState {
     pub pool: PgPool,
+    pub cfg:  Config,
 }
-
-/* ==================== LISTING UMUM ==================== */
 
 #[derive(Serialize)]
 pub struct VideoItem {
@@ -34,7 +35,6 @@ pub struct VideoItem {
     pub created_at: String,
 }
 
-/// GET /api/videos
 pub async fn list_videos(State(st): State<VideoState>) -> impl IntoResponse {
     let rows = match sqlx::query(
         r#"
@@ -58,12 +58,9 @@ pub async fn list_videos(State(st): State<VideoState>) -> impl IntoResponse {
         "#,
     )
     .fetch_all(&st.pool)
-    .await
-    {
+    .await {
         Ok(r) => r,
-        Err(e) => {
-            return Json(serde_json::json!({"ok": false, "error": format!("db: {e}")}));
-        }
+        Err(e) => return Json(serde_json::json!({"ok": false, "error": format!("db: {e}")})),
     };
 
     let list: Vec<VideoItem> = rows
@@ -97,8 +94,6 @@ pub async fn list_videos(State(st): State<VideoState>) -> impl IntoResponse {
     Json(serde_json::json!({ "ok": true, "videos": list }))
 }
 
-/* ==================== MY VIDEOS + ALLOWLIST ==================== */
-
 #[derive(Serialize)]
 struct MyVideo {
     id: String,
@@ -107,12 +102,11 @@ struct MyVideo {
     price_cents: i64,
     created_at: String,
     allow_count: usize,
-    allow_users: Vec<String>, // usernames
+    allow_users: Vec<String>,
 }
 
-/// GET /api/my_videos → butuh login
 pub async fn my_videos(State(st): State<VideoState>, cookies: Cookies) -> impl IntoResponse {
-    let (uid, _is_admin) = match sessions::current_user_id(&st.pool, &cookies).await {
+    let (uid, _is_admin) = match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await {
         Some(v) => v,
         None => return Json(serde_json::json!({"ok": false, "error": "not logged in"})),
     };
@@ -135,17 +129,10 @@ pub async fn my_videos(State(st): State<VideoState>, cookies: Cookies) -> impl I
     };
 
     let mut out: Vec<MyVideo> = Vec::with_capacity(vids.len());
-
     for v in vids {
         let vid = v.try_get::<String, _>("id").unwrap_or_default();
-
         let allow_rows = sqlx::query(
-            r#"
-            SELECT username
-            FROM allowlist
-            WHERE video_id = $1
-            ORDER BY username
-            "#,
+            r#"SELECT username FROM allowlist WHERE video_id = $1 ORDER BY username"#,
         )
         .bind(&vid)
         .fetch_all(&st.pool)
@@ -171,18 +158,17 @@ pub async fn my_videos(State(st): State<VideoState>, cookies: Cookies) -> impl I
     Json(serde_json::json!({ "ok": true, "videos": out }))
 }
 
-/* ==================== USER LOOKUP (untuk allowlist UI) ==================== */
-
 #[derive(Deserialize)]
 pub struct UserLookupQs {
-    pub q: Option<String>,        // partial, balas list
-    pub username: Option<String>, // exact, balas single
-    pub email: Option<String>,    // exact, balas single
+    pub q: Option<String>,
+    pub username: Option<String>,
+    pub email: Option<String>,
 }
 
-/// GET /api/user_lookup?q=foo | ?username=alice | ?email=a@b.c
-pub async fn user_lookup(State(st): State<VideoState>, Query(qs): Query<UserLookupQs>) -> impl IntoResponse {
-    // 1) Exact by username
+pub async fn user_lookup(
+    State(st): State<VideoState>,
+    Query(qs): Query<UserLookupQs>,
+) -> impl IntoResponse {
     if let Some(u) = qs.username.as_deref().filter(|s| !s.is_empty()) {
         let row = sqlx::query(r#"SELECT id, username, email FROM users WHERE username = $1 LIMIT 1"#)
             .bind(u)
@@ -198,8 +184,6 @@ pub async fn user_lookup(State(st): State<VideoState>, Query(qs): Query<UserLook
             None => Json(serde_json::json!({"ok": true, "user": null})),
         };
     }
-
-    // 2) Exact by email
     if let Some(e) = qs.email.as_deref().filter(|s| !s.is_empty()) {
         let row = sqlx::query(r#"SELECT id, username, email FROM users WHERE email = $1 LIMIT 1"#)
             .bind(e)
@@ -215,8 +199,6 @@ pub async fn user_lookup(State(st): State<VideoState>, Query(qs): Query<UserLook
             None => Json(serde_json::json!({"ok": true, "user": null})),
         };
     }
-
-    // 3) Partial search (?q=)
     if let Some(q) = qs.q.as_deref().filter(|s| !s.is_empty()) {
         let pattern = format!("%{}%", q);
         let rows = sqlx::query(
@@ -246,35 +228,28 @@ pub async fn user_lookup(State(st): State<VideoState>, Query(qs): Query<UserLook
 
         return Json(serde_json::json!({"ok": true, "users": users}));
     }
-
-    // 4) Tidak ada parameter
     Json(serde_json::json!({"ok": true, "users": []}))
 }
-
-/* ==================== ADD ALLOW (owner memberi akses) ==================== */
 
 #[derive(Deserialize)]
 pub struct AddAllowForm {
     pub video_id: String,
     pub user_id: Option<String>,
     pub username_or_email: Option<String>,
-    // kompat: form di dashboard pakai name="username"
     pub username: Option<String>,
     pub email: Option<String>,
 }
 
-/// POST /api/allow (x-www-form-urlencoded)
 pub async fn add_allow(
     State(st): State<VideoState>,
     cookies: Cookies,
     Form(f): Form<AddAllowForm>,
 ) -> impl IntoResponse {
-    let (uid, _is_admin) = match sessions::current_user_id(&st.pool, &cookies).await {
+    let (uid, _is_admin) = match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await {
         Some(v) => v,
         None => return Json(serde_json::json!({"ok": false, "error": "not logged in"})),
     };
 
-    // Pastikan pemanggil adalah owner video
     let is_owner: bool = sqlx::query_scalar(
         r#"SELECT EXISTS(SELECT 1 FROM videos WHERE id = $1 AND owner_id = $2)"#,
     )
@@ -283,12 +258,10 @@ pub async fn add_allow(
     .fetch_one(&st.pool)
     .await
     .unwrap_or(false);
-
     if !is_owner {
         return Json(serde_json::json!({"ok": false, "error": "not owner"}));
     }
 
-    // Tentukan target username (prioritas: username -> email -> user_id -> username_or_email)
     let target_uname = if let Some(u) = &f.username {
         u.trim().to_string()
     } else if let Some(e) = &f.email {
@@ -328,10 +301,6 @@ pub async fn add_allow(
         return Json(serde_json::json!({"ok": false, "error": "user not found"}));
     }
 
-    // (opsional) log untuk debug
-    tracing::info!("add_allow: owner_uid={}, video_id={}, target_uname={}", uid, f.video_id, target_uname);
-
-    // INSERT ke allowlist (idempotent via UNIQUE(video_id, username))
     let res = sqlx::query(
         r#"
         INSERT INTO allowlist (video_id, username)
@@ -349,13 +318,11 @@ pub async fn add_allow(
             "ok": true,
             "video_id": f.video_id,
             "username": target_uname,
-            "rows_affected": r.rows_affected() // 0 = duplikat (sudah ada)
+            "rows_affected": r.rows_affected()
         })),
         Err(e) => Json(serde_json::json!({"ok": false, "error": e.to_string()})),
     }
 }
-
-/* ==================== UPDATE VIDEO (owner) ==================== */
 
 #[derive(Deserialize)]
 pub struct UpdateVideoForm {
@@ -365,24 +332,20 @@ pub struct UpdateVideoForm {
     pub price_cents: i64,
 }
 
-/// POST /api/video_update (x-www-form-urlencoded)
 pub async fn update_video(
     State(st): State<VideoState>,
     cookies: Cookies,
     Form(f): Form<UpdateVideoForm>,
 ) -> impl IntoResponse {
-    let (uid, _is_admin) = match sessions::current_user_id(&st.pool, &cookies).await {
+    let (uid, _is_admin) = match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await {
         Some(v) => v,
         None => return Json(serde_json::json!({"ok": false, "error": "not logged in"})),
     };
 
-    // Hanya pemilik yang boleh update
     let res = sqlx::query(
         r#"
         UPDATE videos
-        SET title = $2,
-            description = $3,
-            price_cents = $4
+        SET title = $2, description = $3, price_cents = $4
         WHERE id = $1 AND owner_id = $5
         "#,
     )
@@ -401,16 +364,12 @@ pub async fn update_video(
     }
 }
 
-/* ==================== AUTHZ HELPER (dipakai stream.rs) ==================== */
-
-/// Cek apakah `user_id` boleh menonton `video_id`
-/// Rule: owner video **atau** username ada di tabel allowlist
+/// AuthZ helper
 pub async fn user_has_view_access(
     pool: &PgPool,
     video_id: &str,
     user_id: &str,
 ) -> anyhow::Result<bool> {
-    // Owner?
     let is_owner: bool = sqlx::query_scalar(
         r#"SELECT EXISTS(SELECT 1 FROM videos WHERE id = $1 AND owner_id = $2)"#,
     )
@@ -419,24 +378,22 @@ pub async fn user_has_view_access(
     .fetch_one(pool)
     .await
     .unwrap_or(false);
-
     if is_owner {
         return Ok(true);
     }
 
-    // Ambil username dari user_id
-    let username_opt =
-        sqlx::query_scalar::<_, Option<String>>(r#"SELECT username FROM users WHERE id = $1"#)
-            .bind(user_id)
-            .fetch_one(pool)
-            .await
-            .unwrap_or(None);
+    let username_opt = sqlx::query_scalar::<_, Option<String>>(
+        r#"SELECT username FROM users WHERE id = $1"#,
+    )
+    .bind(user_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(None);
 
     let Some(username) = username_opt else {
         return Ok(false);
     };
 
-    // Apakah username ada di allowlist untuk video tsb?
     let is_allowed: bool = sqlx::query_scalar(
         r#"SELECT EXISTS(SELECT 1 FROM allowlist WHERE video_id = $1 AND username = $2)"#,
     )

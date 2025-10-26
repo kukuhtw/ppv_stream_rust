@@ -1,17 +1,20 @@
 // src/handlers/me.rs
+// src/handlers/me.rs
 use axum::{extract::State, response::IntoResponse, Json};
 use sqlx::PgPool;
 use tower_cookies::Cookies;
 
+use crate::config::Config;
 use crate::sessions;
 
 #[derive(Clone)]
 pub struct MeState {
     pub pool: PgPool,
+    pub cfg:  Config,
 }
 
 pub async fn me(State(st): State<MeState>, cookies: Cookies) -> impl IntoResponse {
-    let Some((uid, _is_admin)) = sessions::current_user_id(&st.pool, &cookies).await else {
+    let Some((uid, _is_admin)) = sessions::current_user_id(&st.pool, &st.cfg, &cookies).await else {
         return Json(serde_json::json!({"ok": false, "error": "not logged in"}));
     };
 

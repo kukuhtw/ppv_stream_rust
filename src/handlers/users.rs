@@ -4,21 +4,24 @@
 use axum::{
     extract::{Query, State},
     response::IntoResponse,
-    Json, Form,
+    Form, Json,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tower_cookies::Cookies;
 
+use crate::config::Config;
 use crate::sessions;
 
 // === tambahan untuk validasi alamat EVM ===
 use ethers::types::Address;
 use std::str::FromStr;
 
-
 #[derive(Clone)]
-pub struct UsersState { pub pool: PgPool }
+pub struct UsersState {
+    pub pool: PgPool,
+    pub cfg:  Config,
+}
 
 #[derive(Serialize)]
 pub struct PublicProfile {
@@ -45,7 +48,7 @@ pub struct MeProfile {
 }
 
 pub async fn get_my_profile(State(st): State<UsersState>, cookies: Cookies) -> impl IntoResponse {
-    let (uid, _is_admin) = match sessions::current_user_id(&st.pool, &cookies).await {
+    let (uid, _is_admin) = match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await {
         Some(v) => v,
         None => return Json(serde_json::json!({"ok": false, "error": "not logged in"})),
     };
@@ -63,7 +66,10 @@ pub async fn get_my_profile(State(st): State<UsersState>, cookies: Cookies) -> i
         LIMIT 1
         "#,
         uid
-    ).fetch_optional(&st.pool).await {
+    )
+    .fetch_optional(&st.pool)
+    .await
+    {
         Ok(r) => r,
         Err(e) => return Json(serde_json::json!({"ok": false, "error": format!("db: {e}")})),
     };
@@ -90,8 +96,8 @@ pub async fn get_my_profile(State(st): State<UsersState>, cookies: Cookies) -> i
 #[derive(Deserialize)]
 pub struct UpdateProfileForm {
     pub bank_account: String,
-    pub wallet_account: String,     // alamat EVM (boleh kosong)
-    pub wallet_chain_id: Option<i64>, // chainId preferensi kreator (boleh null)
+    pub wallet_account: String,        // alamat EVM (boleh kosong)
+    pub wallet_chain_id: Option<i64>,  // chainId preferensi kreator (boleh null)
     pub whatsapp: String,
     pub profile_desc: String,
 }
@@ -102,9 +108,15 @@ pub async fn update_my_profile(
     cookies: Cookies,
     Form(f): Form<UpdateProfileForm>,
 ) -> impl IntoResponse {
-    let (uid, _is_admin) = match sessions::current_user_id(&st.pool, &cookies).await {
+    let (uid, _is_admin) = match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await {
         Some(v) => v,
-        None => return Json(serde_json::json!({"ok": false, "where":"auth", "error": "not logged in"})),
+        None => {
+            return Json(serde_json::json!({
+                "ok": false,
+                "where": "auth",
+                "error": "not logged in"
+            }))
+        }
     };
 
     // --- Normalisasi & validasi wallet EVM ---
@@ -120,15 +132,19 @@ pub async fn update_my_profile(
         }
     }
     // Simpan versi lowercase (lebih konsisten untuk perbandingan)
-    let wallet_to_save = if wa_trim.is_empty() { "".to_string() } else { wa_trim.to_lowercase() };
+    let wallet_to_save = if wa_trim.is_empty() {
+        "".to_string()
+    } else {
+        wa_trim.to_lowercase()
+    };
 
     let res = sqlx::query!(
         r#"
         UPDATE users
-        SET bank_account   = NULLIF($2,''),
-            wallet_account = NULLIF($3,''),
-            whatsapp       = NULLIF($4,''),
-            profile_desc   = $5,
+        SET bank_account    = NULLIF($2,''),
+            wallet_account  = NULLIF($3,''),
+            whatsapp        = NULLIF($4,''),
+            profile_desc    = $5,
             wallet_chain_id = $6
         WHERE id = $1
         "#,
@@ -138,11 +154,17 @@ pub async fn update_my_profile(
         f.whatsapp.trim(),
         f.profile_desc.trim(),
         f.wallet_chain_id  // Option<i64> → akan menjadi NULL jika None
-    ).execute(&st.pool).await;
+    )
+    .execute(&st.pool)
+    .await;
 
     match res {
-        Ok(_) => Json(serde_json::json!({"ok": true})),
-        Err(e) => Json(serde_json::json!({"ok": false, "where":"db_update", "error": e.to_string()})),
+        Ok(_) => Json(serde_json::json!({ "ok": true })),
+        Err(e) => Json(serde_json::json!({
+            "ok": false,
+            "where":"db_update",
+            "error": e.to_string()
+        })),
     }
 }
 
@@ -153,7 +175,10 @@ pub struct PublicQs {
 }
 
 /// GET /api/user_profile?user_id=... | ?username=...
-pub async fn public_profile(State(st): State<UsersState>, Query(q): Query<PublicQs>) -> impl IntoResponse {
+pub async fn public_profile(
+    State(st): State<UsersState>,
+    Query(q): Query<PublicQs>,
+) -> impl IntoResponse {
     if q.user_id.is_none() && q.username.is_none() {
         return Json(serde_json::json!({"ok": false, "error":"missing user_id/username"}));
     }
@@ -180,17 +205,20 @@ pub async fn public_profile(State(st): State<UsersState>, Query(q): Query<Public
     };
 
     if let Some(u) = row {
-        Json(serde_json::json!({"ok": true, "profile": PublicProfile{
-            id: u.id,
-            username: u.username,
-            email: u.email,
-            bank_account: u.bank_account,
-            wallet_account: u.wallet_account,
-            wallet_chain_id: u.wallet_chain_id, // diekspos untuk publik juga (opsional)
-            whatsapp: u.whatsapp,
-            profile_desc: u.profile_desc.unwrap_or_default(),
-        }}))
+        Json(serde_json::json!({
+            "ok": true,
+            "profile": PublicProfile{
+                id: u.id,
+                username: u.username,
+                email: u.email,
+                bank_account: u.bank_account,
+                wallet_account: u.wallet_account,
+                wallet_chain_id: u.wallet_chain_id, // diekspos untuk publik juga (opsional)
+                whatsapp: u.whatsapp,
+                profile_desc: u.profile_desc.unwrap_or_default(),
+            }
+        }))
     } else {
-        Json(serde_json::json!({"ok": false, "error": "not found"}))
+        Json(serde_json::json!({ "ok": false, "error": "not found" }))
     }
 }

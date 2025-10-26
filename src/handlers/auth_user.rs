@@ -1,4 +1,5 @@
 // src/handlers/auth_user.rs
+// src/handlers/auth_user.rs
 
 use axum::{
     extract::{Form, State},
@@ -15,10 +16,12 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{email, sessions, validators};
+use crate::config::Config;
 
 #[derive(Clone)]
 pub struct AuthUserState {
     pub pool: PgPool,
+    pub cfg:  Config,
 }
 
 #[derive(Deserialize)]
@@ -85,7 +88,7 @@ pub async fn post_register(
         return Redirect::to("/public/auth/register.html?status=fail&reason=server_error");
     }
 
-    // Sukses → arahkan ke login dengan status ok (UI: tampilkan "Registrasi berhasil")
+    // Sukses → arahkan ke login dengan status ok
     Redirect::to("/public/auth/login.html?status=ok")
 }
 
@@ -136,13 +139,12 @@ pub async fn post_login(
     };
 
     // Verifikasi
-    // ...
     if Argon2::default()
         .verify_password(f.password.as_bytes(), &parsed)
         .is_ok()
     {
         let uid: &str = &row.id;
-        if sessions::create_session(&st.pool, uid, false, &cookies)
+        if sessions::create_session(&st.pool, &st.cfg, uid, false, &cookies)
             .await
             .is_err()
         {
@@ -153,11 +155,10 @@ pub async fn post_login(
     } else {
         Redirect::to("/public/auth/login.html?status=fail&reason=bad_credentials")
     }
-    // ...
 }
 
 pub async fn post_logout(State(st): State<AuthUserState>, cookies: Cookies) -> impl IntoResponse {
-    let _ = sessions::destroy_session(&st.pool, &cookies).await;
+    let _ = sessions::destroy_session(&st.pool, &st.cfg, &cookies).await;
     Redirect::to("/public/auth/login.html?status=ok")
 }
 

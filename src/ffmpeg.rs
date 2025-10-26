@@ -1,27 +1,31 @@
 // src/ffmpeg.rs
 
+// src/ffmpeg.rs
+
 use anyhow::{anyhow, Context, Result};
 use std::{path::Path, process::Stdio};
 use tokio::{io::AsyncReadExt, process::Command};
 
-/// Runner generik untuk menjalankan `ffmpeg` dengan argumen yang diberikan.
-/// Mengumpulkan stderr agar mudah di-debug saat gagal.
-async fn run_ffmpeg(args: Vec<String>) -> Result<()> {
+/// Jalankan ffmpeg di direktori kerja tertentu.
+/// - `args`: daftar argumen ffmpeg (tanpa path bin ffmpeg)
+/// - `work_dir`: direktori kerja (untuk output relatif)
+pub async fn run_ffmpeg(args: &[String], work_dir: &str) -> Result<()> {
     let mut cmd = Command::new("ffmpeg");
-    cmd.args(&args)
+    cmd.current_dir(work_dir)
+        .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
     let mut child = cmd.spawn().map_err(|e| anyhow!("spawn ffmpeg: {e}"))?;
 
+    // Kumpulkan stderr untuk debugging saat gagal
     let mut stderr = child
         .stderr
         .take()
         .ok_or_else(|| anyhow!("failed to take ffmpeg stderr"))?;
-    let mut err_buf = Vec::new();
-
     let stderr_task = tokio::spawn(async move {
+        let mut err_buf = Vec::new();
         let mut tmp = [0u8; 8192];
         while let Ok(n) = stderr.read(&mut tmp).await {
             if n == 0 {
@@ -52,16 +56,27 @@ async fn run_ffmpeg(args: Vec<String>) -> Result<()> {
     Ok(())
 }
 
-/// Jalankan ffmpeg async dengan argumen lengkap dari pemanggil (kompatibel dengan versi lama).
-/// Dipakai bila perlu pipeline kustom.
-pub async fn transcode_hls(_input_path: &str, _session_dir: &str, args: Vec<String>) -> Result<()> {
-    run_ffmpeg(args).await
+/// Kompat layer untuk handler lama:
+/// Menjalankan ffmpeg dengan `args` **di** `session_dir` (agar output relatif nulis ke sana).
+pub async fn transcode_hls(_input_path: &str, session_dir: &str, args: Vec<String>) -> Result<()> {
+    run_ffmpeg(&args, session_dir).await
 }
 
-/// Remux MP4 agar `moov` dipindah ke awal file (progressive playback).
-/// - Lossless & cepat (pakai `-c copy`)
-/// - Aman dipakai setelah upload sebelum file disegment untuk HLS
+/// Remux MP4 agar `moov` di depan (progressive-friendly, cepat, lossless).
 pub async fn faststart_mp4(input: &str, output: &str) -> Result<()> {
+    // Kerja di parent dir output supaya nama target bisa relatif
+    let work_dir = Path::new(output)
+        .parent()
+        .unwrap_or_else(|| Path::new(".")) // fallback aman
+        .to_string_lossy()
+        .to_string();
+
+    let target = Path::new(output)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| anyhow!("non-utf8 output file name"))?
+        .to_string();
+
     let args = vec![
         "-hide_banner".into(),
         "-loglevel".into(),
@@ -69,13 +84,16 @@ pub async fn faststart_mp4(input: &str, output: &str) -> Result<()> {
         "-y".into(),
         "-i".into(),
         input.into(),
+        "-map".into(),
+        "0".into(),
         "-c".into(),
         "copy".into(),
         "-movflags".into(),
         "+faststart".into(),
-        output.into(),
+        target,
     ];
-    run_ffmpeg(args).await
+
+    run_ffmpeg(&args, &work_dir).await
 }
 
 /// (Opsional) Ambil durasi (detik) via ffprobe. Kembalikan None bila gagal.
@@ -163,10 +181,10 @@ pub async fn ffprobe_has_audio(input: &str) -> bool {
     }
 }
 
-/// Encode HLS ABR (1080p/720p/480p) TANPA watermark.
-/// - `hwaccel`: "none" | "nvidia" | "intel" | "amd"
-/// - `seg_seconds`: durasi setiap segmen HLS
-/// Return: path absolut `master.m3u8` (String)
+/// Encode HLS ABR (default CPU, anti-upscale).
+/// - `hwaccel`: "none" | "nvidia" | "intel" | "amd" (opsional; default none)
+/// - `seg_seconds`: durasi segmen
+/// Return: **path absolut** `master.m3u8`
 pub async fn encode_hls_abr(
     input_mp4: &str,
     out_dir: &str,
@@ -178,73 +196,60 @@ pub async fn encode_hls_abr(
         .await
         .with_context(|| format!("create_dir_all({out_dir})"))?;
 
-    // Master playlist path
-    let master = Path::new(out_dir).join("master.m3u8");
-    let master_str = master
-        .to_str()
-        .ok_or_else(|| anyhow!("non-utf8 path for master.m3u8"))?
-        .to_string();
-
-    // === Anti-upscale: tentukan ladder dari tinggi sumber ===
+    // Tentukan resolusi sumber untuk anti-upscale
     let source_h = match ffprobe_dimensions(input_mp4).await {
         Some((_w, h)) => h,
-        None => 1080, // fallback konservatif
+        None => 1080,
     };
 
-    // Default ladder tinggi (descending). Hanya pilih yang ≤ source_h.
+    // Ladder (descending), hanya ambil yang ≤ source_h
     let mut ladder: Vec<u32> = vec![1080, 720, 480]
         .into_iter()
         .filter(|&h| h <= source_h)
         .collect();
 
-    // Safety: minimal 1 varian
     if ladder.is_empty() {
-        // kalau sumber < 480, pakai tinggi sumber dibulatkan ke kelipatan 2 terdekat (FFmpeg syarat even)
+        // fallback aman (even)
         let safe_h = (source_h / 2).max(1) * 2;
         ladder.push(safe_h);
     }
 
-    // fps * seg_seconds ≈ GOP size; fallback 24 fps
-    let g = (24 * seg_seconds.max(1)) as i32;
+    let n = ladder.len();
+    let g = (24 * seg_seconds.max(1)) as i32; // perkiraan GOP untuk 24fps
     let seg_str = seg_seconds.to_string();
 
-    // Apakah ada audio asli?
-    let has_audio = ffprobe_has_audio(input_mp4).await;
-
-    // === Filter: split sebanyak N, scale tiap varian (tanpa drawtext) ===
-    // [0:v]split=N[v0][v1]...[vN-1]; [v0]scale=-2:H0[vout0]; ...
-    let n = ladder.len();
+    // filter: split N, scale setiap varian
+    // [0:v]split=N[v0][v1]...; [v0]scale=-2:H0[vout0]; ...
     let split_labels: Vec<String> = (0..n).map(|i| format!("[v{i}]")).collect();
     let vouts: Vec<String> = (0..n).map(|i| format!("[vout{i}]")).collect();
-
-    let split_part = format!(
-        "[0:v]split={}{labels}",
-        n,
-        labels = split_labels.join("")
-    );
-
+    let split_part = format!("[0:v]split={}{labels}", n, labels = split_labels.join(""));
     let scale_parts: Vec<String> = ladder
         .iter()
         .enumerate()
-        .map(|(i, h)| format!("[v{i}]scale=-2:{h}[vout{i}]"))
+        .map(|(i, h)| {
+            format!(
+                "[v{i}]scale=-2:{h}:force_original_aspect_ratio=decrease:eval=frame[vout{i}]"
+            )
+        })
         .collect();
-
     let filter_complex = format!("{};{}", split_part, scale_parts.join(";"));
 
-    // === Base args & input(s) ===
+    // cek ada audio?
+    let has_audio = ffprobe_has_audio(input_mp4).await;
+
+    // Build args
     let mut args: Vec<String> = vec![
         "-hide_banner".into(),
+        "-loglevel".into(),
+        "error".into(),
         "-y".into(),
-        // input video utama
         "-i".into(),
         input_mp4.into(),
-        // graph filter
         "-filter_complex".into(),
         filter_complex,
     ];
 
-    // Jika TIDAK ada audio, tambahkan input anullsrc sebagai input ke-2 (index 1)
-    // anullsrc "tak terbatas"; gunakan -shortest agar mux berhenti saat video selesai.
+    // Tambah input anullsrc jika tidak ada audio di sumber
     let audio_map_src = if has_audio {
         "0:a:0".to_string()
     } else {
@@ -257,99 +262,94 @@ pub async fn encode_hls_abr(
         "1:a:0".to_string()
     };
 
-    // Map setiap varian video + audio (asli atau anullsrc)
+    // Map vouts + audio untuk setiap varian
     for i in 0..n {
         args.push("-map".into());
-        args.push(vouts[i].clone());     // video i
+        args.push(vouts[i].clone());
         args.push("-map".into());
-        args.push(audio_map_src.clone()); // audio
+        args.push(audio_map_src.clone());
     }
 
-    // Audio settings (berlaku untuk semua audio output)
+    // Audio global
     args.extend(
-        [
-            "-c:a", "aac",
-            "-b:a", "128k",
-            "-ac", "2",
-            "-ar", "48000",
-        ]
-        .into_iter()
-        .map(Into::into),
+        ["-c:a", "aac", "-b:a", "128k", "-ac", "2", "-ar", "48000"]
+            .into_iter()
+            .map(Into::into),
     );
 
-    // Video encoder per stream sesuai hwaccel
+    // Video encoder per varian (CPU default)
     match hwaccel {
         "nvidia" => {
-            // NVENC
             for i in 0..n {
-                let cq = 22 + (i as i32); // 22,23,24...
-                args.extend(
-                    [
-                        format!("-c:v:{i}"), "h264_nvenc".into(),
-                        format!("-preset:v:{i}"), "p1".into(),
-                        format!("-rc:v:{i}"), "vbr".into(),
-                        format!("-cq:v:{i}"), cq.to_string(),
-                    ]
-                );
+                let cq = 22 + (i as i32);
+                args.extend([
+                    format!("-c:v:{i}"),
+                    "h264_nvenc".into(),
+                    format!("-preset:v:{i}"),
+                    "p1".into(),
+                    format!("-rc:v:{i}"),
+                    "vbr".into(),
+                    format!("-cq:v:{i}"),
+                    cq.to_string(),
+                ]);
             }
         }
         "intel" => {
-            // QuickSync
             for i in 0..n {
                 let gq = 23 + (i as i32);
-                args.extend(
-                    [
-                        format!("-c:v:{i}"), "h264_qsv".into(),
-                        format!("-global_quality:v:{i}"), gq.to_string(),
-                    ]
-                );
+                args.extend([
+                    format!("-c:v:{i}"),
+                    "h264_qsv".into(),
+                    format!("-global_quality:v:{i}"),
+                    gq.to_string(),
+                ]);
             }
         }
         "amd" => {
-            // VAAPI
             for i in 0..n {
                 let qp = 23 + (i as i32);
-                args.extend(
-                    [
-                        format!("-c:v:{i}"), "h264_vaapi".into(),
-                        format!("-qp:v:{i}"), qp.to_string(),
-                    ]
-                );
+                args.extend([
+                    format!("-c:v:{i}"),
+                    "h264_vaapi".into(),
+                    format!("-qp:v:{i}"),
+                    qp.to_string(),
+                ]);
             }
         }
         _ => {
             // CPU libx264
             for i in 0..n {
                 let crf = 22 + (i as i32);
-                args.extend(
-                    [
-                        format!("-c:v:{i}"), "libx264".into(),
-                        format!("-preset:v:{i}"), "veryfast".into(),
-                        format!("-crf:v:{i}"), crf.to_string(),
-                    ]
-                );
+                args.extend([
+                    format!("-c:v:{i}"),
+                    "libx264".into(),
+                    format!("-preset:v:{i}"),
+                    "veryfast".into(),
+                    format!("-crf:v:{i}"),
+                    crf.to_string(),
+                ]);
             }
         }
-    };
-
-    // GOP & scene-cut per varian
-    for i in 0..n {
-        args.extend(
-            [
-                format!("-g:v:{i}"), g.to_string(),
-                format!("-keyint_min:v:{i}"), g.to_string(),
-                format!("-sc_threshold:v:{i}"), "0".into(),
-            ]
-        );
     }
 
-    // -shortest perlu jika pakai anullsrc (tanpa -t)
+    // GOP & scene-cut
+    for i in 0..n {
+        args.extend([
+            format!("-g:v:{i}"),
+            g.to_string(),
+            format!("-keyint_min:v:{i}"),
+            g.to_string(),
+            format!("-sc_threshold:v:{i}"),
+            "0".into(),
+        ]);
+    }
+
+    // Sinkron video-audio saat pakai anullsrc
     if !has_audio {
         args.push("-shortest".into());
     }
 
-    // HLS output (independent seg + temp_file)
-    // Bangun var_stream_map dinamis: v:0,a:0 v:1,a:1 ...
+    // HLS multi-variant (pakai path relatif di dalam out_dir)
     let var_stream_map = (0..n)
         .map(|i| format!("v:{i},a:{i}"))
         .collect::<Vec<_>>()
@@ -357,19 +357,35 @@ pub async fn encode_hls_abr(
 
     args.extend(
         [
-            "-f", "hls",
-            "-hls_time", &seg_str,
-            "-hls_playlist_type", "vod",
-            "-hls_flags", "independent_segments+temp_file",
-            "-master_pl_name", "master.m3u8",
-            "-var_stream_map", &var_stream_map,
-            "-hls_segment_filename", &format!("{}/stream_%v_%06d.ts", out_dir),
-            &format!("{}/stream_%v.m3u8", out_dir),
+            "-f",
+            "hls",
+            "-hls_time",
+            &seg_str,
+            "-hls_playlist_type",
+            "vod",
+            "-hls_flags",
+            "independent_segments+temp_file",
+            "-master_pl_name",
+            "master.m3u8",
+            "-var_stream_map",
+            &var_stream_map,
+            "-hls_segment_filename",
+            "stream_%v_%06d.ts",
+            "stream_%v.m3u8",
         ]
         .into_iter()
         .map(Into::into),
     );
 
-    run_ffmpeg(args).await?;
+    // Jalankan di out_dir supaya semua output relatif nulis ke sana
+    run_ffmpeg(&args, out_dir).await?;
+
+    // Kembalikan absolute path master
+    let master_abs = Path::new(out_dir).join("master.m3u8");
+    let master_str = master_abs
+        .to_str()
+        .ok_or_else(|| anyhow!("non-utf8 path for master.m3u8"))?
+        .to_string();
+
     Ok(master_str)
 }

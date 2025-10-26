@@ -1,4 +1,5 @@
 // src/main.rs
+// src/main.rs
 
 use tracing_subscriber::fmt::init as tracing_init;
 
@@ -31,7 +32,6 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::Result<()> {
-    // re-import lokal agar scope rapih
     use axum::{
         extract::DefaultBodyLimit,
         response::Redirect,
@@ -58,7 +58,10 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
     use crate::worker;
 
     // ==== States ====
-    let users_state = UsersState { pool: pool.clone() };
+    let users_state = UsersState {
+        pool: pool.clone(),
+        cfg: cfg.clone(),
+    };
     let worker = worker::Worker::new(pool.clone(), cfg.clone(), 2);
 
     // ==== Static Files ====
@@ -94,7 +97,11 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
             "/auth/forgot",
             get(|| async { Redirect::to("/public/auth/forgot_password.html") }),
         )
-        .with_state(AuthUserState { pool: pool.clone() });
+        // pass cfg ke state
+        .with_state(AuthUserState {
+            pool: pool.clone(),
+            cfg: cfg.clone(),
+        });
 
     // ==== Admin auth ====
     let admin_auth_router = Router::new()
@@ -103,7 +110,10 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
             get(|| async { Redirect::to("/public/admin/login.html") }).post(post_admin_login),
         )
         .route("/admin/logout", post(post_admin_logout))
-        .with_state(AuthAdminState { pool: pool.clone() });
+        .with_state(AuthAdminState {
+            pool: pool.clone(),
+            cfg: cfg.clone(),
+        });
 
     // ==== Setup admin ====
     let setup_router = Router::new()
@@ -136,7 +146,10 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
         .route("/api/pay/x402/start", post(pay::x402_start))
         .route("/api/crypto_price", get(pay::crypto_price))
         .route("/api/pay/x402/confirm", post(pay::x402_confirm))
-        .with_state(VideoState { pool: pool.clone() });
+        .with_state(VideoState {
+            pool: pool.clone(),
+            cfg: cfg.clone(),
+        });
 
     // ==== Users ====
     let users_router = Router::new()
@@ -148,7 +161,8 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
     // ==== Streaming ====
     let streaming_router = Router::new()
         .route("/api/request_play", get(request_play))
-        .route("/hls/:video/:file", get(serve_hls))
+        // perbaiki param: session + file
+        .route("/hls/:session/:file", get(serve_hls))
         .with_state(StreamState {
             pool: pool.clone(),
             cfg: cfg.clone(),
@@ -157,7 +171,10 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
     // ==== Me ====
     let me_router = Router::new()
         .route("/api/me", get(me))
-        .with_state(MeState { pool: pool.clone() });
+        .with_state(MeState {
+            pool: pool.clone(),
+            cfg: cfg.clone(),
+        });
 
     // ==== Kurs ====
     let kurs_router = kurs_router(KursState { cfg: cfg.clone() });
@@ -179,8 +196,8 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
     // ==== (opsional) Jalankan watcher di process yang sama bila di-enable ====
     #[cfg(feature = "x402-watcher")]
     if std::env::var("WATCHER_ENABLE").ok().as_deref() == Some("1") {
-        use ethers::types::Address;
         use crate::services::x402_watcher::run_watcher;
+        use ethers::types::Address;
 
         let pool_clone = pool.clone();
         if let (Ok(wss), Ok(addr_str)) = (

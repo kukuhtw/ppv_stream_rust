@@ -138,15 +138,16 @@ pub struct StartPayResp {
 // ===== ethers untuk keccak256, abi-encode & signing =====
 use ethers::abi::{encode as abi_encode, Token as AbiToken};
 use ethers::core::utils::keccak256;
-use ethers::signers::{LocalWallet, Signer};
+// use ethers::signers::{LocalWallet, Signer};
 use ethers::types::{Address, Signature, U256};
+use ethers::signers::LocalWallet;
 
 pub async fn x402_start(
     State(st): State<VideoState>,
     cookies: Cookies,
     Json(body): Json<StartPayReq>,
 ) -> impl IntoResponse {
-    let (buyer_id, _) = match sessions::current_user_id(&st.pool, &cookies).await {
+    let (buyer_id, _) = match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await { 
         Some(v) => v,
         None => return Json(json!({"ok": false, "error": "not logged in"})),
     };
