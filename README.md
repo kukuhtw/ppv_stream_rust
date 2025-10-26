@@ -67,6 +67,118 @@ Key features of the X402 integration:
 
 This makes PPV Stream Rust not only a **decentralized pay-per-view platform**, but also a **ready-to-use C2C video marketplace** with **trustless crypto payments** and **full ownership control** for every creator.
 
+Here’s the  summary updated october 26th, 2025 — clearly structured and focused on **performance**, **security**, and **data flow** differences between the old and new logic:
+
+---
+
+# 1) Video Upload
+
+* **Old:** wrote files directly to the target using `File::create` + `write_all` per chunk.
+* **New:**
+
+  * Uses **Buffered I/O** with `BufWriter` (~1 MB) → fewer syscalls.
+  * Writes to a temporary `*.part` file, then **atomically renames** it → prevents half-written files.
+  * Enforces **file size limit** (`MAX_UPLOAD_BYTES`) and counts bytes in real time.
+  * Adds **extension whitelist** (`ALLOW_EXTS`) and **MIME sniffing** via `infer`.
+  * If DB insert fails, the file is **cleaned up**.
+  * Logs file size and storage location.
+
+---
+
+# 2) Transcoding Worker
+
+* **Old:** no `faststart`; inconsistent ABR quality; several missing functions.
+* **New:**
+
+  * Adds **MP4 faststart** (`-c copy -movflags +faststart`) before HLS → faster initial seeking.
+  * Supports **multi-rendition ABR** (240p/360p/480p) in **a single ffmpeg process** using `-filter_complex` + `-var_stream_map` → better CPU/IO efficiency.
+  * Includes **anti-upscale** logic (ladder adjusts to source height).
+  * Handles **silent audio** with `anullsrc` + `-shortest`.
+  * Uses **Semaphore** for controlled concurrency.
+  * DB status is clearly tracked: `processing → ready|error`, with `last_error` and `hls_master` path stored.
+  * Clean output structure under `media/<video_id>`; includes `master.m3u8` and variant subfolders.
+
+---
+
+# 3) FFMPEG Runner & Probing
+
+* **Old:** `transcode_hls` ran raw command args, no dedicated working directory.
+* **New:**
+
+  * Introduces `run_ffmpeg(args, work_dir)` → all output written inside the safe target folder.
+  * `transcode_hls` now truly runs inside its `session_dir`.
+  * Adds helpers: `ffprobe_duration`, `ffprobe_dimensions`, `ffprobe_has_audio`.
+  * HLS ABR encoding is now a utility function respecting `hwaccel` (default: CPU).
+
+---
+
+# 4) Streaming (Play) & HLS Serving
+
+* **Old:** read entire HLS file into memory (`Vec<u8>`) before sending; watermark logic similar.
+* **New:**
+
+  * Streams files using **`ReaderStream`** → no full file loaded in RAM.
+  * Consistent **`Cache-Control: no-store`** headers.
+  * Stricter path and extension validation.
+  * Moving watermark remains, and ffmpeg threads are set to `num_cpus()`.
+
+---
+
+# 5) Sessions & Cookies
+
+* **Old:** stored plain `sid` cookie; fixed 7-day TTL; no integrity protection.
+* **New:**
+
+  * TTL now configurable (`SESSION_TOKEN_TTL`).
+  * Cookie **signed with HMAC-SHA256** (`b64(sid).b64(sig)`) → prevents forgery.
+  * Secure cookie attributes: `HttpOnly`, `SameSite=Lax`.
+  * API now requires `&Config` for access to `hmac_secret` and TTL:
+
+    * `create_session(pool, &cfg, user_id, is_admin, cookies)`
+    * `destroy_session(pool, &cfg, cookies)`
+    * `current_user_id(pool, &cfg, cookies)`
+
+---
+
+# 6) Configuration & Directories
+
+* **Old:** `media_dir` sometimes defaulted to `hls_root`; `tmp_dir` fixed; no `allow_exts`.
+* **New:**
+
+  * Default **`media_dir = media/`**, with separate **`hls_root`** for temporary HLS sessions.
+  * **`tmp_dir`** now cross-platform (uses OS temp; `/dev/shm` on Linux if available).
+  * **`ensure_dirs`** creates all required directories, including `hls_root`.
+  * `allow_exts` read from `ALLOW_EXTS`.
+  * Startup logs redact DB credentials.
+
+---
+
+# 7) Security & Robustness
+
+* **Old:** potential race conditions / partial uploads; cookies could be forged; full-file reads for streaming.
+* **New:**
+
+  * Atomic rename + size limit + MIME validation on upload.
+  * HMAC-signed cookies + expired-session cleanup.
+  * Streaming I/O for HLS serving.
+  * `last_error` written to DB on failures for easier diagnostics.
+
+---
+
+# 8) Migration Impact (Changed APIs)
+
+* `sessions::*` functions now require `&Config`.
+* `Worker::new(pool, cfg, concurrency)` stores `cfg` for TTL/dirs.
+* `ffmpeg::run_ffmpeg(args, work_dir)` now used by both worker and streaming layers.
+* New or updated environment variables:
+  `ALLOW_EXTS`, `MAX_UPLOAD_BYTES`, `SESSION_TOKEN_TTL`, `HMAC_SECRET`, `HLS_ROOT`, `MEDIA_DIR`, `TMP_DIR`, `WATERMARK_FONT`.
+
+---
+
+## Summary
+
+The new version is significantly **faster** (buffered I/O, single-process multi-rendition, faststart), **more memory-efficient** (streamed HLS delivery), and far more **secure** (HMAC cookies, path validation, size & MIME checks), while offering better **observability** (DB status and error logging).
+
 
 ## 🚀 Key Features
 
