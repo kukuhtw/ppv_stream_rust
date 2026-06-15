@@ -1,9 +1,6 @@
 // src/handlers/stream.rs
 //
 // Playback session and HLS delivery handlers.
-//
-// Playback sessions are persisted in PostgreSQL so they survive application
-// restarts and can be validated consistently across multiple application nodes.
 
 use axum::{
     extract::{Path as AxumPath, Query, State},
@@ -29,7 +26,7 @@ use crate::ffmpeg::run_ffmpeg;
 use crate::handlers::video::user_has_view_access;
 use crate::sessions;
 
-const PLAYBACK_SESSION_TTL_SECONDS: i64 = 60 * 60;
+const PLAYBACK_SESSION_TTL_SECONDS: i32 = 60 * 60;
 const PLAYLIST_READY_TIMEOUT_SECONDS: u64 = 30;
 const PLAYBACK_HLS_LIST_SIZE: u32 = 8;
 
@@ -171,13 +168,13 @@ pub async fn request_play(
         INSERT INTO playback_sessions
             (session_id, user_id, video_id, session_dir, status, expires_at)
         VALUES
-            ($1, $2, $3, $4, 'starting', NOW() + ($5 || ' seconds')::interval)
+            ($1, $2, $3, $4, 'starting', NOW() + make_interval(secs => $5))
         "#,
         session,
         user_id,
         video.id,
         session_dir_string,
-        PLAYBACK_SESSION_TTL_SECONDS.to_string()
+        PLAYBACK_SESSION_TTL_SECONDS
     )
     .execute(&st.pool)
     .await
@@ -275,8 +272,6 @@ pub async fn request_play(
         "0".into(),
         "-hls_time".into(),
         segment_seconds.to_string(),
-        "-hls_playlist_type".into(),
-        "event".into(),
         "-hls_flags".into(),
         "independent_segments+delete_segments+append_list".into(),
         "-hls_list_size".into(),
@@ -329,10 +324,12 @@ pub async fn request_play(
             .await
             {
                 ffmpeg_task.abort();
+                let message = format!("mark playlist ready: {e}");
+                let _ = mark_session_failed(&st.pool, &session, &message).await;
                 let _ = fs::remove_dir_all(&session_dir).await;
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({"ok": false, "error": format!("mark playlist ready: {e}")})),
+                    Json(json!({"ok": false, "error": message})),
                 )
                     .into_response();
             }
@@ -350,16 +347,22 @@ pub async fn request_play(
                     }
                     Ok(Ok(())) => {
                         if !playlist_path.exists() {
+                            let message = "ffmpeg completed without creating a playlist";
+                            let _ = mark_session_failed(&st.pool, &session, message).await;
+                            let _ = fs::remove_dir_all(&session_dir).await;
                             return (
                                 StatusCode::INTERNAL_SERVER_ERROR,
-                                Json(json!({"ok": false, "error": "ffmpeg completed without creating a playlist"})),
+                                Json(json!({"ok": false, "error": message})),
                             ).into_response();
                         }
                     }
                     Err(_) => {
+                        let message = "ffmpeg status channel closed";
+                        let _ = mark_session_failed(&st.pool, &session, message).await;
+                        let _ = fs::remove_dir_all(&session_dir).await;
                         return (
                             StatusCode::INTERNAL_SERVER_ERROR,
-                            Json(json!({"ok": false, "error": "ffmpeg status channel closed"})),
+                            Json(json!({"ok": false, "error": message})),
                         ).into_response();
                     }
                 }
@@ -442,9 +445,9 @@ async fn mark_session_failed(pool: &PgPool, session_id: &str, message: &str) -> 
 pub async fn cleanup_expired_sessions(pool: &PgPool, hls_root: &str) -> Result<u64, sqlx::Error> {
     let rows = sqlx::query!(
         r#"
-        DELETE FROM playback_sessions
+        SELECT session_id, session_dir
+        FROM playback_sessions
         WHERE expires_at <= NOW()
-        RETURNING session_id, session_dir
         "#
     )
     .fetch_all(pool)
@@ -458,10 +461,23 @@ pub async fn cleanup_expired_sessions(pool: &PgPool, hls_root: &str) -> Result<u
             PathBuf::from(&row.session_dir)
         };
 
-        match fs::remove_dir_all(path).await {
-            Ok(_) => removed += 1,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => warn!("failed to delete expired playback directory: {e}"),
+        let directory_removed = match fs::remove_dir_all(&path).await {
+            Ok(_) => true,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => true,
+            Err(e) => {
+                warn!("failed to delete expired playback directory {}: {}", path.display(), e);
+                false
+            }
+        };
+
+        if directory_removed {
+            sqlx::query!(
+                "DELETE FROM playback_sessions WHERE session_id=$1",
+                row.session_id
+            )
+            .execute(pool)
+            .await?;
+            removed += 1;
         }
     }
 
@@ -471,7 +487,6 @@ pub async fn cleanup_expired_sessions(pool: &PgPool, hls_root: &str) -> Result<u
 pub fn start_cleanup_task(pool: PgPool, hls_root: String) {
     tokio::spawn(async move {
         loop {
-            sleep(Duration::from_secs(300)).await;
             match cleanup_expired_sessions(&pool, &hls_root).await {
                 Ok(count) if count > 0 => {
                     tracing::info!("removed {} expired playback sessions", count);
@@ -479,6 +494,7 @@ pub fn start_cleanup_task(pool: PgPool, hls_root: String) {
                 Ok(_) => {}
                 Err(e) => warn!("periodic playback cleanup failed: {e}"),
             }
+            sleep(Duration::from_secs(300)).await;
         }
     });
 }
@@ -533,7 +549,20 @@ pub async fn serve_hls(
         return (StatusCode::GONE, "playback session failed").into_response();
     }
 
-    let file_path = Path::new(&session_row.session_dir).join(&file);
+    let root = match fs::canonicalize(&st.cfg.hls_root).await {
+        Ok(path) => path,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "hls root is unavailable").into_response(),
+    };
+    let session_dir = match fs::canonicalize(&session_row.session_dir).await {
+        Ok(path) => path,
+        Err(_) => return (StatusCode::GONE, "playback session files are unavailable").into_response(),
+    };
+
+    if !session_dir.starts_with(&root) {
+        return (StatusCode::FORBIDDEN, "invalid playback session path").into_response();
+    }
+
+    let file_path = session_dir.join(&file);
 
     match fs::File::open(&file_path).await {
         Ok(file_handle) => {
