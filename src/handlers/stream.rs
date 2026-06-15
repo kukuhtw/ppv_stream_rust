@@ -2,9 +2,8 @@
 //
 // Playback session and HLS delivery handlers.
 //
-// This module authenticates viewers, checks video access rights, creates a
-// viewer-specific HLS session, applies a moving watermark with FFmpeg, and
-// streams generated HLS playlists and media segments back to the client.
+// Playback sessions are persisted in PostgreSQL so they survive application
+// restarts and can be validated consistently across multiple application nodes.
 
 use axum::{
     extract::{Path as AxumPath, Query, State},
@@ -12,17 +11,14 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde_json::json;
 use sqlx::PgPool;
 use std::{
-    collections::HashMap,
     path::{Path, PathBuf},
-    sync::Mutex,
-    time::{Duration, Instant},
+    time::Duration,
 };
-use tokio::{fs, time::sleep};
+use tokio::{fs, sync::oneshot, time::sleep};
 use tokio_util::io::ReaderStream;
 use tower_cookies::Cookies;
 use tracing::{error, warn};
@@ -33,17 +29,9 @@ use crate::ffmpeg::run_ffmpeg;
 use crate::handlers::video::user_has_view_access;
 use crate::sessions;
 
-const PLAYBACK_SESSION_TTL_SECONDS: u64 = 60 * 60;
+const PLAYBACK_SESSION_TTL_SECONDS: i64 = 60 * 60;
 const PLAYLIST_READY_TIMEOUT_SECONDS: u64 = 30;
-
-#[derive(Clone, Debug)]
-struct PlaybackSession {
-    user_id: String,
-    expires_at: Instant,
-}
-
-static PLAYBACK_SESSIONS: Lazy<Mutex<HashMap<String, PlaybackSession>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
+const PLAYBACK_HLS_LIST_SIZE: u32 = 8;
 
 #[derive(Clone)]
 pub struct StreamState {
@@ -90,7 +78,7 @@ pub async fn request_play(
         }
     }
 
-    let row = match sqlx::query! {
+    let row = match sqlx::query!(
         r#"
         SELECT id, owner_id, filename, title, price_cents
         FROM videos
@@ -98,7 +86,7 @@ pub async fn request_play(
         LIMIT 1
         "#,
         q.video_id
-    }
+    )
     .fetch_optional(&st.pool)
     .await
     {
@@ -120,10 +108,10 @@ pub async fn request_play(
             .into_response();
     };
 
-    let username: String = match sqlx::query_scalar! {
+    let username: String = match sqlx::query_scalar!(
         r#"SELECT username FROM users WHERE id = $1 LIMIT 1"#,
         user_id
-    }
+    )
     .fetch_one(&st.pool)
     .await
     {
@@ -137,7 +125,7 @@ pub async fn request_play(
         }
     };
 
-    if let Err(e) = cleanup_expired_sessions(&st.cfg.hls_root).await {
+    if let Err(e) = cleanup_expired_sessions(&st.pool, &st.cfg.hls_root).await {
         warn!("playback session cleanup failed: {e}");
     }
 
@@ -173,6 +161,31 @@ pub async fn request_play(
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"ok": false, "error": format!("write wm file: {e}")})),
+        )
+            .into_response();
+    }
+
+    let session_dir_string = session_dir.to_string_lossy().to_string();
+    if let Err(e) = sqlx::query!(
+        r#"
+        INSERT INTO playback_sessions
+            (session_id, user_id, video_id, session_dir, status, expires_at)
+        VALUES
+            ($1, $2, $3, $4, 'starting', NOW() + ($5 || ' seconds')::interval)
+        "#,
+        session,
+        user_id,
+        video.id,
+        session_dir_string,
+        PLAYBACK_SESSION_TTL_SECONDS.to_string()
+    )
+    .execute(&st.pool)
+    .await
+    {
+        let _ = fs::remove_dir_all(&session_dir).await;
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"ok": false, "error": format!("create playback session: {e}")})),
         )
             .into_response();
     }
@@ -219,6 +232,7 @@ pub async fn request_play(
     let input_path = match resolve_input_path(&st.cfg, &video.filename) {
         Some(path) => path,
         None => {
+            let _ = mark_session_failed(&st.pool, &session, "source file not found").await;
             let _ = fs::remove_dir_all(&session_dir).await;
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -256,7 +270,7 @@ pub async fn request_play(
         "-b:a".into(),
         "128k".into(),
         "-threads".into(),
-        format!("{}", num_cpus::get().max(2)),
+        format!("{}", num_cpus::get().min(4).max(1)),
         "-start_number".into(),
         "0".into(),
         "-hls_time".into(),
@@ -264,47 +278,106 @@ pub async fn request_play(
         "-hls_playlist_type".into(),
         "event".into(),
         "-hls_flags".into(),
-        "independent_segments+delete_segments".into(),
+        "independent_segments+delete_segments+append_list".into(),
         "-hls_list_size".into(),
-        "0".into(),
+        PLAYBACK_HLS_LIST_SIZE.to_string(),
+        "-hls_delete_threshold".into(),
+        "2".into(),
+        "-hls_segment_filename".into(),
+        "segment_%06d.ts".into(),
         playlist_name.clone(),
     ];
 
-    PLAYBACK_SESSIONS.lock().unwrap().insert(
-        session.clone(),
-        PlaybackSession {
-            user_id: user_id.clone(),
-            expires_at: Instant::now() + Duration::from_secs(PLAYBACK_SESSION_TTL_SECONDS),
-        },
-    );
-
-    let session_dir_for_task = session_dir.clone();
+    let (status_tx, mut status_rx) = oneshot::channel::<Result<(), String>>();
+    let pool_for_task = st.pool.clone();
     let session_for_task = session.clone();
-    tokio::spawn(async move {
-        if let Err(e) = run_ffmpeg(&arguments, &session_dir_for_task.to_string_lossy()).await {
-            error!("playback ffmpeg failed for session {}: {}", session_for_task, e);
-            PLAYBACK_SESSIONS.lock().unwrap().remove(&session_for_task);
-            let _ = fs::remove_dir_all(&session_dir_for_task).await;
+    let session_dir_for_task = session_dir.clone();
+
+    let ffmpeg_task = tokio::spawn(async move {
+        let result = run_ffmpeg(&arguments, &session_dir_for_task.to_string_lossy()).await;
+        match result {
+            Ok(()) => {
+                let _ = sqlx::query!(
+                    "UPDATE playback_sessions SET status='completed', last_error=NULL WHERE session_id=$1",
+                    session_for_task
+                )
+                .execute(&pool_for_task)
+                .await;
+                let _ = status_tx.send(Ok(()));
+            }
+            Err(e) => {
+                let message = e.to_string();
+                error!("playback ffmpeg failed for session {}: {}", session_for_task, message);
+                let _ = mark_session_failed(&pool_for_task, &session_for_task, &message).await;
+                let _ = fs::remove_dir_all(&session_dir_for_task).await;
+                let _ = status_tx.send(Err(message));
+            }
         }
     });
 
     let playlist_path = session_dir.join(&playlist_name);
-    let ready_deadline = Instant::now() + Duration::from_secs(PLAYLIST_READY_TIMEOUT_SECONDS);
-    while !playlist_path.exists() && Instant::now() < ready_deadline {
-        sleep(Duration::from_millis(200)).await;
-    }
+    let startup_timeout = sleep(Duration::from_secs(PLAYLIST_READY_TIMEOUT_SECONDS));
+    tokio::pin!(startup_timeout);
 
-    if !playlist_path.exists() {
-        PLAYBACK_SESSIONS.lock().unwrap().remove(&session);
-        let _ = fs::remove_dir_all(&session_dir).await;
-        return (
-            StatusCode::GATEWAY_TIMEOUT,
-            Json(json!({
-                "ok": false,
-                "error": "playlist was not generated within the startup timeout"
-            })),
-        )
-            .into_response();
+    loop {
+        if playlist_path.exists() {
+            if let Err(e) = sqlx::query!(
+                "UPDATE playback_sessions SET status='ready', last_error=NULL WHERE session_id=$1",
+                session
+            )
+            .execute(&st.pool)
+            .await
+            {
+                ffmpeg_task.abort();
+                let _ = fs::remove_dir_all(&session_dir).await;
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"ok": false, "error": format!("mark playlist ready: {e}")})),
+                )
+                    .into_response();
+            }
+            break;
+        }
+
+        tokio::select! {
+            result = &mut status_rx => {
+                match result {
+                    Ok(Err(message)) => {
+                        return (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(json!({"ok": false, "error": format!("ffmpeg: {message}")})),
+                        ).into_response();
+                    }
+                    Ok(Ok(())) => {
+                        if !playlist_path.exists() {
+                            return (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                Json(json!({"ok": false, "error": "ffmpeg completed without creating a playlist"})),
+                            ).into_response();
+                        }
+                    }
+                    Err(_) => {
+                        return (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(json!({"ok": false, "error": "ffmpeg status channel closed"})),
+                        ).into_response();
+                    }
+                }
+            }
+            _ = &mut startup_timeout => {
+                ffmpeg_task.abort();
+                let _ = mark_session_failed(&st.pool, &session, "playlist startup timeout").await;
+                let _ = fs::remove_dir_all(&session_dir).await;
+                return (
+                    StatusCode::GATEWAY_TIMEOUT,
+                    Json(json!({
+                        "ok": false,
+                        "error": "playlist was not generated within the startup timeout"
+                    })),
+                ).into_response();
+            }
+            _ = sleep(Duration::from_millis(200)) => {}
+        }
     }
 
     let playlist = format!("/hls/{}/master.m3u8", session);
@@ -355,31 +428,59 @@ fn resolve_input_path(cfg: &Config, filename_in_db: &str) -> Option<PathBuf> {
     None
 }
 
-async fn cleanup_expired_sessions(hls_root: &str) -> std::io::Result<()> {
-    let expired_session_ids: Vec<String> = {
-        let mut sessions = PLAYBACK_SESSIONS.lock().unwrap();
-        let now = Instant::now();
-        let expired: Vec<String> = sessions
-            .iter()
-            .filter(|(_, session)| session.expires_at <= now)
-            .map(|(session_id, _)| session_id.clone())
-            .collect();
-        for session_id in &expired {
-            sessions.remove(session_id);
-        }
-        expired
-    };
+async fn mark_session_failed(pool: &PgPool, session_id: &str, message: &str) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "UPDATE playback_sessions SET status='error', last_error=$2 WHERE session_id=$1",
+        session_id,
+        message
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
 
-    for session_id in expired_session_ids {
-        let path = Path::new(hls_root).join(session_id);
+pub async fn cleanup_expired_sessions(pool: &PgPool, hls_root: &str) -> Result<u64, sqlx::Error> {
+    let rows = sqlx::query!(
+        r#"
+        DELETE FROM playback_sessions
+        WHERE expires_at <= NOW()
+        RETURNING session_id, session_dir
+        "#
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let mut removed = 0u64;
+    for row in rows {
+        let path = if row.session_dir.trim().is_empty() {
+            Path::new(hls_root).join(&row.session_id)
+        } else {
+            PathBuf::from(&row.session_dir)
+        };
+
         match fs::remove_dir_all(path).await {
-            Ok(_) => {}
+            Ok(_) => removed += 1,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(e),
+            Err(e) => warn!("failed to delete expired playback directory: {e}"),
         }
     }
 
-    Ok(())
+    Ok(removed)
+}
+
+pub fn start_cleanup_task(pool: PgPool, hls_root: String) {
+    tokio::spawn(async move {
+        loop {
+            sleep(Duration::from_secs(300)).await;
+            match cleanup_expired_sessions(&pool, &hls_root).await {
+                Ok(count) if count > 0 => {
+                    tracing::info!("removed {} expired playback sessions", count);
+                }
+                Ok(_) => {}
+                Err(e) => warn!("periodic playback cleanup failed: {e}"),
+            }
+        }
+    });
 }
 
 pub async fn serve_hls(
@@ -396,28 +497,43 @@ pub async fn serve_hls(
         None => return (StatusCode::UNAUTHORIZED, "not logged in").into_response(),
     };
 
-    let session_record = {
-        let mut session_map = PLAYBACK_SESSIONS.lock().unwrap();
-        match session_map.get(&session).cloned() {
-            Some(record) if record.expires_at > Instant::now() => Some(record),
-            Some(_) => {
-                session_map.remove(&session);
-                None
-            }
-            None => None,
-        }
+    let session_row = match sqlx::query!(
+        r#"
+        SELECT user_id, session_dir, status, expires_at > NOW() AS "is_active!"
+        FROM playback_sessions
+        WHERE session_id=$1
+        LIMIT 1
+        "#,
+        session
+    )
+    .fetch_optional(&st.pool)
+    .await
+    {
+        Ok(row) => row,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "session lookup failed").into_response(),
     };
 
-    let Some(session_record) = session_record else {
-        let _ = fs::remove_dir_all(Path::new(&st.cfg.hls_root).join(&session)).await;
+    let Some(session_row) = session_row else {
         return (StatusCode::GONE, "playback session expired").into_response();
     };
 
-    if session_record.user_id != current_user_id {
+    if !session_row.is_active {
+        let _ = sqlx::query!("DELETE FROM playback_sessions WHERE session_id=$1", session)
+            .execute(&st.pool)
+            .await;
+        let _ = fs::remove_dir_all(&session_row.session_dir).await;
+        return (StatusCode::GONE, "playback session expired").into_response();
+    }
+
+    if session_row.user_id != current_user_id {
         return (StatusCode::FORBIDDEN, "session does not belong to this user").into_response();
     }
 
-    let file_path = Path::new(&st.cfg.hls_root).join(&session).join(&file);
+    if session_row.status == "error" {
+        return (StatusCode::GONE, "playback session failed").into_response();
+    }
+
+    let file_path = Path::new(&session_row.session_dir).join(&file);
 
     match fs::File::open(&file_path).await {
         Ok(file_handle) => {
@@ -430,14 +546,8 @@ pub async fn serve_hls(
             };
 
             let mut headers = HeaderMap::new();
-            headers.insert(
-                header::CONTENT_TYPE,
-                HeaderValue::from_static(content_type),
-            );
-            headers.insert(
-                header::CACHE_CONTROL,
-                HeaderValue::from_static("no-store"),
-            );
+            headers.insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
+            headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
 
             let stream = ReaderStream::new(file_handle);
             (
