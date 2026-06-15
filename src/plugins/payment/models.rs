@@ -66,6 +66,35 @@ pub enum PaymentStatus {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PaymentProviderConfig {
+    pub provider: String,
+    pub environment: String,
+    pub api_base_url: Option<String>,
+    pub configured: bool,
+    pub required_env: Vec<String>,
+    pub missing_env: Vec<String>,
+}
+
+impl PaymentProviderConfig {
+    pub fn new(
+        provider: impl Into<String>,
+        environment: impl Into<String>,
+        api_base_url: Option<String>,
+        required_env: Vec<String>,
+        missing_env: Vec<String>,
+    ) -> Self {
+        Self {
+            provider: provider.into(),
+            environment: environment.into(),
+            api_base_url,
+            configured: missing_env.is_empty(),
+            required_env,
+            missing_env,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PaymentPluginCapability {
     pub provider: String,
     pub display_name: String,
