@@ -315,21 +315,21 @@ sequenceDiagram
     participant FFmpeg
 
     Creator->>API: POST /api/upload
-    API->>API: Verify signed session
-    API->>FS: Write .part file and atomically rename
+    API->>API: Verifikasi signed session
+    API->>FS: Tulis .part dan atomic rename
     API->>DB: INSERT videos (queued)
     API->>Worker: enqueue TranscodeJob
     Worker->>DB: UPDATE status = processing
     Worker->>FFmpeg: faststart + HLS ABR
     FFmpeg->>FS: media/<video_id>/master.m3u8 + segments
-    alt successful
+    alt berhasil
         Worker->>DB: UPDATE hls_ready=true, status=ready
-    else failed
+    else gagal
         Worker->>DB: UPDATE status=error, last_error
     end
 ```
 
-### Payment-to-Unlock Flow
+### Flow Pembayaran sampai Unlock
 
 ```mermaid
 sequenceDiagram
@@ -352,16 +352,16 @@ sequenceDiagram
     API->>RPC: eth_getTransactionReceipt
     API->>API: Validate contract, event, invoice, video, amount
     API->>DB: UPDATE invoice paid/underpaid
-    alt sufficient payment
+    alt pembayaran cukup
         API->>DB: INSERT purchases
         API->>DB: INSERT allowlist
         API-->>Viewer: Access unlocked
-    else underpaid
+    else kurang bayar
         API-->>Viewer: missing_wei
     end
 ```
 
-### Playback Flow
+### Flow Playback
 
 ```mermaid
 flowchart LR
