@@ -20,7 +20,7 @@ midtrans
 xendit
 ```
 
-The current implementation creates the extension points first. Provider API calls can then be migrated one by one from handler logic into plugin implementations.
+Provider API calls can be migrated one by one from handler logic into plugin implementations.
 
 ## Environment Configuration
 
@@ -48,6 +48,55 @@ PAYMENT_PLUGINS=x402
 PAYMENT_DEFAULT_PROVIDER=x402
 ```
 
+## Provider Environment Variables
+
+### x402
+
+```dotenv
+X402_CONTRACT_ADDRESS=0x...
+X402_RPC_HTTP=https://...
+X402_ADMIN_PRIVKEY=0x...
+X402_CHAIN_ID=80002
+```
+
+### PayPal
+
+```dotenv
+PAYPAL_ENV=sandbox
+PAYPAL_CLIENT_ID=...
+PAYPAL_CLIENT_SECRET=...
+```
+
+Use `PAYPAL_ENV=live` for production.
+
+### Stripe
+
+```dotenv
+STRIPE_ENV=test
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+```
+
+Use `STRIPE_ENV=live` with production credentials.
+
+### Midtrans
+
+```dotenv
+MIDTRANS_ENV=sandbox
+MIDTRANS_SERVER_KEY=...
+MIDTRANS_CLIENT_KEY=...
+```
+
+Use `MIDTRANS_ENV=production` for production.
+
+### Xendit
+
+```dotenv
+XENDIT_ENV=test
+XENDIT_SECRET_KEY=...
+XENDIT_WEBHOOK_TOKEN=...
+```
+
 ## Active Generic Routes
 
 The generic plugin routes are now wired in `src/main.rs`:
@@ -64,17 +113,15 @@ Examples:
 curl http://localhost:8080/api/pay/providers
 ```
 
-```bash
-curl -X POST http://localhost:8080/api/pay/midtrans/start \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "user_id": "user-1",
-    "video_id": "video-1",
-    "amount_cents": 10000,
-    "currency": "IDR",
-    "buyer_email": "buyer@example.com",
-    "buyer_name": "Demo Buyer"
-  }'
+The provider list returns each plugin capability, including:
+
+```text
+configured
+environment
+api_base_url
+required_env
+missing_env
+supported_currencies
 ```
 
 Provider skeletons currently return a clear not-yet-enabled error until each provider API integration is implemented.
@@ -107,7 +154,7 @@ src/plugins/
 
 ## Core Concept
 
-The application should depend on a provider-neutral trait:
+The application depends on a provider-neutral trait:
 
 ```rust
 #[async_trait::async_trait]
@@ -189,6 +236,12 @@ Status: done.
 
 ### Phase 3
 
+Add provider environment configuration and capability reporting.
+
+Status: done.
+
+### Phase 4
+
 Move current x402 logic from:
 
 ```text
@@ -203,11 +256,11 @@ src/plugins/payment/providers/x402.rs
 
 Status: next.
 
-### Phase 4
+### Phase 5
 
 Implement Midtrans and Xendit first for Indonesia payment support.
 
-### Phase 5
+### Phase 6
 
 Implement PayPal and Stripe for international users.
 
