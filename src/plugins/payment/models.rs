@@ -69,8 +69,13 @@ pub enum PaymentStatus {
 pub struct PaymentPluginCapability {
     pub provider: String,
     pub display_name: String,
+    pub configured: bool,
+    pub environment: String,
+    pub api_base_url: Option<String>,
     pub supports_redirect_checkout: bool,
     pub supports_webhook_confirmation: bool,
     pub supports_manual_confirmation: bool,
     pub supported_currencies: Vec<String>,
+    pub required_env: Vec<String>,
+    pub missing_env: Vec<String>,
 }
