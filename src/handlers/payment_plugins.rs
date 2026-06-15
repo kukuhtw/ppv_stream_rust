@@ -1,6 +1,4 @@
 // src/handlers/payment_plugins.rs
-//
-// Generic payment plugin HTTP handlers.
 
 use axum::{
     extract::{Path, State},
@@ -38,7 +36,7 @@ pub struct CreateInvoicePayload {
 pub struct ConfirmPaymentPayload {
     pub invoice_id: String,
     pub transaction_id: Option<String>,
-    pub webhook_payload: Option<serde_json::Value>,
+    pub provider_payload: Option<serde_json::Value>,
     #[serde(default)]
     pub signature_headers: std::collections::HashMap<String, String>,
 }
@@ -61,16 +59,32 @@ pub async fn list_payment_plugins(
     }))
 }
 
+pub async fn create_default_payment_invoice(
+    State(state): State<PaymentPluginState>,
+    Json(payload): Json<CreateInvoicePayload>,
+) -> impl IntoResponse {
+    let Some(provider) = state.registry.default_provider_name() else {
+        return Json(json!({"ok": false, "error": "default payment provider is not configured"}));
+    };
+
+    create_invoice_with_provider(state, provider, payload).await
+}
+
 pub async fn create_payment_invoice(
     State(state): State<PaymentPluginState>,
     Path(provider): Path<String>,
     Json(payload): Json<CreateInvoicePayload>,
 ) -> impl IntoResponse {
+    create_invoice_with_provider(state, provider, payload).await
+}
+
+async fn create_invoice_with_provider(
+    state: PaymentPluginState,
+    provider: String,
+    payload: CreateInvoicePayload,
+) -> Json<serde_json::Value> {
     let Some(plugin) = state.registry.get(&provider) else {
-        return Json(json!({
-            "ok": false,
-            "error": format!("payment provider not found: {provider}")
-        }));
+        return Json(json!({"ok": false, "error": format!("payment provider not found: {provider}")}));
     };
 
     let request = CreateInvoiceRequest {
@@ -86,9 +100,20 @@ pub async fn create_payment_invoice(
     };
 
     match plugin.create_invoice(request).await {
-        Ok(invoice) => Json(json!({"ok": true, "invoice": invoice})),
-        Err(e) => Json(json!({"ok": false, "error": e.to_string()})),
+        Ok(invoice) => Json(json!({"ok": true, "provider": provider, "invoice": invoice})),
+        Err(e) => Json(json!({"ok": false, "provider": provider, "error": e.to_string()})),
     }
+}
+
+pub async fn confirm_default_payment(
+    State(state): State<PaymentPluginState>,
+    Json(payload): Json<ConfirmPaymentPayload>,
+) -> impl IntoResponse {
+    let Some(provider) = state.registry.default_provider_name() else {
+        return Json(json!({"ok": false, "error": "default payment provider is not configured"}));
+    };
+
+    confirm_payment_with_provider(state, provider, payload).await
 }
 
 pub async fn confirm_payment(
@@ -96,23 +121,28 @@ pub async fn confirm_payment(
     Path(provider): Path<String>,
     Json(payload): Json<ConfirmPaymentPayload>,
 ) -> impl IntoResponse {
+    confirm_payment_with_provider(state, provider, payload).await
+}
+
+async fn confirm_payment_with_provider(
+    state: PaymentPluginState,
+    provider: String,
+    payload: ConfirmPaymentPayload,
+) -> Json<serde_json::Value> {
     let Some(plugin) = state.registry.get(&provider) else {
-        return Json(json!({
-            "ok": false,
-            "error": format!("payment provider not found: {provider}")
-        }));
+        return Json(json!({"ok": false, "error": format!("payment provider not found: {provider}")}));
     };
 
     let request = ConfirmPaymentRequest {
         provider: provider.clone(),
         invoice_id: payload.invoice_id,
         transaction_id: payload.transaction_id,
-        webhook_payload: payload.webhook_payload,
+        webhook_payload: payload.provider_payload,
         signature_headers: payload.signature_headers,
     };
 
     match plugin.confirm_payment(request).await {
-        Ok(result) => Json(json!({"ok": true, "payment": result})),
-        Err(e) => Json(json!({"ok": false, "error": e.to_string()})),
+        Ok(result) => Json(json!({"ok": true, "provider": provider, "payment": result})),
+        Err(e) => Json(json!({"ok": false, "provider": provider, "error": e.to_string()})),
     }
 }
