@@ -195,6 +195,305 @@ The new version is significantly **faster** (buffered I/O, single-process multi-
 
 ---
 
+## 🔄 Business Processes
+
+This section describes the platform's primary business workflows from the perspectives of viewers, creators, payments, and system operations.
+
+### Primary Actors
+
+| Actor | Responsibilities |
+|---|---|
+| **Viewer / buyer** | Registers, logs in, selects a video, pays for access, and watches unlocked content. |
+| **Creator / video owner** | Completes payment profile details, uploads videos, sets prices, manages metadata, and grants manual access. |
+| **Platform administrator** | Bootstraps or logs in as an administrator and monitors users, sessions, videos, allowlists, purchases, and password resets. |
+| **Backend system** | Authenticates sessions, stores metadata, runs transcoding, verifies payments, manages access rights, and serves HLS. |
+| **X402 smart contract** | Processes on-chain payments and splits funds between the creator and administrator according to basis points signed by the backend. |
+
+### 1. Registration, Login, and Sessions
+
+1. A user registers through `POST /auth/register`.
+2. The backend validates the input, hashes the password with Argon2, and creates the user record.
+3. A user logs in through `POST /auth/login`; an administrator uses `POST /admin/login`.
+4. After validating the credentials, the backend creates a database session and sends an HMAC-SHA256-signed `ppv_session` cookie.
+5. Every protected endpoint verifies the cookie signature, loads the session, and confirms that it has not expired.
+6. Logging out removes both the database session and browser cookie.
+7. During password recovery, a time-limited, single-use token is stored and later marked as `used` after the password is changed successfully.
+
+### 2. Creator Onboarding and Profile Management
+
+1. Every user can act as a creator; there is no separate creator table or role.
+2. A creator updates their profile through `POST /api/profile_update`.
+3. Bank account details, blockchain wallet, preferred chain, WhatsApp number, and profile description are stored on the user record.
+4. The creator wallet must be present and valid before a buyer can start an X402 payment.
+
+### 3. Video Upload and Processing
+
+1. An authenticated creator sends a multipart form to `POST /api/upload` containing `title`, `price_cents`, and `file`.
+2. The backend validates the extension and size, writes the upload to a temporary `*.part` file, and then performs an atomic rename.
+3. Video metadata is created with the initial `queued` status.
+4. A job is submitted to the in-memory transcoding worker.
+5. The worker changes the status to `processing`, creates a fast-start MP4, and generates adaptive-bitrate HLS with FFmpeg.
+6. On success, the video is assigned `hls_ready = true` and `processing_state = 'ready'`. On failure, its status becomes `error` and the cause is stored in `last_error`.
+7. The creator can update the title, description, and price through `POST /api/video_update`.
+
+> **Operational note:** the transcode queue currently resides in the application process memory. Queued jobs do not survive a process restart, although video metadata and the last recorded status remain in PostgreSQL.
+
+### 4. Discovery and Manual Access
+
+1. The marketplace loads its catalog through `GET /api/videos`.
+2. A creator retrieves their own videos through `GET /api/my_videos`.
+3. A creator can search for users through `GET /api/user_lookup`.
+4. A creator grants manual access through `POST /api/allow`.
+5. The backend confirms that the requester owns the video and then adds the `(video_id, username)` pair to the allowlist.
+
+### 5. PPV Purchase with X402
+
+1. A viewer selects a video and requests payment options through `GET /api/pay/options?video_id=...`.
+2. The backend loads the video price, creator wallet, and active payment tokens from the database.
+3. The viewer selects a chain and token, then sends `POST /api/pay/x402/start`.
+4. The backend creates a unique invoice, calculates the token amount in its smallest unit (`wei`), stores the invoice hash, sets an expiration time, and signs the smart-contract payment payload.
+5. The viewer's wallet calls the X402 contract with the payload. The contract transfers and splits the funds between the creator and administrator, then emits a `Paid` event.
+6. Access can be finalized through either of two paths:
+   * **HTTP confirmation** — the frontend sends the transaction hash to `POST /api/pay/x402/confirm`; the backend reads the RPC receipt and validates the contract address, event, invoice hash, video ID, and payment amount.
+   * **Optional watcher** — when the `x402-watcher` feature and `WATCHER_ENABLE=1` are enabled, the backend listens for `Paid` events over WebSocket.
+7. The invoice is updated to `paid` or `underpaid`.
+8. A full payment creates a purchase record and adds the viewer to the allowlist idempotently.
+
+> **Playback authorization source:** viewing access currently depends on video ownership or the presence of the viewer's username in `allowlist`. The `purchases` table acts as the purchase ledger and audit trail; a successful payment also writes to `allowlist` to unlock playback.
+
+### 6. Playback and Content Protection
+
+1. A viewer requests playback through `GET /api/request_play?video_id=...`.
+2. The backend validates the session and checks whether the viewer owns the video or appears in the allowlist.
+3. The backend resolves the source file, creates a temporary HLS session directory, and generates a watermark containing the username and timestamp.
+4. FFmpeg creates a session-specific HLS stream with a moving watermark.
+5. The backend returns the `/hls/:session/master.m3u8` playlist URL.
+6. Playlists and segments are streamed with `Cache-Control: no-store` and validated path and file names.
+
+### 7. Administrator Monitoring
+
+1. An administrator logs in with an account whose `is_admin` flag is enabled.
+2. The `GET /admin/data` endpoint validates both the session and administrator role.
+3. The dashboard displays records and aggregate counts for users, sessions, videos, allowlists, purchases, and password resets.
+4. The `/setup_admin` endpoint can create or promote the initial administrator when a bootstrap token is configured.
+
+---
+
+## 🧭 Business Process-to-Code Mapping
+
+### Mapping Summary
+
+| Business process | HTTP route / trigger | Primary implementation | Primary effects |
+|---|---|---|---|
+| User registration | `POST /auth/register` | `src/handlers/auth_user.rs::post_register` | Inserts a user with a password hash. |
+| User login/logout | `POST /auth/login`, `POST /auth/logout` | `src/handlers/auth_user.rs`, `src/sessions.rs` | Creates or removes the session and signed cookie. |
+| Administrator login/logout | `POST /admin/login`, `POST /admin/logout` | `src/handlers/auth_admin.rs`, `src/sessions.rs` | Validates `is_admin` and manages the session. |
+| Forgot/reset password | `POST /auth/forgot`, `POST /auth/reset` | `src/handlers/password.rs`, `src/handlers/auth_user.rs` | Creates a reset token, replaces the password hash, and marks the token as used. |
+| Creator profile | `GET /api/profile`, `POST /api/profile_update` | `src/handlers/users.rs` | Reads or updates profile, contact, bank, and wallet details. |
+| Marketplace browsing | `GET /api/videos` | `src/handlers/video.rs::list_videos` | Joins video data with creator profile data. |
+| Video upload | `POST /api/upload` | `src/handlers/upload.rs::upload_video` | Writes the file, inserts video metadata, and enqueues a job. |
+| Video transcoding | Internal trigger after upload | `src/worker.rs`, `src/ffmpeg.rs` | Updates processing status and produces ABR HLS media. |
+| Video management | `GET /api/my_videos`, `POST /api/video_update` | `src/handlers/video.rs` | Reads creator-owned videos and updates metadata or price. |
+| Manual access grant | `GET /api/user_lookup`, `POST /api/allow` | `src/handlers/video.rs` | Validates ownership and inserts an allowlist entry. |
+| Payment options | `GET /api/pay/options` | `src/handlers/pay.rs::pay_options` | Reads the price, creator wallet, and active tokens. |
+| X402 invoice creation | `POST /api/pay/x402/start` | `src/handlers/pay.rs::x402_start` | Inserts an invoice and creates the payment signature. |
+| Payment confirmation | `POST /api/pay/x402/confirm` | `src/handlers/pay.rs::x402_confirm` | Verifies the receipt/event, updates the invoice, and inserts purchase and allowlist records. |
+| Asynchronous payment event | `Paid` event over WSS | `src/services/x402_watcher.rs` | Matches the invoice hash and unlocks access. |
+| Playback authorization | `GET /api/request_play` | `src/handlers/stream.rs`, `src/handlers/video.rs::user_has_view_access` | Checks ownership/allowlist access and generates watermarked HLS. |
+| HLS delivery | `GET /hls/:session/:file` | `src/handlers/stream.rs::serve_hls` | Streams a playlist or segment from the session directory. |
+| Administrator monitoring | `GET /admin/data` | `src/handlers/admin.rs::admin_data` | Reads operational records and entity counts. |
+
+### Upload-to-Ready Flow
+
+```mermaid
+sequenceDiagram
+    actor Creator
+    participant API as Axum API
+    participant DB as PostgreSQL
+    participant FS as File Storage
+    participant Worker as Transcode Worker
+    participant FFmpeg
+
+    Creator->>API: POST /api/upload
+    API->>API: Verify signed session
+    API->>FS: Write .part file and atomically rename
+    API->>DB: INSERT videos (queued)
+    API->>Worker: enqueue TranscodeJob
+    Worker->>DB: UPDATE status = processing
+    Worker->>FFmpeg: faststart + HLS ABR
+    FFmpeg->>FS: media/<video_id>/master.m3u8 + segments
+    alt successful
+        Worker->>DB: UPDATE hls_ready=true, status=ready
+    else failed
+        Worker->>DB: UPDATE status=error, last_error
+    end
+```
+
+### Payment-to-Unlock Flow
+
+```mermaid
+sequenceDiagram
+    actor Viewer
+    participant API as Axum API
+    participant DB as PostgreSQL
+    participant Wallet
+    participant X402 as X402Splitter
+    participant RPC as Blockchain RPC
+
+    Viewer->>API: GET /api/pay/options
+    API->>DB: Read video, creator wallet, pay_tokens
+    Viewer->>API: POST /api/pay/x402/start
+    API->>DB: INSERT x402_invoices (pending)
+    API-->>Viewer: Invoice hash, amount, deadline, signature
+    Viewer->>Wallet: Approve/send transaction
+    Wallet->>X402: payNative/payERC20
+    X402-->>RPC: Emit Paid event
+    Viewer->>API: POST /api/pay/x402/confirm (tx_hash)
+    API->>RPC: eth_getTransactionReceipt
+    API->>API: Validate contract, event, invoice, video, amount
+    API->>DB: UPDATE invoice paid/underpaid
+    alt sufficient payment
+        API->>DB: INSERT purchases
+        API->>DB: INSERT allowlist
+        API-->>Viewer: Access unlocked
+    else underpaid
+        API-->>Viewer: missing_wei
+    end
+```
+
+### Playback Flow
+
+```mermaid
+flowchart LR
+    A[Viewer request_play] --> B{Session valid?}
+    B -- No --> X[401 Unauthorized]
+    B -- Yes --> C{Owner or included in allowlist?}
+    C -- No --> Y[403 Forbidden]
+    C -- Yes --> D[Resolve source video]
+    D --> E[Create HLS session and username watermark]
+    E --> F[FFmpeg overlays watermark onto HLS]
+    F --> G[Return playlist URL]
+    G --> H[serve_hls streams playlist and segments]
+```
+
+---
+
+## 🗄️ Business Process-to-Database Mapping
+
+### Entities and Responsibilities
+
+| Table | Business role | Written by | Read by / important relationships |
+|---|---|---|---|
+| `users` | User/admin identity, creator profile, and payment destination. | Registration, administrator setup, profile update, password reset. | Authentication, video catalog, payments, watermarking, and administrator dashboard. Referenced by sessions, videos, purchases, resets, and invoices. |
+| `sessions` | Server-side login sessions with a TTL and administrator flag. | User/admin login; removed on logout or expiration. | Every protected endpoint through `sessions::current_user_id`. |
+| `password_resets` | Single-use password recovery tokens. | Forgot-password and reset-password flows. | Token, expiration, and `used` status validation. |
+| `videos` | PPV products containing ownership, title, description, price, source file, and HLS status. | Upload handler, transcode worker, video update handler. | Marketplace, creator dashboard, access checks, payments, playback, and administrator dashboard. |
+| `allowlist` | Playback permission source for each `(video_id, username)` pair. | Manual grants, X402 confirmation, or watcher. | Playback authorization and creator dashboard viewer lists. |
+| `purchases` | Ledger of user purchases for videos. | X402 confirmation or watcher. | Auditing and administrator dashboard; not read directly for playback authorization. |
+| `pay_tokens` | Master data for supported payment tokens and chains. | Migrations, seed data, or database operations. | Payment options and token validation during invoice creation. |
+| `x402_invoices` | On-chain payment lifecycle from quote to paid/underpaid. | Payment start, payment confirmation, and watcher. | Invoice matching, amount validation, transaction auditing, and access unlocking. |
+| `pay_tokens_compat` | Compatibility view for legacy and current token column names. | Created by a migration. | Preserves compatibility for queries or integrations that still use the `erc20` alias. |
+
+### Primary Data Relationships
+
+```mermaid
+erDiagram
+    USERS ||--o{ SESSIONS : has
+    USERS ||--o{ PASSWORD_RESETS : requests
+    USERS ||--o{ VIDEOS : owns
+    USERS ||--o{ PURCHASES : buys
+    VIDEOS ||--o{ PURCHASES : purchased_as
+    VIDEOS ||--o{ ALLOWLIST : grants
+    USERS ||--o{ X402_INVOICES : buyer
+    USERS ||--o{ X402_INVOICES : creator
+    VIDEOS ||--o{ X402_INVOICES : billed_for
+
+    USERS {
+        text id PK
+        text username UK
+        text email UK
+        text password_hash
+        int is_admin
+        text wallet_account
+        bigint wallet_chain_id
+    }
+    VIDEOS {
+        text id PK
+        text owner_id FK
+        text title
+        bigint price_cents
+        text filename
+        boolean hls_ready
+        text processing_state
+        text hls_master
+    }
+    ALLOWLIST {
+        text video_id
+        text username
+    }
+    PURCHASES {
+        bigint id PK
+        text user_id FK
+        text video_id FK
+        text created_at
+    }
+    X402_INVOICES {
+        bigint id PK
+        text invoice_uid UK
+        text invoice_uid_hash
+        text user_id FK
+        text video_id FK
+        text creator_id FK
+        bigint chain_id
+        text token_symbol
+        numeric required_amount_wei
+        numeric paid_amount_wei
+        text status
+        text tx_hash
+    }
+```
+
+### Status and Transition Mapping
+
+| Entity | Status | Meaning and transition |
+|---|---|---|
+| `videos.processing_state` | `queued` | The upload and metadata are stored, and the job is waiting for a worker. |
+| `videos.processing_state` | `processing` | The worker is running fast-start processing and transcoding. |
+| `videos.processing_state` | `ready` | HLS generation succeeded; `hls_ready=true` and `hls_master` are set. |
+| `videos.processing_state` | `error` | Job enqueueing or transcoding failed; details are stored in `last_error`. |
+| `x402_invoices.status` | `pending` | The invoice exists and is waiting for payment or confirmation. |
+| `x402_invoices.status` | `paid` | A valid event satisfies the required amount; purchase and allowlist records are created. |
+| `x402_invoices.status` | `underpaid` | A valid event paid less than `required_amount_wei`; access remains locked. |
+| `x402_invoices.status` | `expired` / `cancelled` | Schema-supported lifecycle states for expired or cancelled invoices. |
+
+### Source of Truth by Requirement
+
+| Requirement | Source of truth |
+|---|---|
+| Creator identity and profile | `users` |
+| Login status | `sessions` plus the signed `ppv_session` cookie |
+| Content price and ownership | `videos` |
+| Transcode readiness | `videos.hls_ready`, `videos.processing_state`, `videos.hls_master` |
+| Playback permission | Ownership through `videos.owner_id` **or** a matching entry in `allowlist` |
+| Purchase history | `purchases` |
+| Crypto payment status and proof | `x402_invoices` |
+| Available payment tokens | `pay_tokens` |
+| Original video file | Configured upload/storage directory |
+| Worker-generated HLS | `media_dir/<video_id>/` |
+| Per-viewer watermarked HLS | `hls_root/<session>/` |
+
+### Migration Order
+
+The core database migrations are stored in `sql/001_*.sql` through `sql/012_*.sql`, while X402 additions are stored in `migrations/013_*.sql` and later files. Run:
+
+```bash
+make migrate
+```
+
+This target applies every file in `sql/` and then `migrations/` in version order. The application also runs SQLx migrations from `sql/` during startup, but deployments that use X402 must still run `make migrate` so the `pay_tokens` and `x402_invoices` schemas are available.
+
+---
+
 ## 🧱 Project Structure
 
 ```
@@ -339,14 +638,7 @@ The service will start on **http://localhost:8080**
 
 ## 🗃️ Database Schema
 
-**Tables:**
-
-- `users` — user and admin accounts
-- `videos` — uploaded content
-- `allowlist` — manual access control
-- `purchases` — pay-per-view records
-- `sessions` — login sessions
-- `password_resets` — recovery tokens
+The database schema includes the core `users`, `sessions`, `password_resets`, `videos`, `allowlist`, and `purchases` tables, as well as the `pay_tokens` and `x402_invoices` crypto-payment tables. See **Business Process-to-Database Mapping** above for each table's responsibilities, relationships, statuses, and source-of-truth rules.
 
 ---
 
