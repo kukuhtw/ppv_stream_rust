@@ -1,17 +1,757 @@
-# Deploy ke testnet (default)
-npx hardhat run --network polygonAmoyTestnet scripts/deploy_x402.js
+# Smart Contract Deployment Guide
 
-# Estimasi gas
+This guide explains how to deploy the `X402Splitter` smart contract from the `contracts` workspace. It covers local preparation, environment configuration, testnet deployment, gas estimation, explorer verification, mainnet deployment, Docker-based deployment, post-deployment checks, and rollback planning.
+
+## 1. Purpose of the Deployment
+
+The deployment script creates a new `X402Splitter` contract instance and passes the configured administrator wallet to the constructor.
+
+The script also writes deployment metadata into:
+
+```text
+contracts/deployed.json
+```
+
+The metadata includes:
+
+* contract address
+* administrator wallet
+* network name
+* chain ID
+* deployment transaction hash
+* deployment block number
+* deployment timestamp
+* explorer URL
+* constructor arguments
+
+## 2. Prerequisites
+
+Install the following tools before deployment:
+
+```text
+Node.js 20 or later
+npm
+Hardhat
+A funded deployment wallet
+An RPC endpoint for the target network
+A block explorer API key when contract verification is required
+Docker and Docker Compose when using the container-based deployment method
+```
+
+Confirm the installed versions:
+
+```bash
+node --version
+npm --version
+npx hardhat --version
+```
+
+## 3. Enter the Contract Workspace
+
+Run all non-Docker Hardhat commands from the `contracts` directory:
+
+```bash
+cd contracts
+```
+
+Install project dependencies:
+
+```bash
+npm install
+```
+
+For reproducible CI or production deployment environments, prefer:
+
+```bash
+npm ci
+```
+
+## 4. Review the Solidity Compiler Configuration
+
+The project currently uses Solidity version `0.8.20` with optimization enabled:
+
+```javascript
+solidity: {
+  version: "0.8.20",
+  settings: {
+    optimizer: {
+      enabled: true,
+      runs: 200
+    }
+  }
+}
+```
+
+Do not change the compiler version, optimizer state, or optimizer runs between deployment and verification. Explorer verification requires the exact same compiler configuration used during deployment.
+
+## 5. Configure Environment Variables
+
+Create a local environment file:
+
+```bash
+cp .env.example .env
+```
+
+When `.env.example` does not exist, create `.env` manually.
+
+Minimum testnet configuration:
+
+```dotenv
+PRIVATE_KEY=0xYOUR_DEPLOYER_PRIVATE_KEY
+ADMIN_WALLET=0xYOUR_ADMIN_WALLET
+AMOY_RPC_HTTP=https://polygon-amoy-bor.publicnode.com
+AMOY_CHAIN_ID=80002
+POLYGONSCAN_API_KEY=YOUR_POLYGONSCAN_API_KEY
+CONFIRMATIONS=2
+AUTO_VERIFY=true
+```
+
+Alternative administrator variable:
+
+```dotenv
+X402_ADMIN_WALLET=0xYOUR_ADMIN_WALLET
+```
+
+The deployment script accepts either `ADMIN_WALLET` or `X402_ADMIN_WALLET`.
+
+### Security Requirements
+
+Never commit the following values into Git:
+
+```text
+PRIVATE_KEY
+X402_ADMIN_PRIVKEY
+RPC credentials containing secrets
+Explorer API keys
+```
+
+Recommended private key format:
+
+```dotenv
+PRIVATE_KEY=0xabc123...
+```
+
+Use a dedicated deployment wallet. Do not use a personal wallet or a wallet that stores significant funds.
+
+## 6. Understand the Wallet Roles
+
+Two wallet roles are involved:
+
+### Deployer wallet
+
+The deployer wallet is derived from:
+
+```dotenv
+PRIVATE_KEY
+```
+
+It signs and pays for the deployment transaction.
+
+### Administrator wallet
+
+The administrator wallet is passed to the contract constructor through:
+
+```dotenv
+ADMIN_WALLET
+```
+
+or:
+
+```dotenv
+X402_ADMIN_WALLET
+```
+
+The deployer and administrator may be the same address, but separating them is safer for production. A recommended production setup is:
+
+```text
+Deployer wallet: temporary operational wallet
+Administrator wallet: multisignature wallet or hardware-controlled address
+```
+
+## 7. Fund the Deployment Wallet
+
+The deployer wallet must hold enough native network currency to pay gas.
+
+For Polygon Amoy, obtain test tokens from an official or trusted faucet and send them to the deployer address.
+
+Display the deployer address before deployment:
+
+```bash
+npx hardhat console --network polygonAmoyTestnet
+```
+
+Then run:
+
+```javascript
+const [signer] = await ethers.getSigners();
+await signer.getAddress();
+```
+
+Check the balance:
+
+```javascript
+await ethers.provider.getBalance(await signer.getAddress());
+```
+
+Format the balance:
+
+```javascript
+ethers.formatEther(await ethers.provider.getBalance(await signer.getAddress()));
+```
+
+Exit the console:
+
+```javascript
+.exit
+```
+
+## 8. Compile the Contract
+
+Clean old build output first when the compiler configuration or contract code has changed:
+
+```bash
+npx hardhat clean
+```
+
+Compile:
+
+```bash
+npx hardhat compile
+```
+
+Expected result:
+
+```text
+Compiled Solidity files successfully
+```
+
+Do not proceed when compilation fails.
+
+## 9. Run Tests Before Deployment
+
+Execute the complete Hardhat test suite:
+
+```bash
+npx hardhat test
+```
+
+Important behavior to test includes:
+
+```text
+constructor administrator assignment
+native currency payment split
+ERC20 payment split
+signature verification
+invoice replay protection
+expired authorization rejection
+underpayment rejection
+invalid creator or payer address rejection
+event emission
+administrator update restrictions
+```
+
+Deployment should not proceed when tests fail.
+
+## 10. Estimate Deployment Gas
+
+Run the gas estimation script on the intended network:
+
+```bash
 npx hardhat run --network polygonAmoyTestnet scripts/estimate_gas_cost.js
+```
 
-# (Nanti jika sudah un-comment blok mainnet)
+The script estimates:
+
+* gas units
+* current base fee
+* suggested priority fee
+* suggested maximum fee
+* lower-bound cost
+* upper-bound cost
+* optional USD and IDR conversion
+
+Optional price variables:
+
+```dotenv
+MATIC_USD_PRICE=0.62
+DOLLAR_USD_TO_RUPIAH=17000
+```
+
+Optional fee overrides:
+
+```dotenv
+GAS_LIMIT=300000
+MAX_FEE_GWEI=50
+MAX_PRIORITY_FEE_GWEI=2
+```
+
+Use overrides only when required. An unnecessarily low gas limit can make deployment fail. An unnecessarily high maximum fee can increase the amount temporarily reserved by the wallet.
+
+## 11. Deploy to Polygon Amoy Testnet
+
+Run:
+
+```bash
+npx hardhat run --network polygonAmoyTestnet scripts/deploy_x402.js
+```
+
+The deployment script performs the following steps:
+
+1. Loads the administrator wallet.
+2. Connects to the configured network.
+3. Loads the deployer signer.
+4. Creates the `X402Splitter` contract factory.
+5. Deploys the contract with the administrator constructor argument.
+6. Waits for deployment completion.
+7. Optionally waits for additional block confirmations.
+8. Prints the contract address and transaction hash.
+9. Writes deployment metadata to `contracts/deployed.json`.
+10. Optionally verifies the source code on Polygonscan.
+
+Example successful output:
+
+```text
+Deploying X402Splitter
+Network: polygonAmoyTestnet
+Admin: 0x...
+Deploy transaction: 0x...
+Deployed address: 0x...
+```
+
+## 12. Confirm Deployment Metadata
+
+Open:
+
+```text
+contracts/deployed.json
+```
+
+Expected structure:
+
+```json
+{
+  "80002": {
+    "X402Splitter": {
+      "address": "0x...",
+      "admin": "0x...",
+      "networkName": "polygonAmoyTestnet",
+      "chainId": 80002,
+      "deployTx": "0x...",
+      "blockNumber": 123456,
+      "deployedAt": "2026-06-15T00:00:00.000Z",
+      "constructorArgs": ["0x..."]
+    }
+  }
+}
+```
+
+Commit `deployed.json` only when the repository policy allows public contract addresses and transaction hashes. Never store private keys in this file.
+
+## 13. Verify the Contract on Polygonscan
+
+### Automatic verification
+
+Set:
+
+```dotenv
+AUTO_VERIFY=true
+POLYGONSCAN_API_KEY=YOUR_API_KEY
+```
+
+Then deploy normally:
+
+```bash
+npx hardhat run --network polygonAmoyTestnet scripts/deploy_x402.js
+```
+
+### Manual verification
+
+Run:
+
+```bash
+npx hardhat verify \
+  --network polygonAmoyTestnet \
+  CONTRACT_ADDRESS \
+  ADMIN_WALLET_ADDRESS
+```
+
+Example:
+
+```bash
+npx hardhat verify \
+  --network polygonAmoyTestnet \
+  0x1234567890abcdef1234567890abcdef12345678 \
+  0xabcdefabcdefabcdefabcdefabcdefabcdefabcd
+```
+
+Verification requires:
+
+```text
+matching Solidity compiler version
+matching optimizer settings
+matching constructor arguments
+matching source code
+matching linked libraries, when any exist
+```
+
+## 14. Perform Post-Deployment Validation
+
+Do not consider deployment complete until the following checks pass.
+
+### Check contract bytecode
+
+Open the contract address on the network explorer and confirm that deployed bytecode exists.
+
+Using Hardhat console:
+
+```bash
+npx hardhat console --network polygonAmoyTestnet
+```
+
+```javascript
+const code = await ethers.provider.getCode("CONTRACT_ADDRESS");
+code !== "0x";
+```
+
+### Check the configured administrator
+
+Load the deployed contract:
+
+```javascript
+const contract = await ethers.getContractAt(
+  "X402Splitter",
+  "CONTRACT_ADDRESS"
+);
+```
+
+Call the administrator getter defined by the contract, for example:
+
+```javascript
+await contract.admin();
+```
+
+The exact getter name must match the Solidity contract.
+
+### Test a small payment
+
+Before integrating the contract with the Rust application:
+
+1. Use a test video invoice.
+2. Generate a signed authorization payload.
+3. Submit a very small test payment.
+4. Confirm that the expected `Paid` event is emitted.
+5. Confirm creator and administrator balances.
+6. Confirm the backend recognizes the invoice.
+7. Confirm the buyer receives video access.
+
+## 15. Configure the Rust Application
+
+After successful deployment, update the backend environment:
+
+```dotenv
+X402_CONTRACT_ADDRESS=0xDEPLOYED_CONTRACT_ADDRESS
+X402_CHAIN_ID=80002
+X402_RPC_HTTP=https://YOUR_AMOY_HTTP_RPC
+X402_RPC_WSS=wss://YOUR_AMOY_WEBSOCKET_RPC
+X402_ADMIN_PRIVKEY=0xBACKEND_AUTHORIZATION_SIGNER_PRIVATE_KEY
+```
+
+The contract administrator address and the backend signing key must follow the authorization model implemented by the Solidity contract.
+
+Restart the Rust application after changing environment variables.
+
+## 16. Docker-Based Deployment
+
+The project also supports deployment through Docker Compose.
+
+### Testnet deployment
+
+```bash
+docker compose run --rm x402-deployer \
+  npx hardhat run \
+  --network polygonAmoyTestnet \
+  scripts/deploy_x402.js
+```
+
+The previous guidance mentioned `megaTestnet`, but that network is not currently defined in `hardhat.config.js`. Do not use `megaTestnet` until its network configuration has been added.
+
+### Gas estimation through Docker
+
+```bash
+docker compose run --rm x402-deployer \
+  npx hardhat run \
+  --network polygonAmoyTestnet \
+  scripts/estimate_gas_cost.js
+```
+
+Ensure the container receives environment variables. Common approaches include:
+
+```text
+Docker Compose env_file
+Docker Compose environment entries
+shell environment variables
+secret management integration
+```
+
+## 17. Polygon Mainnet Preparation
+
+Mainnet deployment is currently disabled in `hardhat.config.js` because the `polygonMainnet` network block is commented out.
+
+Enable it only after testnet validation is complete:
+
+```javascript
+polygonMainnet: {
+  url: POLYGON_RPC_HTTP || "https://polygon-rpc.com",
+  chainId: Number(POLYGON_CHAIN_ID || 137),
+  accounts: PRIVATE_KEY ? [PRIVATE_KEY] : []
+}
+```
+
+Mainnet `.env` example:
+
+```dotenv
+PRIVATE_KEY=0xDEDICATED_MAINNET_DEPLOYER_PRIVATE_KEY
+ADMIN_WALLET=0xPRODUCTION_MULTISIG_ADDRESS
+POLYGON_RPC_HTTP=https://YOUR_PRODUCTION_POLYGON_RPC
+POLYGON_CHAIN_ID=137
+POLYGONSCAN_API_KEY=YOUR_POLYGONSCAN_API_KEY
+CONFIRMATIONS=5
+AUTO_VERIFY=true
+```
+
+Estimate gas before mainnet deployment:
+
+```bash
+npx hardhat run --network polygonMainnet scripts/estimate_gas_cost.js
+```
+
+Deploy:
+
+```bash
 npx hardhat run --network polygonMainnet scripts/deploy_x402.js
+```
 
+Docker version:
 
+```bash
+docker compose run --rm x402-deployer \
+  npx hardhat run \
+  --network polygonMainnet \
+  scripts/deploy_x402.js
+```
 
-// Deploy testnet:
-docker compose run --rm x402-deployer npx hardhat run --network megaTestnet scripts/deploy_x402.js
+## 18. Mainnet Deployment Checklist
 
+Complete this checklist before broadcasting the transaction:
 
- // Deploy mainnet:
-docker compose run --rm x402-deployer npx hardhat run --network polygonMainnet scripts/deploy_x402.js
+```text
+Contract source reviewed
+Automated tests pass
+Static analysis completed
+Independent audit completed for production funds
+Constructor administrator confirmed
+Administrator is a multisignature wallet
+Deployer address confirmed
+Deployer balance confirmed
+Chain ID confirmed as 137
+RPC endpoint confirmed
+Gas estimate reviewed
+Fee overrides reviewed
+Contract address from any previous deployment recorded
+Backend maintenance window prepared
+Monitoring prepared
+Rollback or migration plan prepared
+```
+
+## 19. Troubleshooting
+
+### Error: no signer available
+
+Typical cause:
+
+```text
+PRIVATE_KEY is missing or malformed
+```
+
+Fix:
+
+```dotenv
+PRIVATE_KEY=0xYOUR_PRIVATE_KEY
+```
+
+### Error: insufficient funds
+
+The deployment wallet does not have enough native currency for gas.
+
+Fix:
+
+1. Check the deployer address.
+2. Check the deployer balance.
+3. Fund the wallet.
+4. Run the gas estimate again.
+
+### Error: administrator wallet not set
+
+The script requires one of:
+
+```dotenv
+ADMIN_WALLET=0x...
+```
+
+or:
+
+```dotenv
+X402_ADMIN_WALLET=0x...
+```
+
+### Error: invalid administrator address
+
+Confirm that the value:
+
+```text
+starts with 0x
+contains 40 hexadecimal address characters
+is not the zero address
+belongs to the intended administrator
+```
+
+### Error: transaction underpriced
+
+The network fee changed or the configured maximum fee is too low.
+
+Fix:
+
+1. Remove manual fee overrides and retry with provider suggestions.
+2. Increase `MAX_FEE_GWEI` carefully.
+3. Increase `MAX_PRIORITY_FEE_GWEI` only when necessary.
+
+### Error: transaction ran out of gas
+
+The explicit `GAS_LIMIT` is too low.
+
+Fix:
+
+1. Remove `GAS_LIMIT` and allow estimation.
+2. Re-run `estimate_gas_cost.js`.
+3. Set a higher limit with a reasonable safety margin.
+
+### Error: contract verification failed
+
+Check:
+
+```text
+network name
+chain ID
+Polygonscan API key
+contract address
+constructor argument
+compiler version
+optimizer configuration
+```
+
+Wait several block confirmations before retrying verification.
+
+### Error: `megaTestnet` is not defined
+
+The deployment script comments mention `megaTestnet`, but the current Hardhat network configuration does not define it.
+
+Either use:
+
+```bash
+--network polygonAmoyTestnet
+```
+
+or add a valid `megaTestnet` configuration to `hardhat.config.js` before using that network name.
+
+## 20. Deployment Safety and Rollback
+
+A blockchain deployment cannot normally be deleted or rolled back.
+
+When a deployment is incorrect:
+
+1. Stop the backend from using the incorrect address.
+2. Record the incorrect deployment address and transaction hash.
+3. Deploy a corrected contract.
+4. Update backend environment variables.
+5. Update `deployed.json`.
+6. Re-run smoke tests.
+7. Notify application operators and users when payment processing was affected.
+
+If the contract is not upgradeable, redeployment is the normal replacement strategy.
+
+Never send production funds to an unverified deployment.
+
+## 21. Recommended Deployment Sequence
+
+```text
+Install dependencies
+Compile contract
+Run tests
+Run static analysis
+Review administrator wallet
+Fund deployer wallet
+Estimate gas
+Deploy to Amoy testnet
+Verify contract
+Run payment smoke test
+Integrate Rust backend
+Run end-to-end test
+Complete security review
+Enable Polygon mainnet configuration
+Estimate mainnet gas
+Deploy mainnet contract
+Verify mainnet contract
+Update backend environment
+Monitor events and transactions
+```
+
+## 22. Quick Commands
+
+Compile:
+
+```bash
+cd contracts
+npm ci
+npx hardhat clean
+npx hardhat compile
+```
+
+Test:
+
+```bash
+npx hardhat test
+```
+
+Estimate Amoy gas:
+
+```bash
+npx hardhat run \
+  --network polygonAmoyTestnet \
+  scripts/estimate_gas_cost.js
+```
+
+Deploy to Amoy:
+
+```bash
+npx hardhat run \
+  --network polygonAmoyTestnet \
+  scripts/deploy_x402.js
+```
+
+Manual verification:
+
+```bash
+npx hardhat verify \
+  --network polygonAmoyTestnet \
+  CONTRACT_ADDRESS \
+  ADMIN_WALLET_ADDRESS
+```
+
+Deploy through Docker:
+
+```bash
+docker compose run --rm x402-deployer \
+  npx hardhat run \
+  --network polygonAmoyTestnet \
+  scripts/deploy_x402.js
+```
