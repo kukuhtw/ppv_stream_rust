@@ -1,0 +1,75 @@
+name: Rust CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  rust-check:
+    name: Format, check, and test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ppv_stream_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/ppv_stream_test
+      SQLX_OFFLINE: false
+      RUST_BACKTRACE: 1
+      ADMIN_BOOTSTRAP_TOKEN: ci-token
+      SESSION_SECRET: ci-session-secret
+      PAYMENT_PLUGINS: paypal,stripe,midtrans,xendit
+      PAYMENT_DEFAULT_PROVIDER: midtrans
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo registry and target
+        uses: Swatinem/rust-cache@v2
+
+      - name: Show Rust version
+        run: rustc --version && cargo --version
+
+      - name: Apply SQL files when available
+        shell: bash
+        run: |
+          if [ -d sql ]; then
+            for file in sql/*.sql; do
+              if [ -f "$file" ]; then
+                echo "Applying $file"
+                psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$file"
+              fi
+            done
+          fi
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Cargo check
+        run: cargo check --all-targets --all-features
+
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Test
+        run: cargo test --all-features
