@@ -1,11 +1,10 @@
 // src/plugins/payment/registry.rs
 //
 // Runtime registry for payment plugins.
-//
-// The registry keeps payment providers behind `Arc<dyn PaymentPlugin>` so HTTP
-// handlers and services can call providers through a stable interface.
 
 use std::{collections::HashMap, env, sync::Arc};
+
+use sqlx::PgPool;
 
 use super::{
     providers::{
@@ -30,6 +29,10 @@ impl PaymentPluginRegistry {
     }
 
     pub fn from_env() -> Self {
+        Self::from_env_with_pool(None)
+    }
+
+    pub fn from_env_with_pool(pool: Option<PgPool>) -> Self {
         let enabled = env::var("PAYMENT_PLUGINS")
             .unwrap_or_else(|_| "x402,paypal,stripe,midtrans,xendit".to_string());
         let default_provider = env::var("PAYMENT_DEFAULT_PROVIDER").ok();
@@ -41,7 +44,7 @@ impl PaymentPluginRegistry {
                 "stripe" => registry.register(Arc::new(StripePaymentPlugin::from_env())),
                 "midtrans" => registry.register(Arc::new(MidtransPaymentPlugin::from_env())),
                 "xendit" => registry.register(Arc::new(XenditPaymentPlugin::from_env())),
-                "x402" => registry.register(Arc::new(X402PaymentPlugin::from_env())),
+                "x402" => registry.register(Arc::new(X402PaymentPlugin::from_env_with_pool(pool.clone()))),
                 "" => {}
                 _ => tracing::warn!("unknown payment plugin configured: {}", provider),
             }
