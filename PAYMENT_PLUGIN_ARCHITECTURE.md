@@ -10,8 +10,6 @@ The goal is to make payment providers configurable without hardcoding all provid
 
 ## Supported Provider Targets
 
-The initial plugin skeleton supports these provider names:
-
 ```text
 x402
 paypal
@@ -19,8 +17,6 @@ stripe
 midtrans
 xendit
 ```
-
-Provider API calls can be migrated one by one from handler logic into plugin implementations.
 
 ## Environment Configuration
 
@@ -43,11 +39,6 @@ PAYMENT_PLUGINS=paypal,stripe
 PAYMENT_DEFAULT_PROVIDER=stripe
 ```
 
-```dotenv
-PAYMENT_PLUGINS=x402
-PAYMENT_DEFAULT_PROVIDER=x402
-```
-
 ## Provider Environment Variables
 
 ### x402
@@ -67,8 +58,6 @@ PAYPAL_CLIENT_ID=...
 PAYPAL_CLIENT_SECRET=...
 ```
 
-Use `PAYPAL_ENV=live` for production.
-
 ### Stripe
 
 ```dotenv
@@ -77,8 +66,6 @@ STRIPE_SECRET_KEY=sk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 ```
 
-Use `STRIPE_ENV=live` with production credentials.
-
 ### Midtrans
 
 ```dotenv
@@ -86,8 +73,6 @@ MIDTRANS_ENV=sandbox
 MIDTRANS_SERVER_KEY=...
 MIDTRANS_CLIENT_KEY=...
 ```
-
-Use `MIDTRANS_ENV=production` for production.
 
 ### Xendit
 
@@ -99,21 +84,35 @@ XENDIT_WEBHOOK_TOKEN=...
 
 ## Active Generic Routes
 
-The generic plugin routes are now wired in `src/main.rs`:
+Default provider routes:
 
 ```text
 GET  /api/pay/providers
+POST /api/pay/start
+POST /api/pay/confirm
+```
+
+Provider-specific routes:
+
+```text
 POST /api/pay/:provider/start
 POST /api/pay/:provider/confirm
 ```
 
-Examples:
+Legacy x402 routes remain available:
+
+```text
+POST /api/pay/x402/start
+POST /api/pay/x402/confirm
+```
+
+## Check Enabled Providers
 
 ```bash
 curl http://localhost:8080/api/pay/providers
 ```
 
-The provider list returns each plugin capability, including:
+The response includes:
 
 ```text
 configured
@@ -124,14 +123,63 @@ missing_env
 supported_currencies
 ```
 
-Provider skeletons currently return a clear not-yet-enabled error until each provider API integration is implemented.
+## Create Invoice Through Default Provider
 
-The existing legacy x402 routes remain available:
-
-```text
-POST /api/pay/x402/start
-POST /api/pay/x402/confirm
+```bash
+curl -X POST http://localhost:8080/api/pay/start \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "user_id": "user-1",
+    "video_id": "video-1",
+    "amount_cents": 10000,
+    "currency": "IDR",
+    "buyer_email": "buyer@example.com",
+    "buyer_name": "Demo Buyer"
+  }'
 ```
+
+## Create Invoice Through Explicit Provider
+
+```bash
+curl -X POST http://localhost:8080/api/pay/midtrans/start \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "user_id": "user-1",
+    "video_id": "video-1",
+    "amount_cents": 10000,
+    "currency": "IDR",
+    "buyer_email": "buyer@example.com",
+    "buyer_name": "Demo Buyer"
+  }'
+```
+
+## Confirm Payment
+
+Default provider:
+
+```bash
+curl -X POST http://localhost:8080/api/pay/confirm \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "invoice_id": "invoice-1",
+    "transaction_id": "tx-1",
+    "provider_payload": {}
+  }'
+```
+
+Explicit provider:
+
+```bash
+curl -X POST http://localhost:8080/api/pay/xendit/confirm \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "invoice_id": "invoice-1",
+    "transaction_id": "tx-1",
+    "provider_payload": {}
+  }'
+```
+
+Provider skeletons currently return a clear not-yet-enabled error until each provider API integration is implemented.
 
 ## Folder Structure
 
@@ -205,7 +253,7 @@ Each payment plugin should handle:
 ```text
 create invoice or checkout session
 return payment redirect URL when applicable
-validate webhook or transaction confirmation
+validate provider notification or transaction confirmation
 normalize provider status into PaymentStatus
 return provider raw payload for auditing
 ```
@@ -215,10 +263,10 @@ return provider raw payload for auditing
 | Provider | Typical Flow | Confirmation |
 |---|---|---|
 | x402 | Blockchain authorization payload | Transaction receipt or watcher |
-| PayPal | Redirect checkout | Webhook or order capture |
-| Stripe | Checkout Session or Payment Intent | Webhook |
+| PayPal | Redirect checkout | Order capture or notification |
+| Stripe | Checkout Session or Payment Intent | Event notification |
 | Midtrans | Hosted payment page or payment token | Notification callback |
-| Xendit | Invoice or payment request | Callback webhook |
+| Xendit | Invoice or payment request | Callback notification |
 
 ## Migration Plan
 
@@ -242,6 +290,12 @@ Status: done.
 
 ### Phase 4
 
+Add default provider routes.
+
+Status: done.
+
+### Phase 5
+
 Move current x402 logic from:
 
 ```text
@@ -256,11 +310,11 @@ src/plugins/payment/providers/x402.rs
 
 Status: next.
 
-### Phase 5
+### Phase 6
 
 Implement Midtrans and Xendit first for Indonesia payment support.
 
-### Phase 6
+### Phase 7
 
 Implement PayPal and Stripe for international users.
 
@@ -279,7 +333,3 @@ Avoid this at the beginning:
 ```text
 runtime .so/.dll loading
 ```
-
-## Next Implementation Target
-
-Move the existing x402 business logic from `src/handlers/pay.rs` into `src/plugins/payment/providers/x402.rs`, then let the generic route call the x402 plugin directly.
