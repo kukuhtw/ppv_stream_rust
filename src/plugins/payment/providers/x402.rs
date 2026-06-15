@@ -6,13 +6,14 @@ use ethers::signers::LocalWallet;
 use ethers::types::{Address, Signature, U256};
 use serde_json::json;
 use sqlx::{types::BigDecimal, PgPool, Row};
-use std::{env, str::FromStr};
+use std::str::FromStr;
 use uuid::Uuid;
 
 use crate::plugins::payment::{
+    env::{env_or, missing_env, required_env},
     models::{
         ConfirmPaymentRequest, CreateInvoiceRequest, Invoice, PaymentPluginCapability,
-        PaymentResult, PaymentStatus,
+        PaymentProviderConfig, PaymentResult, PaymentStatus,
     },
     traits::PaymentPlugin,
 };
@@ -20,8 +21,7 @@ use crate::plugins::payment::{
 #[derive(Clone, Debug)]
 pub struct X402PaymentPlugin {
     pool: Option<PgPool>,
-    configured: bool,
-    missing_env: Vec<String>,
+    config: PaymentProviderConfig,
 }
 
 impl X402PaymentPlugin {
@@ -31,15 +31,21 @@ impl X402PaymentPlugin {
 
     pub fn from_env_with_pool(pool: Option<PgPool>) -> Self {
         let required = ["X402_CONTRACT_ADDRESS", "X402_RPC_HTTP", "X402_ADMIN_PRIVKEY"];
-        let missing_env = required
-            .iter()
-            .filter(|key| env::var(key).unwrap_or_default().is_empty())
-            .map(|key| key.to_string())
-            .collect::<Vec<_>>();
+        let chain_id = env_or("X402_CHAIN_ID", "evm");
+        let rpc_http = std::env::var("X402_RPC_HTTP").ok();
+        let mut missing = missing_env(&required);
+        if pool.is_none() {
+            missing.push("DATABASE_POOL".to_string());
+        }
         Self {
             pool,
-            configured: missing_env.is_empty(),
-            missing_env,
+            config: PaymentProviderConfig::new(
+                "x402",
+                chain_id,
+                rpc_http,
+                required_env(&required),
+                missing,
+            ),
         }
     }
 
@@ -65,21 +71,21 @@ impl PaymentPlugin for X402PaymentPlugin {
         PaymentPluginCapability {
             provider: self.provider_key().to_string(),
             display_name: self.display_name().to_string(),
-            configured: self.configured && self.pool.is_some(),
-            environment: env::var("X402_CHAIN_ID").unwrap_or_else(|_| "evm".to_string()),
-            api_base_url: env::var("X402_RPC_HTTP").ok(),
+            configured: self.config.configured,
+            environment: self.config.environment.clone(),
+            api_base_url: self.config.api_base_url.clone(),
             supports_redirect_checkout: false,
             supports_webhook_confirmation: false,
             supports_manual_confirmation: true,
             supported_currencies: vec!["USDC".into(), "MATIC".into(), "ETH".into()],
-            required_env: vec!["X402_CONTRACT_ADDRESS".into(), "X402_RPC_HTTP".into(), "X402_ADMIN_PRIVKEY".into()],
-            missing_env: self.missing_env.clone(),
+            required_env: self.config.required_env.clone(),
+            missing_env: self.config.missing_env.clone(),
         }
     }
 
     async fn create_invoice(&self, request: CreateInvoiceRequest) -> Result<Invoice> {
-        if !self.configured {
-            bail!("x402 plugin is not configured. Missing env: {:?}", self.missing_env);
+        if !self.config.configured {
+            bail!("x402 plugin configuration is incomplete: {:?}", self.config.missing_env);
         }
 
         let pool = self
@@ -197,7 +203,7 @@ impl PaymentPlugin for X402PaymentPlugin {
         .execute(pool)
         .await?;
 
-        let x402_contract = env::var("X402_CONTRACT_ADDRESS").unwrap_or_default();
+        let x402_contract = std::env::var("X402_CONTRACT_ADDRESS").unwrap_or_default();
         let token_address = token_address_string
             .as_deref()
             .and_then(|value| Address::from_str(value).ok())
@@ -223,7 +229,7 @@ impl PaymentPlugin for X402PaymentPlugin {
             [b"\x19Ethereum Signed Message:\n32", message_hash.as_bytes()].concat(),
         ));
 
-        let admin_private_key = env::var("X402_ADMIN_PRIVKEY").unwrap_or_default();
+        let admin_private_key = std::env::var("X402_ADMIN_PRIVKEY").unwrap_or_default();
         let admin_wallet: LocalWallet = admin_private_key
             .parse()
             .map_err(|_| anyhow!("bad X402_ADMIN_PRIVKEY"))?;
@@ -260,8 +266,8 @@ impl PaymentPlugin for X402PaymentPlugin {
     }
 
     async fn confirm_payment(&self, _request: ConfirmPaymentRequest) -> Result<PaymentResult> {
-        if !self.configured {
-            bail!("x402 plugin is not configured. Missing env: {:?}", self.missing_env);
+        if !self.config.configured {
+            bail!("x402 plugin configuration is incomplete: {:?}", self.config.missing_env);
         }
         bail!("x402 plugin confirmation is not enabled yet. Use legacy POST /api/pay/x402/confirm for now")
     }
