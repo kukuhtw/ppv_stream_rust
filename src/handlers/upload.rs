@@ -30,8 +30,11 @@ use tower_cookies::Cookies;
 use tracing::info;
 use uuid::Uuid;
 
+use std::sync::Arc;
+
 use crate::{
     config::Config,
+    plugins::storage::StoragePlugin,
     sessions,
     worker::{TranscodeJob, Worker},
 };
@@ -40,9 +43,10 @@ const MAX_TITLE_CHARS: usize = 200;
 
 #[derive(Clone)]
 pub struct UploadState {
-    pub cfg: Config,
-    pub pool: PgPool,
-    pub worker: Worker,
+    pub cfg:     Config,
+    pub pool:    PgPool,
+    pub worker:  Worker,
+    pub storage: Arc<dyn StoragePlugin>,
 }
 
 pub async fn upload_video(
@@ -399,6 +403,20 @@ pub async fn upload_video(
             Json(json!({"ok": false, "where": "enqueue", "error": e.to_string()})),
         )
             .into_response();
+    }
+
+    // Push original to remote storage backend (fire-and-forget, non-fatal).
+    // No-op when STORAGE_BACKEND=local.
+    if !st.storage.is_local() {
+        let storage = st.storage.clone();
+        let key     = format!("uploads/{saved_filename_only}");
+        let path    = saved_path.clone();
+        tokio::spawn(async move {
+            match storage.put_file(&key, &path).await {
+                Ok(_)  => tracing::info!("storage: pushed original {key}"),
+                Err(e) => tracing::warn!("storage: original push {key} non-fatal: {e}"),
+            }
+        });
     }
 
     info!(

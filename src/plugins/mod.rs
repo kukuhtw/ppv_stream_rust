@@ -6,3 +6,4 @@
 // later, for example storage, transcoding, notifications, and job queues.
 
 pub mod payment;
+pub mod storage;

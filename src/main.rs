@@ -53,17 +53,20 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
         video::{add_allow, list_videos, my_videos, update_video, user_lookup, VideoState},
     };
     use crate::plugins::payment::PaymentPluginRegistry;
+    use crate::plugins::storage::StorageRegistry;
     use crate::worker;
 
     let payment_plugins = PaymentPluginRegistry::from_env_with_pool(Some(pool.clone()));
     tracing::info!("payment plugins enabled: {:?}", payment_plugins.names());
+
+    let storage = StorageRegistry::from_env().plugin();
 
     let users_state = UsersState {
         pool: pool.clone(),
         cfg: cfg.clone(),
     };
 
-    let worker = worker::Worker::new(pool.clone(), cfg.clone(), 2);
+    let worker = worker::Worker::new(pool.clone(), cfg.clone(), storage.clone(), 2);
 
     let static_service = ServeDir::new(&cfg.public_dir).append_index_html_on_directories(true);
     let hls_service = ServeDir::new(&cfg.media_dir);
@@ -128,6 +131,7 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
             cfg: cfg.clone(),
             pool: pool.clone(),
             worker: worker.clone(),
+            storage: storage.clone(),
         })
         .layer(DefaultBodyLimit::max(
             cfg.max_upload_bytes.try_into().unwrap_or(usize::MAX),
