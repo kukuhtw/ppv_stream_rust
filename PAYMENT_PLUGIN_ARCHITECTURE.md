@@ -153,6 +153,62 @@ curl -X POST http://localhost:8080/api/pay/midtrans/start \
   }'
 ```
 
+## Create x402 Invoice Through Generic Plugin Route
+
+The generic x402 route now creates the same type of signed authorization payload as the legacy x402 start endpoint. It requires x402-specific values inside `metadata`:
+
+```bash
+curl -X POST http://localhost:8080/api/pay/x402/start \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "user_id": "user-1",
+    "video_id": "video-1",
+    "amount_cents": 10000,
+    "currency": "USDC",
+    "metadata": {
+      "chain_id": "80002",
+      "symbol": "USDC",
+      "token_address": "0x0000000000000000000000000000000000000000",
+      "payer_address": "0x1111111111111111111111111111111111111111"
+    }
+  }'
+```
+
+Required x402 metadata:
+
+```text
+chain_id
+symbol
+payer_address
+```
+
+Optional x402 metadata:
+
+```text
+token_address
+```
+
+The response returns the invoice under `invoice.raw`, including:
+
+```text
+invoice_uid
+invoice_uid_bytes32
+amount_wei
+min_amount_wei
+deadline
+v
+r
+s
+x402_contract
+creator_wallet
+```
+
+x402 confirmation is still handled by the legacy endpoint until receipt verification is fully moved into the plugin:
+
+```text
+POST /api/pay/x402/confirm
+```
+
 ## Confirm Payment
 
 Default provider:
@@ -236,7 +292,7 @@ HashMap<String, Arc<dyn PaymentPlugin>>
 This allows the application to select a payment provider at runtime:
 
 ```rust
-let registry = PaymentPluginRegistry::from_env();
+let registry = PaymentPluginRegistry::from_env_with_pool(Some(pool.clone()));
 let provider = registry.get("midtrans");
 ```
 
@@ -296,25 +352,21 @@ Status: done.
 
 ### Phase 5
 
-Move current x402 logic from:
+Move x402 invoice creation into the x402 plugin.
 
-```text
-src/handlers/pay.rs
-```
-
-into:
-
-```text
-src/plugins/payment/providers/x402.rs
-```
-
-Status: next.
+Status: done.
 
 ### Phase 6
 
-Implement Midtrans and Xendit first for Indonesia payment support.
+Move x402 receipt verification into the x402 plugin.
+
+Status: next.
 
 ### Phase 7
+
+Implement Midtrans and Xendit first for Indonesia payment support.
+
+### Phase 8
 
 Implement PayPal and Stripe for international users.
 
