@@ -42,7 +42,10 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
         auth_admin::{post_admin_login, post_admin_logout, AuthAdminState},
         auth_user::{post_login, post_logout, post_register, AuthUserState},
         kurs::{router as kurs_router, KursState},
-        payment_plugins::{confirm_payment, create_payment_invoice, list_payment_plugins, PaymentPluginState},
+        payment_plugins::{
+            confirm_default_payment, confirm_payment, create_default_payment_invoice,
+            create_payment_invoice, list_payment_plugins, PaymentPluginState,
+        },
         setup::{setup_admin, SetupState},
         stream::{request_play, serve_hls, start_cleanup_task, StreamState},
         upload::{upload_video, UploadState},
@@ -142,6 +145,8 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
 
     let payment_plugin_router = Router::new()
         .route("/api/pay/providers", get(list_payment_plugins))
+        .route("/api/pay/start", post(create_default_payment_invoice))
+        .route("/api/pay/confirm", post(confirm_default_payment))
         .route("/api/pay/:provider/start", post(create_payment_invoice))
         .route("/api/pay/:provider/confirm", post(confirm_payment))
         .with_state(PaymentPluginState {
