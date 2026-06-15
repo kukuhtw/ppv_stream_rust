@@ -1,0 +1,71 @@
+// src/plugins/payment/registry.rs
+//
+// Runtime registry for payment plugins.
+//
+// The registry keeps payment providers behind `Arc<dyn PaymentPlugin>` so HTTP
+// handlers and services can call providers through a stable interface.
+
+use std::{collections::HashMap, env, sync::Arc};
+
+use super::{
+    providers::{
+        midtrans::MidtransPaymentPlugin,
+        paypal::PaypalPaymentPlugin,
+        stripe::StripePaymentPlugin,
+        x402::X402PaymentPlugin,
+        xendit::XenditPaymentPlugin,
+    },
+    traits::PaymentPlugin,
+};
+
+#[derive(Clone, Default)]
+pub struct PaymentPluginRegistry {
+    plugins: HashMap<String, Arc<dyn PaymentPlugin>>,
+    default_provider: Option<String>,
+}
+
+impl PaymentPluginRegistry {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn from_env() -> Self {
+        let enabled = env::var("PAYMENT_PLUGINS")
+            .unwrap_or_else(|_| "x402,paypal,stripe,midtrans,xendit".to_string());
+        let default_provider = env::var("PAYMENT_DEFAULT_PROVIDER").ok();
+
+        let mut registry = Self::new();
+        for provider in enabled.split(',').map(|value| value.trim().to_ascii_lowercase()) {
+            match provider.as_str() {
+                "paypal" => registry.register(Arc::new(PaypalPaymentPlugin)),
+                "stripe" => registry.register(Arc::new(StripePaymentPlugin)),
+                "midtrans" => registry.register(Arc::new(MidtransPaymentPlugin)),
+                "xendit" => registry.register(Arc::new(XenditPaymentPlugin)),
+                "x402" => registry.register(Arc::new(X402PaymentPlugin)),
+                "" => {}
+                _ => tracing::warn!("unknown payment plugin configured: {}", provider),
+            }
+        }
+
+        registry.default_provider = default_provider.or_else(|| registry.names().first().cloned());
+        registry
+    }
+
+    pub fn register(&mut self, plugin: Arc<dyn PaymentPlugin>) {
+        self.plugins.insert(plugin.provider_key().to_string(), plugin);
+    }
+
+    pub fn get(&self, provider: &str) -> Option<Arc<dyn PaymentPlugin>> {
+        self.plugins.get(&provider.to_ascii_lowercase()).cloned()
+    }
+
+    pub fn default(&self) -> Option<Arc<dyn PaymentPlugin>> {
+        self.default_provider.as_deref().and_then(|provider| self.get(provider))
+    }
+
+    pub fn names(&self) -> Vec<String> {
+        let mut names = self.plugins.keys().cloned().collect::<Vec<_>>();
+        names.sort();
+        names
+    }
+}
