@@ -48,6 +48,44 @@ PAYMENT_PLUGINS=x402
 PAYMENT_DEFAULT_PROVIDER=x402
 ```
 
+## Active Generic Routes
+
+The generic plugin routes are now wired in `src/main.rs`:
+
+```text
+GET  /api/pay/providers
+POST /api/pay/:provider/start
+POST /api/pay/:provider/confirm
+```
+
+Examples:
+
+```bash
+curl http://localhost:8080/api/pay/providers
+```
+
+```bash
+curl -X POST http://localhost:8080/api/pay/midtrans/start \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "user_id": "user-1",
+    "video_id": "video-1",
+    "amount_cents": 10000,
+    "currency": "IDR",
+    "buyer_email": "buyer@example.com",
+    "buyer_name": "Demo Buyer"
+  }'
+```
+
+Provider skeletons currently return a clear not-yet-enabled error until each provider API integration is implemented.
+
+The existing legacy x402 routes remain available:
+
+```text
+POST /api/pay/x402/start
+POST /api/pay/x402/confirm
+```
+
 ## Folder Structure
 
 ```text
@@ -145,6 +183,12 @@ Status: done.
 
 ### Phase 2
 
+Expose generic HTTP handlers and wire them into the Axum router.
+
+Status: done.
+
+### Phase 3
+
 Move current x402 logic from:
 
 ```text
@@ -157,18 +201,7 @@ into:
 src/plugins/payment/providers/x402.rs
 ```
 
-### Phase 3
-
-Update payment handlers to call the registry instead of provider-specific functions.
-
-Suggested generic endpoints:
-
-```text
-GET  /api/pay/providers
-POST /api/pay/:provider/start
-POST /api/pay/:provider/confirm
-POST /api/pay/:provider/webhook
-```
+Status: next.
 
 ### Phase 4
 
@@ -177,32 +210,6 @@ Implement Midtrans and Xendit first for Indonesia payment support.
 ### Phase 5
 
 Implement PayPal and Stripe for international users.
-
-## Recommended Handler Design
-
-Instead of provider-specific routes only:
-
-```text
-/api/pay/x402/start
-/api/pay/x402/confirm
-```
-
-add generic routes:
-
-```text
-/api/pay/{provider}/start
-/api/pay/{provider}/confirm
-```
-
-Then route internally:
-
-```rust
-let plugin = registry
-    .get(provider)
-    .ok_or_else(|| anyhow!("payment plugin not found"))?;
-
-let invoice = plugin.create_invoice(request).await?;
-```
 
 ## Important Note
 
@@ -222,4 +229,4 @@ runtime .so/.dll loading
 
 ## Next Implementation Target
 
-The next best step is to create generic HTTP handlers that use `PaymentPluginRegistry`, then gradually move the existing x402 code into the x402 plugin.
+Move the existing x402 business logic from `src/handlers/pay.rs` into `src/plugins/payment/providers/x402.rs`, then let the generic route call the x402 plugin directly.
