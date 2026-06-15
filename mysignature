@@ -1,25 +1,35 @@
 /*
 ==============================================================================
 Project : PPV Stream Rust
-Version : 0.2.0
+Version : 0.3.0
 Author  : Kukuh Tripamungkas Wicaksono (Kukuh TW)
 Email   : kukuhtw@gmail.com
 WhatsApp: https://wa.me/628129893706
 LinkedIn: https://id.linkedin.com/in/kukuhtw
-License : MIT (see LICENSE)
+GitHub  : https://github.com/kukuhtw/ppv_stream_rust
+License : Apache 2.0
 
-Summary : Self-hosted video streaming marketplace (C2C) dengan sistem
-          pembayaran blockchain X402.
-          
-          Fitur utama:
-          - Pembayaran otomatis via smart contract (X402Splitter.sol).
-          - Pembagian hasil 90% kreator, 10% admin.
-          - Watermark dinamis (on-the-fly) untuk keamanan video.
-          - Transcoding HLS (480p/720p/1080p) dan streaming via Axum.
-          - Verifikasi invoice dan signature di backend (Rust server).
-          - Frontend watch.html terhubung langsung ke kontrak blockchain.
-          - Dukungan testnet (Mega, Polygon Amoy, Sepolia).
-          
-          - Source code: https://github.com/kukuhtw/ppv_stream_rust
+Summary : Self-hosted Pay-Per-View (PPV) video streaming marketplace (C2C)
+          built with Rust (Axum), PostgreSQL, and FFmpeg.
+
+          Key features:
+          - Blockchain payment via X402Splitter.sol smart contract.
+            Revenue split: 90% to creator, 10% to platform admin.
+          - Multi-provider fiat payment plugins: Stripe, PayPal,
+            Midtrans, Xendit — with automatic webhook processing.
+          - Xendit auto-disburse: 90% automatically transferred to
+            creator's bank account (BCA, BNI, BRI, Mandiri, etc.)
+            via Xendit Disbursements API.
+          - Dynamic watermarking (per-viewer, moving overlay) for
+            piracy protection.
+          - HLS adaptive bitrate transcoding (240p / 360p / 480p)
+            via FFmpeg with hardware acceleration support.
+          - HMAC-SHA256 signed session cookies (secure, httponly).
+          - Admin dashboard: fiat invoice monitoring, manual disburse
+            trigger, SMTP email configuration.
+          - SMTP email notifications: password reset, change-password
+            confirmation (lettre + Tokio async).
+          - User and admin change-password with email alert.
+          - Testnet support: Mega Testnet, Polygon Amoy, Sepolia.
 ==============================================================================
 */

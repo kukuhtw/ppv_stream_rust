@@ -208,9 +208,17 @@ impl PaymentPlugin for X402PaymentPlugin {
             .as_deref()
             .and_then(|value| Address::from_str(value).ok())
             .unwrap_or(Address::zero());
-        let creator_basis_points: u16 = 9000;
+        let creator_basis_points: u16 = std::env::var("CREATOR_SPLIT_BP")
+            .ok()
+            .and_then(|s| s.parse::<u16>().ok())
+            .unwrap_or(9000)
+            .min(10000);
         let minimum_amount_wei = U256::from_dec_str(&token_amount_wei.to_string())?;
-        let deadline: u64 = (chrono::Utc::now().timestamp() as u64) + 900;
+        let deadline_secs: u64 = std::env::var("X402_DEADLINE_SECS")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(900);
+        let deadline: u64 = (chrono::Utc::now().timestamp() as u64) + deadline_secs;
         let video_hash = H256::from_slice(&keccak256(request.video_id.as_bytes()));
 
         let encoded_payload = abi_encode(&[
@@ -248,8 +256,8 @@ impl PaymentPlugin for X402PaymentPlugin {
             "v": signature.v as u8,
             "r": format!("{:#066x}", signature.r),
             "s": format!("{:#066x}", signature.s),
-            "split_creator_bp": 9000,
-            "split_admin_bp": 1000,
+            "split_creator_bp": creator_basis_points,
+            "split_admin_bp": 10000u16 - creator_basis_points,
             "x402_contract": x402_contract,
             "creator_wallet": creator_wallet_string,
         });

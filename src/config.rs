@@ -39,8 +39,14 @@ pub struct Config {
     // ===== X402 =====
     pub x402_contract: String,
     pub x402_admin_wallet: String,
-    pub x402_rpc_wss: String, // untuk watcher (WebSocket RPC)
-    pub x402_chain_id: u64,   // chain default (mis: 137)
+    pub x402_rpc_wss: String,      // untuk watcher (WebSocket RPC)
+    pub x402_chain_id: u64,        // chain default (mis: 137)
+    pub x402_deadline_secs: u64,   // payment window in seconds (default 900 = 15 min)
+
+    // ===== Revenue split =====
+    /// Creator share in basis points (0–10000). Default 9000 = 90%.
+    /// Admin share is implicitly 10000 - creator_split_bp.
+    pub creator_split_bp: u16,
 }
 
 impl Config {
@@ -125,6 +131,17 @@ impl Config {
             .ok()
             .and_then(|s| s.parse::<u64>().ok())
             .unwrap_or(0);
+        let x402_deadline_secs = env::var("X402_DEADLINE_SECS")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(900);
+
+        // ===== Revenue split =====
+        let creator_split_bp = env::var("CREATOR_SPLIT_BP")
+            .ok()
+            .and_then(|s| s.parse::<u16>().ok())
+            .unwrap_or(9000)
+            .min(10000);
 
         let cfg = Self {
             database_url,
@@ -147,6 +164,8 @@ impl Config {
             x402_admin_wallet,
             x402_rpc_wss,
             x402_chain_id,
+            x402_deadline_secs,
+            creator_split_bp,
         };
 
         cfg.ensure_dirs();
@@ -154,6 +173,7 @@ impl Config {
         println!(
             "[config] bind={}, db_url={}, upload_dir={}, media_dir={}, tmp_dir={}, public_dir={}, \
              hls_segment={}s, hwaccel={}, kurs_usd_to_idr={}, max_upload={}MB, \
+             creator_split={}bp ({}%), x402_deadline={}s, \
              x402_contract={}, x402_chain_id={}, watcher_wss={}",
             cfg.bind,
             redacted(&cfg.database_url),
@@ -165,6 +185,9 @@ impl Config {
             cfg.hwaccel,
             cfg.dollar_usd_to_rupiah,
             cfg.max_upload_bytes / (1024 * 1024),
+            cfg.creator_split_bp,
+            cfg.creator_split_bp / 100,
+            cfg.x402_deadline_secs,
             if cfg.x402_contract.is_empty() { "-" } else { &cfg.x402_contract },
             cfg.x402_chain_id,
             if cfg.x402_rpc_wss.is_empty() { "-" } else { "set" }

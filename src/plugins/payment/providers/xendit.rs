@@ -7,7 +7,7 @@
 //   2. Buyer redirected to Xendit-hosted payment page
 //   3. Xendit calls POST /api/pay/xendit/webhook on payment completion
 //   4. confirm_payment() checks x-callback-token header, returns result
-//   5. Webhook handler calls disburse_to_creator() for 90% auto-disbursement
+//   5. Webhook handler calls disburse_to_creator() for creator's share auto-disbursement
 //
 // Env vars required:
 //   XENDIT_SECRET_KEY       Secret API key (Money-In operations)
@@ -76,7 +76,8 @@ impl XenditPaymentPlugin {
         Some((bank_code, account_number, holder_name))
     }
 
-    /// Send 90% of the paid amount to the creator via Xendit Disbursement API.
+    /// Send the creator's share (CREATOR_SPLIT_BP / 10000) of the paid amount
+    /// to the creator via Xendit Disbursement API.
     /// Called by the webhook handler after a successful payment is confirmed.
     pub async fn disburse_to_creator(
         &self,
@@ -88,7 +89,12 @@ impl XenditPaymentPlugin {
             Self::parse_bank_account(creator_bank_account)
                 .ok_or_else(|| anyhow!("xendit: invalid bank_account: {creator_bank_account}"))?;
 
-        let creator_amount = (amount_idr as f64 * 0.9) as i64;
+        let creator_split_bp: u16 = std::env::var("CREATOR_SPLIT_BP")
+            .ok()
+            .and_then(|s| s.parse::<u16>().ok())
+            .unwrap_or(9000)
+            .min(10000);
+        let creator_amount = (amount_idr as f64 * (creator_split_bp as f64 / 10000.0)) as i64;
 
         let body = json!({
             "external_id":         format!("{invoice_uid}-creator"),
@@ -208,7 +214,7 @@ impl PaymentPlugin for XenditPaymentPlugin {
     /// Verifies x-callback-token header, then parses `status` from the Xendit Invoice webhook.
     ///
     /// After this returns PaymentStatus::Paid, the webhook handler should call
-    /// `disburse_to_creator()` for the 90% creator auto-payout.
+    /// `disburse_to_creator()` for the creator share auto-payout (see CREATOR_SPLIT_BP).
     async fn confirm_payment(&self, request: ConfirmPaymentRequest) -> Result<PaymentResult> {
         if !self.config.configured {
             bail!("Xendit plugin not configured: {:?}", self.config.missing_env);

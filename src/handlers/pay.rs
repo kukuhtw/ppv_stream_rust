@@ -328,11 +328,9 @@ pub async fn x402_start(
         .and_then(|value| Address::from_str(value).ok())
         .unwrap_or(Address::zero());
 
-    // The creator receives 90 percent and the administrator receives 10 percent.
-    // Basis points use 10,000 as 100 percent.
-    let creator_basis_points: u16 = 9000;
+    let creator_basis_points = st.cfg.creator_split_bp;
     let minimum_amount_wei = U256::from_dec_str(&token_amount_wei.to_string()).unwrap();
-    let deadline: u64 = (chrono::Utc::now().timestamp() as u64) + 900;
+    let deadline: u64 = (chrono::Utc::now().timestamp() as u64) + st.cfg.x402_deadline_secs;
     let video_hash = H256::from_slice(&keccak256(body.video_id.as_bytes()));
 
     // ABI encode values in the exact order expected by the smart contract
@@ -391,8 +389,8 @@ pub async fn x402_start(
         v: signature.v as u8,
         r: format!("{:#066x}", signature.r),
         s: format!("{:#066x}", signature.s),
-        split_creator_bp: 9000,
-        split_admin_bp: 1000,
+        split_creator_bp: st.cfg.creator_split_bp as i32,
+        split_admin_bp: (10000u16 - st.cfg.creator_split_bp) as i32,
         x402_contract,
         creator_wallet: creator_wallet_string,
     };

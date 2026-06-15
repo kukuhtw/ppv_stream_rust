@@ -96,34 +96,30 @@ Basis points: 10,000 = 100%. So 9000 bp = 90.00%.
 
 ### Where Is This Configured?
 
-The split is **hardcoded in two places in the source code**. There is no env var or config file for it — changing it requires editing the source and redeploying.
+The split is controlled by **one environment variable** that flows to all three places:
 
-**Location 1 — Rust handler** ([src/handlers/pay.rs](src/handlers/pay.rs)):
-```rust
-let creator_basis_points: u16 = 9000;  // 90% to creator
-// split_admin_bp is implicitly 10000 - 9000 = 1000
+```dotenv
+CREATOR_SPLIT_BP=9000      # 9000 = 90%; admin gets 10000 - 9000 = 1000 bp = 10%
+X402_DEADLINE_SECS=900     # payment window in seconds (default 15 min)
 ```
 
-**Location 2 — x402 plugin** ([src/plugins/payment/providers/x402.rs](src/plugins/payment/providers/x402.rs)):
-```rust
-"split_creator_bp": 9000,  // sent to frontend so MetaMask knows the split
-"split_admin_bp":   1000,
-```
-
-**Location 3 — Smart contract** ([contracts/contracts/X402Splitter.sol](contracts/contracts/X402Splitter.sol)):
-```solidity
-uint256 toCreator = (msg.value * creatorBp) / BP_DENOM;  // creatorBp = 9000
-uint256 toAdmin   = msg.value - toCreator;               // remainder = 10%
-```
-
-The `creatorBp` value is passed into the contract function call by the frontend, taken from the backend's response. The smart contract enforces the value is within an acceptable range.
+| Location | Uses |
+|---|---|
+| `src/config.rs` | Reads `CREATOR_SPLIT_BP` into `cfg.creator_split_bp` |
+| `src/handlers/pay.rs` | Uses `st.cfg.creator_split_bp` and `st.cfg.x402_deadline_secs` |
+| `src/plugins/payment/providers/x402.rs` | Reads `CREATOR_SPLIT_BP` / `X402_DEADLINE_SECS` from env (plugin has no cfg access) |
+| `src/plugins/payment/providers/xendit.rs` | Reads `CREATOR_SPLIT_BP` to compute disburse amount |
+| `contracts/contracts/X402Splitter.sol` | Accepts `creatorBp` as a parameter from the frontend — no redeployment needed |
 
 ### How to Change the Split
 
-1. Edit `creator_basis_points` in `src/handlers/pay.rs`
-2. Edit `split_creator_bp` in `src/plugins/payment/providers/x402.rs`
-3. Rebuild and redeploy the Rust backend
-4. The contract itself accepts `creatorBp` as a parameter — no contract redeployment needed for split changes, only backend changes
+Set `CREATOR_SPLIT_BP` in your `.env` file and restart the server:
+
+```dotenv
+CREATOR_SPLIT_BP=8000   # 80% to creator, 20% to admin
+```
+
+No code changes or redeployment needed. The smart contract accepts `creatorBp` as a parameter so changing the env var is sufficient.
 
 ---
 
@@ -163,6 +159,8 @@ All x402 settings are loaded from environment variables (see [src/config.rs](src
 | `X402_CHAIN_ID` | Default EVM chain ID | `80002` |
 | `PAYMENT_PLUGINS` | Active payment providers | `x402,stripe` |
 | `PAYMENT_DEFAULT_PROVIDER` | Fallback provider | `x402` |
+| `CREATOR_SPLIT_BP` | Creator share in basis points (0–10000) | `9000` (= 90%) |
+| `X402_DEADLINE_SECS` | x402 payment window duration in seconds | `900` (= 15 min) |
 
 ### Supported Tokens & Chains
 
