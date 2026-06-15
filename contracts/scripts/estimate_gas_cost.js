@@ -1,20 +1,26 @@
 // contracts/scripts/estimate_gas_cost.js
 console.log("__RUN__", __filename);
 /**
- * Estimasi biaya deploy X402Splitter.sol (multi-network, EIP-1559 aware)
- * Jalankan contoh:
+ * Estimate the deployment cost for X402Splitter.sol.
+ *
+ * This script is multi-network aware and supports EIP-1559 fee fields when the
+ * selected network provides them.
+ *
+ * Example commands:
  *   npx hardhat run --network polygonAmoyTestnet scripts/estimate_gas_cost.js
  *   npx hardhat run --network polygonMainnet    scripts/estimate_gas_cost.js
  *   npx hardhat run --network megaTestnet       scripts/estimate_gas_cost.js
  *
- * ENV opsional:
- *   ADMIN_WALLET / X402_ADMIN_WALLET  -> constructor arg
+ * Optional environment variables:
+ *   ADMIN_WALLET / X402_ADMIN_WALLET  -> constructor argument
  *   DOLLAR_USD_TO_RUPIAH=17000
- *   # override fee
+ *
+ * Fee overrides:
  *   GAS_LIMIT=300000
  *   MAX_FEE_GWEI=50
  *   MAX_PRIORITY_FEE_GWEI=2
- *   # harga koin (pilih yang relevan)
+ *
+ * Native coin USD price. Set the variable that matches the selected network:
  *   ETH_USD_PRICE=2450
  *   MATIC_USD_PRICE=0.62
  *   MEGA_USD_PRICE=0.01
@@ -33,7 +39,7 @@ function fmtEther(bn) {
   return hre.ethers.formatEther(bn);
 }
 
-// Tentukan simbol native & env harga USD yg dipakai
+// Determine the native coin symbol and the USD price environment variable.
 function nativeMeta(chainId) {
   switch (Number(chainId)) {
     case 80002:
@@ -67,45 +73,45 @@ async function main() {
   const [signer] = await hre.ethers.getSigners();
   const signerAddr = await signer.getAddress();
 
-  // Factory & tx request (belum broadcast)
+  // Build the contract factory and deployment transaction request without broadcasting.
   const Factory = await hre.ethers.getContractFactory("X402Splitter", signer);
   const txReq = await Factory.getDeployTransaction(admin);
 
-  // pastikan from di-set agar estimateGas akurat
+  // Set the sender explicitly so gas estimation is more accurate.
   txReq.from = signerAddr;
 
-  // Overrides via ENV (opsional)
+  // Optional environment-driven overrides.
   if (process.env.GAS_LIMIT) txReq.gasLimit = BigInt(process.env.GAS_LIMIT);
   const feeData = await signer.provider.getFeeData();
   const latestBlock = await signer.provider.getBlock("latest");
 
-  // Pilih fee yang dipakai untuk "upper bound"
-  // prefer MAX_FEE_GWEI env -> feeData.maxFeePerGas -> feeData.gasPrice
+  // Select the fee value used for the upper-bound estimate.
+  // Priority: MAX_FEE_GWEI env -> provider maxFeePerGas -> provider gasPrice.
   let maxFeePerGas =
     process.env.MAX_FEE_GWEI
       ? gweiToWeiBig(process.env.MAX_FEE_GWEI)
       : feeData.maxFeePerGas ?? feeData.gasPrice;
 
-  // Priority yang dipakai (untuk lower bound)
+  // Select the priority fee used for the lower-bound estimate.
   let priorityFee =
     process.env.MAX_PRIORITY_FEE_GWEI
       ? gweiToWeiBig(process.env.MAX_PRIORITY_FEE_GWEI)
       : feeData.maxPriorityFeePerGas ?? gweiToWeiBig(1); // fallback 1 gwei
 
   if (!maxFeePerGas) {
-    console.log("❗ Provider tidak memberi gas price / maxFeePerGas. Tidak bisa estimasi biaya.");
+    console.log("❗ Provider did not return gasPrice or maxFeePerGas. Deployment cost cannot be estimated.");
     return;
   }
 
-  // Estimasi gas units
+  // Estimate gas units.
   const gasUnits = txReq.gasLimit
     ? BigInt(txReq.gasLimit)
     : await signer.provider.estimateGas(txReq);
 
-  // Upper bound = gas * maxFeePerGas
+  // Upper bound = gas units * maxFeePerGas.
   const upperWei = gasUnits * maxFeePerGas;
 
-  // Lower bound (jika ada baseFee) = gas * (baseFee + priority)
+  // Lower bound, when baseFee is available, = gas units * (baseFee + priorityFee).
   let lowerWei = upperWei;
   if (latestBlock && latestBlock.baseFeePerGas != null) {
     const eff = latestBlock.baseFeePerGas + priorityFee;
@@ -147,7 +153,7 @@ async function main() {
     }
     console.log(`≈ Upper:  $${upperUsd.toFixed(2)}  | Rp ${upperIdr.toLocaleString("id-ID")}`);
   } else {
-    console.log(`(Tip) Set ENV ${priceEnv} untuk konversi ke USD/IDR. Contoh: ${priceEnv}=0.62`);
+    console.log(`(Tip) Set ${priceEnv} to enable USD and IDR conversion. Example: ${priceEnv}=0.62`);
   }
   console.log("=====================================================");
 }
