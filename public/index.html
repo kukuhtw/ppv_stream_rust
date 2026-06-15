@@ -1,56 +1,61 @@
 <!-- public/index.html -->
 <!doctype html>
-<meta charset="utf-8">
-<title>Beranda</title>
-<link rel="stylesheet" href="/public/styles.css">
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>Beranda</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/public/styles.css">
+</head>
+<body class="bg-light">
 
-<style>
-  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial,sans-serif;margin:16px}
-  .alert{padding:10px;border-radius:8px;margin:12px 0;font-size:14px;line-height:1.4}
-  .alert.ok{background:#e8f5e9;border:1px solid #a5d6a7}
-  .alert.fail{background:#ffebee;border:1px solid #ef9a9a}
-  .field{display:block;margin:8px 0}
-  .row{display:flex;align-items:center;gap:6px}
-  h2{margin-top:28px}
-  .toolbar{display:flex;gap:.75rem;align-items:center;margin:12px 0 18px}
-  .toolbar input{padding:8px 10px;font:inherit;width:320px;max-width:100%}
-  #videos{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
-  .card{background:#fff;border:1px solid rgba(0,0,0,.12);border-radius:10px;padding:12px}
-  .card h3{margin:0 0 6px}
-  .muted{opacity:.75}
-  .skeleton{background:linear-gradient(90deg,#eee 25%,#f5f5f5 37%,#eee 63%);background-size:400% 100%;animation:shimmer 1.2s infinite;border-radius:10px;height:110px}
-  @keyframes shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
-</style>
+<div class="container py-4">
 
-<h1>Login</h1>
-
-<div id="alert" class="alert" style="display:none"></div>
-
-<form method="post" action="/auth/login">
-  <label class="field">Email <input name="email" type="email" required></label>
-  <label class="field">
-    Password
-    <div class="row">
-      <input id="userPassword" name="password" type="password" required>
-      <button type="button" id="toggleUserPass" title="Tahan mouse untuk melihat password">👁️</button>
+  <!-- ===== Login card ===== -->
+  <div class="row justify-content-center mb-5">
+    <div class="col-12 col-sm-9 col-md-7 col-lg-5">
+      <h1 class="mb-3">Login</h1>
+      <div id="alert" class="alert d-none" role="alert"></div>
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <form method="post" action="/auth/login">
+            <div class="mb-3">
+              <label for="userEmail" class="form-label">Email</label>
+              <input id="userEmail" name="email" type="email" class="form-control" required>
+            </div>
+            <div class="mb-3">
+              <label for="userPassword" class="form-label">Password</label>
+              <div class="input-group">
+                <input id="userPassword" name="password" type="password" class="form-control" required>
+                <button type="button" id="toggleUserPass" class="btn btn-outline-secondary"
+                        title="Tahan mouse untuk melihat password">👁️</button>
+              </div>
+            </div>
+            <button class="btn btn-primary w-100">Login</button>
+          </form>
+        </div>
+      </div>
+      <p class="text-center mt-3 mb-1">Lupa password? <a href="/auth/forgot">Reset</a></p>
+      <p class="text-center">Belum punya akun? <a href="/auth/register">Daftar</a></p>
     </div>
-  </label>
-  <button>Login</button>
-</form>
+  </div>
 
-<p>Lupa password? <a href="/auth/forgot">Reset</a></p>
-<p>Belum punya akun? <a href="/auth/register">Daftar</a></p>
+  <!-- ===== Video list preview ===== -->
+  <h2 class="mb-3">Daftar Video</h2>
+  <div class="mb-3">
+    <input id="q" class="form-control" style="max-width:480px"
+           placeholder="Cari judul / owner / deskripsi…" aria-label="Pencarian">
+  </div>
+  <div id="videos" class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-3">
+    <div class="col"><div class="skeleton"></div></div>
+    <div class="col"><div class="skeleton"></div></div>
+    <div class="col"><div class="skeleton"></div></div>
+  </div>
 
-<h2>Daftar Video</h2>
-<div class="toolbar">
-  <input id="q" placeholder="Cari judul / owner / deskripsi…" aria-label="Pencarian">
 </div>
-<div id="videos">
-  <div class="skeleton"></div>
-  <div class="skeleton"></div>
-  <div class="skeleton"></div>
-</div>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 /* ==== Toggle password ==== */
 const userPass = document.getElementById('userPassword');
@@ -74,13 +79,13 @@ toggleUserPass.addEventListener('mouseleave',() => { userPass.type = 'password';
   };
   let msg = status === 'ok' ? 'Login berhasil.' : (map[reason] || `Login gagal. (${reason || 'unknown'})`);
   box.textContent = msg;
-  box.classList.add(status === 'ok' ? 'ok' : 'fail');
-  box.style.display = 'block';
+  box.classList.add(status === 'ok' ? 'alert-success' : 'alert-danger');
+  box.classList.remove('d-none');
 })();
 
 /* ==== Util & Kurs ==== */
 const numIDR = new Intl.NumberFormat('id-ID');
-let USD_TO_IDR = 17000; // fallback yang benar
+let USD_TO_IDR = 17000;
 
 function escapeHtml(s){
   return String(s ?? '')
@@ -90,13 +95,10 @@ function escapeHtml(s){
 
 async function resolveUsdToIdr(){
   try{
-    // Endpoint backend wajib: /api/kurs -> { ok:true, usd_to_idr:number }
     const r = await fetch('/api/kurs');
     const j = await r.json();
-    if (r.ok && j && typeof j.usd_to_idr === 'number') {
-      USD_TO_IDR = j.usd_to_idr;
-    }
-  }catch {/* pakai fallback 17000 */}
+    if (r.ok && j && typeof j.usd_to_idr === 'number') USD_TO_IDR = j.usd_to_idr;
+  }catch {}
 }
 
 let allVideos = [];
@@ -104,41 +106,39 @@ let allVideos = [];
 function render(list){
   const wrap = document.getElementById('videos');
   if (!list.length){
-    wrap.innerHTML = '<p class="muted">Belum ada video atau tidak ada yang cocok.</p>';
+    wrap.innerHTML = '<div class="col-12"><p class="text-muted">Belum ada video atau tidak ada yang cocok.</p></div>';
     return;
   }
-  const html = list.map(v => {
+  wrap.innerHTML = list.map(v => {
     const priceIDR = Math.round((v.price_cents || 0) / 100 * USD_TO_IDR);
     const desc = (v.description || '').trim();
     return `
-      <div class="card">
-        <h3>${escapeHtml(v.title)}</h3>
-        <div>👤 ${escapeHtml(v.owner_name)}</div>
-        <div>💰 Rp ${numIDR.format(priceIDR)}</div>
-        ${desc ? `<p style="white-space:pre-wrap;margin-top:6px">${escapeHtml(desc)}</p>` : `<p class="muted" style="margin-top:6px">(Belum ada deskripsi)</p>`}
-      </div>
-    `;
+      <div class="col">
+        <div class="card h-100 shadow-sm">
+          <div class="card-body">
+            <h5 class="card-title">${escapeHtml(v.title)}</h5>
+            <p class="mb-1">👤 ${escapeHtml(v.owner_name)}</p>
+            <p class="mb-1 fw-semibold">💰 Rp ${numIDR.format(priceIDR)}</p>
+            ${desc
+              ? `<p class="card-text mt-2" style="white-space:pre-wrap">${escapeHtml(desc)}</p>`
+              : `<p class="card-text text-muted mt-2">(Belum ada deskripsi)</p>`}
+          </div>
+        </div>
+      </div>`;
   }).join('');
-  wrap.innerHTML = html;
 }
 
 function applyFilters(){
   const q = document.getElementById('q').value.trim().toLowerCase();
   let list = [...allVideos];
-  if (q){
-    list = list.filter(v => {
-      const hay = `${v.title} ${v.owner_name} ${v.description||''}`.toLowerCase();
-      return hay.includes(q);
-    });
-  }
+  if (q) list = list.filter(v =>
+    `${v.title} ${v.owner_name} ${v.description||''}`.toLowerCase().includes(q));
   list.sort((a,b) => (b.created_at > a.created_at) ? 1 : (b.created_at < a.created_at ? -1 : 0));
   render(list);
 }
 
 let t;
-document.getElementById('q').addEventListener('input', ()=>{
-  clearTimeout(t); t = setTimeout(applyFilters, 200);
-});
+document.getElementById('q').addEventListener('input', () => { clearTimeout(t); t = setTimeout(applyFilters, 200); });
 
 (async function init(){
   await resolveUsdToIdr();
@@ -150,7 +150,9 @@ document.getElementById('q').addEventListener('input', ()=>{
     applyFilters();
   }catch(e){
     document.getElementById('videos').innerHTML =
-      `<p class="muted">Gagal memuat video: ${escapeHtml(String(e))}</p>`;
+      `<div class="col-12"><p class="text-muted">Gagal memuat video: ${escapeHtml(String(e))}</p></div>`;
   }
 })();
 </script>
+</body>
+</html>

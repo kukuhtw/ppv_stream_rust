@@ -1,33 +1,47 @@
 <!-- public/admin/login.html -->
 <!doctype html>
-<meta charset="utf-8">
-<title>Admin Login</title>
-<link rel="stylesheet" href="/public/styles.css">
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>Admin Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
 
-<style>
-  .alert{padding:10px;border-radius:8px;margin:12px 0;font-size:14px;line-height:1.4}
-  .alert.ok{background:#e8f5e9;border:1px solid #a5d6a7}
-  .alert.fail{background:#ffebee;border:1px solid #ef9a9a}
-  .field{display:block;margin:8px 0}
-  .row{display:flex;align-items:center;gap:6px}
-</style>
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-12 col-sm-9 col-md-7 col-lg-5">
 
-<h1>Admin Login</h1>
+      <h1 class="mb-3">Admin Login</h1>
+      <div id="alert" class="alert d-none" role="alert"></div>
 
-<div id="alert" class="alert" style="display:none"></div>
+      <div class="card shadow-sm border-danger">
+        <div class="card-header bg-danger text-white fw-semibold">Panel Admin</div>
+        <div class="card-body">
+          <form method="post" action="/admin/login">
+            <div class="mb-3">
+              <label for="adminEmail" class="form-label">Email</label>
+              <input id="adminEmail" name="email" type="email" class="form-control" required>
+            </div>
+            <div class="mb-3">
+              <label for="adminPassword" class="form-label">Password</label>
+              <div class="input-group">
+                <input id="adminPassword" name="password" type="password" class="form-control" required>
+                <button type="button" id="toggleAdminPass" class="btn btn-outline-secondary"
+                        title="Tahan mouse untuk melihat password">👁️</button>
+              </div>
+            </div>
+            <button class="btn btn-danger w-100">Login Admin</button>
+          </form>
+        </div>
+      </div>
 
-<form method="post" action="/admin/login">
-  <label class="field">Email <input name="email" type="email" required></label>
-  <label class="field">
-    Password
-    <div class="row">
-      <input id="adminPassword" name="password" type="password" required>
-      <button type="button" id="toggleAdminPass" title="Tahan mouse untuk melihat password">👁️</button>
     </div>
-  </label>
-  <button>Login</button>
-</form>
+  </div>
+</div>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 /* Toggle password */
 const adminPass = document.getElementById('adminPassword');
@@ -42,22 +56,20 @@ toggleAdminPass.addEventListener('mouseleave',() => { adminPass.type = 'password
   const p = new URLSearchParams(location.search);
   const status = p.get('status');
   const reason = p.get('reason');
-
   if (!status) return;
-
   const map = {
     missing_field: 'Lengkapi semua field.',
     bad_credentials: 'Email atau password salah.',
     not_admin: 'Akses admin ditolak.',
     server_error: 'Terjadi masalah di server. Coba lagi.',
   };
-
   let msg = status === 'ok'
     ? 'Login admin berhasil.'
     : (map[reason] || `Login admin gagal. (${reason || 'unknown'})`);
-
   box.textContent = msg;
-  box.classList.add(status === 'ok' ? 'ok' : 'fail');
-  box.style.display = 'block';
+  box.classList.add(status === 'ok' ? 'alert-success' : 'alert-danger');
+  box.classList.remove('d-none');
 })();
 </script>
+</body>
+</html>

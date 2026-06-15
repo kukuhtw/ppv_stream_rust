@@ -44,7 +44,7 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
         kurs::{router as kurs_router, KursState},
         payment_plugins::{
             confirm_default_payment, confirm_payment, create_default_payment_invoice,
-            create_payment_invoice, list_payment_plugins, PaymentPluginState,
+            create_payment_invoice, handle_webhook, list_payment_plugins, PaymentPluginState,
         },
         setup::{setup_admin, SetupState},
         stream::{request_play, serve_hls, start_cleanup_task, StreamState},
@@ -149,8 +149,11 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
         .route("/api/pay/confirm", post(confirm_default_payment))
         .route("/api/pay/:provider/start", post(create_payment_invoice))
         .route("/api/pay/:provider/confirm", post(confirm_payment))
+        .route("/api/pay/:provider/webhook", post(handle_webhook))
         .with_state(PaymentPluginState {
             registry: payment_plugins.clone(),
+            pool:     pool.clone(),
+            cfg:      cfg.clone(),
         });
 
     let users_router = Router::new()

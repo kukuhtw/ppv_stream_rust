@@ -1,608 +1,517 @@
 <!-- public/watch.html -->
-<!-- public/watch.html -->
 <!doctype html>
-<html lang="en">
+<html lang="id">
 <head>
   <meta charset="utf-8">
   <title>Watch</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="/public/styles.css">
-  <style>
-    :root { color-scheme: light dark; }
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Arial, sans-serif; margin:16px; }
-    nav { display:flex; gap:12px; align-items:center; margin-bottom:12px; }
-    .spacer { flex:1 1 auto; }
-    .badge { background: rgba(0,0,0,.08); padding: 4px 8px; border-radius: 8px; }
-    .muted { opacity:.8; }
-
-    .player-wrap {
-      position:relative;
-      width:min(100%, 960px);
-      margin:12px auto;
-      aspect-ratio:16/9;
-      background:#000;
-      border-radius:10px;
-      overflow:hidden;
-    }
-    #player { width:100%; height:100%; object-fit:contain; background:#000; display:block; }
-    video::-webkit-media-controls-fullscreen-button { display:none; }
-    video::-webkit-media-controls-enclosure { overflow:hidden; }
-
-    .fs-btn {
-      position:absolute; right:10px; top:10px; z-index:12;
-      background:rgba(0,0,0,.45); color:#fff; border:0;
-      border-radius:8px; padding:6px 10px; cursor:pointer; font-weight:600;
-    }
-    .player-wrap:fullscreen, .player-wrap:-webkit-full-screen { width:100vw; height:100vh; border-radius:0; }
-
-    .meta { max-width:960px; margin:10px auto; }
-    .meta h1 { margin: 8px 0 6px; font-size: 22px; }
-    .meta .price { margin: 2px 0 10px; font-weight: 600; }
-    .card { border:1px solid rgba(0,0,0,.15); border-radius:12px; padding:14px; margin:14px auto; max-width:960px; background:rgba(0,0,0,.03); }
-    label { display:block; margin:10px 0; }
-    input, textarea, button { font:inherit; padding:8px 10px; }
-    textarea { width:100%; resize:vertical; }
-    button.primary { background:#0b67ff; color:#fff; border:0; border-radius:10px; padding:10px 14px; cursor:pointer; }
-  </style>
 </head>
+<body class="bg-light">
 
-<body>
-  <nav>
-    <a href="/public/browse.html">Browse</a>
-    <a href="/public/dashboard.html">Dashboard</a>
-    <span class="spacer"></span>
-    <span id="userbar" class="badge">Loading user…</span>
-  </nav>
-
-  <div class="meta">
-    <a id="selfLink" class="muted" href="#">This page</a>
-    <h1 id="title">Loading title…</h1>
-    <div id="price" class="price muted"></div>
-    <p id="desc" class="muted" style="white-space:pre-wrap"></p>
+<!-- Navbar -->
+<nav class="navbar navbar-expand-md navbar-light bg-white shadow-sm">
+  <div class="container">
+    <a class="navbar-brand fw-bold" href="/public/browse.html">🎬 PPV Stream</a>
+    <button class="navbar-toggler" type="button"
+            data-bs-toggle="collapse" data-bs-target="#mainNav" aria-controls="mainNav"
+            aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="mainNav">
+      <ul class="navbar-nav me-auto mb-2 mb-md-0">
+        <li class="nav-item"><a class="nav-link" href="/public/browse.html">Browse</a></li>
+        <li class="nav-item"><a class="nav-link" href="/public/dashboard.html">Dashboard</a></li>
+      </ul>
+      <span id="userbar" class="badge bg-secondary mt-2 mt-md-0">Loading user…</span>
+    </div>
   </div>
+</nav>
 
+<div class="container py-3 pb-5">
+
+  <!-- Meta -->
+  <div class="mb-2">
+    <a id="selfLink" class="text-muted small" href="#">This page</a>
+  </div>
+  <h1 id="title" class="h3 mb-1">Loading title…</h1>
+  <p id="price" class="fw-semibold text-muted mb-1"></p>
+  <p id="desc" class="text-muted mb-3" style="white-space:pre-wrap"></p>
+
+  <!-- Player -->
   <div class="player-wrap" id="wrap">
     <video id="player" controls playsinline crossorigin="anonymous"></video>
     <button id="fsBtn" class="fs-btn" type="button">Fullscreen</button>
   </div>
 
   <!-- X402 pay CTA (shown on 403) -->
-  <div id="x402Pay" class="card" style="display:none; max-width:960px;">
-    <h3 style="margin:0 0 8px 0">Access locked</h3>
-    <p id="x402Price" class="muted" style="margin:4px 0 10px"></p>
-
-    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-      <label style="margin:0">
-        <span class="muted">Token:</span>
-        <select id="x402Token" style="padding:8px 10px"></select>
-      </label>
-      <button id="btnX402" class="primary" type="button">Buy with Crypto (X402)</button>
+  <div id="x402Pay" class="card shadow-sm mb-3 d-none">
+    <div class="card-body">
+      <h5 class="card-title">Access locked</h5>
+      <p id="x402Price" class="text-muted mb-3"></p>
+      <div class="d-flex flex-wrap gap-2 align-items-center">
+        <div>
+          <label for="x402Token" class="form-label small text-muted mb-1">Token:</label>
+          <select id="x402Token" class="form-select form-select-sm"></select>
+        </div>
+        <div class="align-self-end">
+          <button id="btnX402" class="btn btn-primary" type="button">Buy with Crypto (X402)</button>
+        </div>
+      </div>
+      <p class="text-muted small mt-2 mb-0">Auto split: 90% creator / 10% admin.</p>
     </div>
-
-    <small class="muted">Auto split: 90% creator / 10% admin.</small>
   </div>
 
   <!-- Owner contact block -->
-  <div id="ownerContact" class="card" style="display:none">
-    <h3 style="margin:0 0 8px 0">Owner Contact</h3>
-    <div id="oc_body" style="white-space:pre-wrap"></div>
+  <div id="ownerContact" class="card shadow-sm mb-3 d-none">
+    <div class="card-body">
+      <h5 class="card-title">Owner Contact</h5>
+      <div id="oc_body" style="white-space:pre-wrap"></div>
+    </div>
   </div>
 
   <!-- Owner edit form -->
-  <div id="ownerEdit" class="card" style="display:none">
-    <h3 style="margin:0 0 8px 0">Edit Video</h3>
-    <form id="editForm">
-      <input type="hidden" name="video_id" id="ev_id">
-      <label>Title
-        <input name="title" id="ev_title" required maxlength="160">
-      </label>
-      <label>Description
-        <textarea name="description" id="ev_desc" rows="3"></textarea>
-      </label>
-
-      <!-- Price in USD (owner inputs USD, backend receives price_cents) -->
-      <label>Price (USD)
-        <input id="ev_price_usd" type="number" min="0" step="0.01" placeholder="e.g. 1.99">
-      </label>
-      <input name="price_cents" id="ev_price_cents" type="hidden">
-
-      <button class="primary" type="submit">Save Changes</button>
-    </form>
-    <small class="muted">Only the video owner can save changes.</small>
+  <div id="ownerEdit" class="card shadow-sm mb-3 d-none">
+    <div class="card-body">
+      <h5 class="card-title">Edit Video</h5>
+      <form id="editForm">
+        <input type="hidden" name="video_id" id="ev_id">
+        <div class="mb-3">
+          <label for="ev_title" class="form-label">Title</label>
+          <input id="ev_title" name="title" class="form-control" required maxlength="160">
+        </div>
+        <div class="mb-3">
+          <label for="ev_desc" class="form-label">Description</label>
+          <textarea id="ev_desc" name="description" rows="3" class="form-control"></textarea>
+        </div>
+        <div class="mb-3">
+          <label for="ev_price_usd" class="form-label">Price (USD)</label>
+          <input id="ev_price_usd" type="number" min="0" step="0.01"
+                 class="form-control" placeholder="e.g. 1.99">
+          <input name="price_cents" id="ev_price_cents" type="hidden">
+        </div>
+        <button class="btn btn-primary" type="submit">Save Changes</button>
+      </form>
+      <p class="text-muted small mt-2 mb-0">Only the video owner can save changes.</p>
+    </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+</div><!-- /container -->
 
-   <script>
-  // ========= utils =========
-  function escapeHtml(s){
-    return String(s ?? '')
-      .replaceAll('&','&amp;').replaceAll('<','&lt;')
-      .replaceAll('>','&gt;').replaceAll('"','&quot;')
-      .replaceAll("'","&#039;");
-  }
-  function toast(msg, ok=true){ alert((ok ? "✅ " : "❌ ") + msg); }
-  const numUSD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
-  const numIDR = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
-  let USD_TO_IDR = 17000; // fallback
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
-  // Optional: load FX rate from backend
-  (async () => {
-    try {
-      const r = await fetch('/api/usd_to_idr');
-      const j = await r.json();
-      if (r.ok && (j.rate || j.usd_to_idr)) USD_TO_IDR = Number(j.rate || j.usd_to_idr) || USD_TO_IDR;
-    } catch {}
-  })();
+<script>
+// ========= utils =========
+function escapeHtml(s){
+  return String(s ?? '')
+    .replaceAll('&','&amp;').replaceAll('<','&lt;')
+    .replaceAll('>','&gt;').replaceAll('"','&quot;')
+    .replaceAll("'","&#039;");
+}
+function toast(msg, ok=true){ alert((ok ? "✅ " : "❌ ") + msg); }
+const numUSD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+const numIDR = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
+let USD_TO_IDR = 17000;
 
-  // user bar
-  (async function loadMe(){
-    try{
-      const r = await fetch('/api/me');
-      const j = await r.json();
-      const el = document.getElementById('userbar');
-      if (j.ok && j.user) {
-        el.innerHTML = `Logged in: <b>${escapeHtml(j.user.username)}</b> &lt;${escapeHtml(j.user.email)}&gt;`;
-      } else {
-        el.innerHTML = `<a href="/public/auth/login.html">Log in</a>`;
-      }
-    }catch{
-      document.getElementById('userbar').textContent = 'User: (failed to load)';
-    }
-  })();
+(async () => {
+  try {
+    const r = await fetch('/api/usd_to_idr');
+    const j = await r.json();
+    if (r.ok && (j.rate || j.usd_to_idr)) USD_TO_IDR = Number(j.rate || j.usd_to_idr) || USD_TO_IDR;
+  } catch {}
+})();
 
-  function renderOwnerContact(meta){
-    if(!meta) return;
-    const box = document.getElementById('ownerContact');
-    const body = document.getElementById('oc_body');
-    const waDigits = (meta.owner_whatsapp || '').replace(/\D/g, '');
-    const waLink = waDigits ? `https://wa.me/${waDigits}` : null;
-    const lines = [];
-    lines.push(`👤 ${escapeHtml(meta.owner_name)}`);
-    if (meta.owner_email) lines.push(`✉️ ${escapeHtml(meta.owner_email)}`);
-    if (waDigits) lines.push(`📱 WhatsApp: ${escapeHtml(meta.owner_whatsapp)}${waLink?` — ${waLink}`:''}`);
-    if (meta.owner_bank)   lines.push(`🏦 ${escapeHtml(meta.owner_bank)}`);
-    if (meta.owner_wallet) lines.push(`💳 ${escapeHtml(meta.owner_wallet)}`);
-    if (meta.owner_profile_desc) lines.push(`\n${escapeHtml(meta.owner_profile_desc)}`);
-    if(lines.length){ body.textContent = lines.join('\n'); box.style.display = ''; }
-  }
-
-  // ========= X402 / EVM helpers =========
-  const X402_ABI = [
-    "event Paid(bytes32 indexed invoiceUid, address indexed payer, address indexed creator, address admin, address token, uint256 amountWei, string videoId)",
-    "function payNativeSigned(bytes32,address,uint16,string,uint256,uint256,uint8,bytes32,bytes32) payable",
-    "function payERC20Signed(bytes32,address,uint256,address,uint16,string,uint256,uint256,uint8,bytes32,bytes32)"
-  ];
-  const { isAddress, getAddress } = ethers.utils ? {...ethers, ...ethers.utils} : ethers;
-  const KNOWN_CHAINS = {
-    80002: {
-      name: "Polygon Amoy Testnet",
-      currency: { name: "MATIC", symbol: "MATIC", decimals: 18 },
-      rpcUrls: ["https://rpc-amoy.polygon.technology"],
-      explorerUrls: ["https://amoy.polygonscan.com"],
-    },
-  };
-  const toHexChain = n => {
-    n = Number(n);
-    if(!Number.isFinite(n) || n<=0) throw new Error('Invalid chainId');
-    return '0x'+n.toString(16);
-  };
-  function pickErr(e){
-    return (
-      e?.error?.message ||
-      e?.error?.data?.message ||
-      e?.data?.message ||
-      e?.reason ||
-      e?.message ||
-      'Reverted (no reason)'
-    );
-  }
-
-  // switch / add network
-  async function ensureNetwork(provider, inv) {
-    const targetNum = Number(inv.chain_id);
-    if (!Number.isFinite(targetNum) || targetNum <= 0) throw new Error('Invalid chain id');
-    const hex = toHexChain(targetNum);
-
-    const meta = inv?.chain_meta ?? KNOWN_CHAINS[targetNum] ?? {
-      name: `Chain ${targetNum}`,
-      currency: { name: "Native", symbol: "NATIVE", decimals: 18 },
-      rpcUrls: [],
-      explorerUrls: [],
-    };
-
-    try {
-      await provider.send("wallet_switchEthereumChain", [{ chainId: hex }]);
-    } catch (e) {
-      if (e?.code === 4001) throw e; // user rejected
-      if (e?.code === 4902) {
-        const rpcUrls = (meta.rpcUrls && meta.rpcUrls.length) ? meta.rpcUrls : (KNOWN_CHAINS[targetNum]?.rpcUrls || []);
-        if (!rpcUrls.length) throw new Error(`Missing RPC URL for chain ${targetNum}`);
-        await provider.send("wallet_addEthereumChain", [{
-          chainId: hex,
-          chainName: meta.name || `Chain ${targetNum}`,
-          nativeCurrency: meta.currency || { name: "Native", symbol: "NATIVE", decimals: 18 },
-          rpcUrls,
-          blockExplorerUrls: meta.explorerUrls || [],
-        }]);
-        await provider.send("wallet_switchEthereumChain", [{ chainId: hex }]);
-      } else {
-        throw e;
-      }
-    }
-
-    // Confirm chain actually switched
-    await new Promise((resolve, reject) => {
-      const eth = provider.provider || window.ethereum;
-      const done = (cid)=> (cid||'').toLowerCase() === hex.toLowerCase();
-      const t = setTimeout(()=>reject(new Error('Switch chain timed out')), 8000);
-      provider.send('eth_chainId',[]).then(cid=>{
-        if(done(cid)){ clearTimeout(t); resolve(); return; }
-        const onChanged = (newHex)=>{
-          if(done(newHex)){ clearTimeout(t); eth?.removeListener?.('chainChanged', onChanged); resolve(); }
-        };
-        eth?.on?.('chainChanged', onChanged);
-      }).catch(err=>{ clearTimeout(t); reject(err); });
-    });
-  }
-
-  // ====== Invoice + Tx helpers ======
-  async function createInvoice(videoId, choice, payer) {
-    const invRes = await fetch('/api/pay/x402/start', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        video_id: videoId,
-        chain_id: choice.chain_id,
-        symbol: choice.symbol,      // kirim symbol asli dari backend (bukan label)
-        token_address: choice.erc20,
-        payer_address: payer
-      })
-    });
-    const inv = await invRes.json().catch(() => ({}));
-    if (!invRes.ok || inv.ok !== true) throw new Error(inv.error || 'Failed to create invoice.');
-    return inv;
-  }
-
-  async function sendPayment(inv, provider, signer, payer) {
-    if (!isAddress(inv.x402_contract)) throw new Error('Invalid X402 contract address from server.');
-    if (!isAddress(inv.creator_wallet)) throw new Error('Invalid creator wallet address from server.');
-    if (inv.token_address && !isAddress(inv.token_address)) throw new Error('Invalid token address.');
-
-    const x402Addr = getAddress(inv.x402_contract);
-    const creatorAddr = getAddress(inv.creator_wallet);
-    const tokenAddr = inv.token_address ? getAddress(inv.token_address) : null;
-
-    const code = await provider.getCode(x402Addr);
-    if (!code || code === '0x') throw new Error(`X402 contract not deployed on chainId=${inv.chain_id}.`);
-
-    const contract = new ethers.Contract(x402Addr, X402_ABI, signer);
-    const invoiceUidBytes32 = inv.invoice_uid_bytes32 || inv.invoice_uid;
-    const creatorBp = Number(inv.split_creator_bp || 9000);
-
-    const net = await provider.getNetwork();
-    if (Number(net.chainId) !== Number(inv.chain_id)) {
-      throw new Error(`Wrong network: wallet on ${net.chainId}, invoice requires ${inv.chain_id}`);
-    }
-
-    // Precheck Native balance
-    if (!tokenAddr) {
-      const bal = await provider.getBalance(payer);
-      const gasPrice = await provider.getGasPrice();
-      const gasLimitGuess = ethers.BigNumber.from(300000);
-      const need = ethers.BigNumber.from(inv.amount_wei).add(gasPrice.mul(gasLimitGuess));
-      if (bal.lt(need)) {
-        throw new Error(
-          `Insufficient MATIC: have ${ethers.utils.formatEther(bal)}; need ~${ethers.utils.formatEther(need)}`
-        );
-      }
-    }
-
-    // estimateGas to surface revert reasons early
-    try {
-      if (tokenAddr) {
-        await contract.estimateGas.payERC20Signed(
-          invoiceUidBytes32, tokenAddr, ethers.BigNumber.from(inv.amount_wei),
-          creatorAddr, creatorBp, inv.video_id,
-          ethers.BigNumber.from(inv.min_amount_wei),
-          ethers.BigNumber.from(inv.deadline), inv.v, inv.r, inv.s,
-          { from: payer }
-        );
-      } else {
-        await contract.estimateGas.payNativeSigned(
-          invoiceUidBytes32, creatorAddr, creatorBp, inv.video_id,
-          ethers.BigNumber.from(inv.min_amount_wei),
-          ethers.BigNumber.from(inv.deadline), inv.v, inv.r, inv.s,
-          { from: payer, value: ethers.BigNumber.from(inv.amount_wei) }
-        );
-      }
-    } catch (eg) {
-      throw new Error('Preflight failed: ' + (pickErr(eg)));
-    }
-
-    // Execute tx
-    if (tokenAddr) {
-      const erc20 = new ethers.Contract(tokenAddr, [
-        "function allowance(address owner, address spender) view returns (uint256)",
-        "function approve(address spender, uint256 value) returns (bool)"
-      ], signer);
-      const need = ethers.BigNumber.from(inv.amount_wei);
-      const allowance = await erc20.allowance(payer, x402Addr);
-      if (allowance.lt(need)) {
-        const txA = await erc20.approve(x402Addr, need);
-        await txA.wait();
-      }
-      const overrides = { gasLimit: ethers.BigNumber.from(300000) };
-      const tx = await contract.payERC20Signed(
-        invoiceUidBytes32, tokenAddr, need, creatorAddr, creatorBp, inv.video_id,
-        ethers.BigNumber.from(inv.min_amount_wei),
-        ethers.BigNumber.from(inv.deadline), inv.v, inv.r, inv.s, overrides
-      );
-      return await tx.wait();
+// user bar
+(async function loadMe(){
+  try{
+    const r = await fetch('/api/me');
+    const j = await r.json();
+    const el = document.getElementById('userbar');
+    if (j.ok && j.user) {
+      el.innerHTML = `<b>${escapeHtml(j.user.username)}</b> &lt;${escapeHtml(j.user.email)}&gt;`;
     } else {
-      const overrides = { value: ethers.BigNumber.from(inv.amount_wei), gasLimit: ethers.BigNumber.from(300000) };
-      const tx = await contract.payNativeSigned(
-        invoiceUidBytes32, creatorAddr, creatorBp, inv.video_id,
-        ethers.BigNumber.from(inv.min_amount_wei),
-        ethers.BigNumber.from(inv.deadline), inv.v, inv.r, inv.s, overrides
-      );
-      return await tx.wait();
+      el.outerHTML = `<a href="/public/auth/login.html" class="btn btn-sm btn-outline-primary mt-2 mt-md-0">Log in</a>`;
     }
+  }catch{
+    document.getElementById('userbar').textContent = '(failed to load)';
   }
+})();
 
-  // Orchestrator with retry
-  async function payFlowWithRetry(videoId, choice, btn) {
-    const MAX_ATTEMPTS = 3;
+function renderOwnerContact(meta){
+  if(!meta) return;
+  const box  = document.getElementById('ownerContact');
+  const body = document.getElementById('oc_body');
+  const waDigits = (meta.owner_whatsapp || '').replace(/\D/g, '');
+  const waLink   = waDigits ? `https://wa.me/${waDigits}` : null;
+  const lines = [];
+  lines.push(`👤 ${escapeHtml(meta.owner_name)}`);
+  if (meta.owner_email)        lines.push(`✉️ ${escapeHtml(meta.owner_email)}`);
+  if (waDigits)                lines.push(`📱 WhatsApp: ${escapeHtml(meta.owner_whatsapp)}${waLink?` — ${waLink}`:''}`);
+  if (meta.owner_bank)         lines.push(`🏦 ${escapeHtml(meta.owner_bank)}`);
+  if (meta.owner_wallet)       lines.push(`💳 ${escapeHtml(meta.owner_wallet)}`);
+  if (meta.owner_profile_desc) lines.push(`\n${escapeHtml(meta.owner_profile_desc)}`);
+  if(lines.length){ body.textContent = lines.join('\n'); box.classList.remove('d-none'); }
+}
 
-    if (!window.ethereum) return alert('MetaMask not detected.');
-    let provider = new ethers.providers.Web3Provider(window.ethereum, 'any');
-    await provider.send('eth_requestAccounts', []);
-    let signer = provider.getSigner();
-    const payer = await signer.getAddress();
+// ========= X402 / EVM helpers =========
+const X402_ABI = [
+  "event Paid(bytes32 indexed invoiceUid, address indexed payer, address indexed creator, address admin, address token, uint256 amountWei, string videoId)",
+  "function payNativeSigned(bytes32,address,uint16,string,uint256,uint256,uint8,bytes32,bytes32) payable",
+  "function payERC20Signed(bytes32,address,uint256,address,uint16,string,uint256,uint256,uint8,bytes32,bytes32)"
+];
+const { isAddress, getAddress } = ethers.utils ? {...ethers, ...ethers.utils} : ethers;
+const KNOWN_CHAINS = {
+  80002: {
+    name: "Polygon Amoy Testnet",
+    currency: { name: "MATIC", symbol: "MATIC", decimals: 18 },
+    rpcUrls: ["https://rpc-amoy.polygon.technology"],
+    explorerUrls: ["https://amoy.polygonscan.com"],
+  },
+};
+const toHexChain = n => {
+  n = Number(n);
+  if(!Number.isFinite(n) || n<=0) throw new Error('Invalid chainId');
+  return '0x'+n.toString(16);
+};
+function pickErr(e){
+  return (
+    e?.error?.message || e?.error?.data?.message ||
+    e?.data?.message  || e?.reason || e?.message || 'Reverted (no reason)'
+  );
+}
 
-    btn.disabled = true; btn.textContent = 'Processing…';
-
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      try {
-        const inv = await createInvoice(videoId, choice, payer);
-        if (Number(inv.deadline || 0) <= Math.floor(Date.now() / 1000)) {
-          throw new Error('Invoice has expired. Please try again.');
-        }
-
-        await ensureNetwork(provider, inv);
-        provider = new ethers.providers.Web3Provider(window.ethereum, 'any');
-        await provider.ready;
-        signer = provider.getSigner();
-
-        await sendPayment(inv, provider, signer, payer);
-
-        toast('Payment sent. Verifying access…');
-        for (let i = 0; i < 20; i++) {
-          await new Promise(r => setTimeout(r, 2000));
-          const rq = await fetch(`/api/request_play?video_id=${encodeURIComponent(videoId)}`);
-          if (rq.ok) { location.reload(); return; }
-        }
-        alert('Payment succeeded but access has not been recorded yet. Please refresh in a few seconds.');
-        return;
-
-      } catch (err) {
-        const msg = (pickErr(err) || '').toLowerCase();
-        console.warn(`attempt ${attempt} failed:`, err);
-
-        if (msg.includes('user rejected') || msg.includes('user denied') || err?.code === 4001) {
-          alert('Transaction cancelled by user.');
-          break;
-        }
-
-        const retryable =
-          msg.includes('invoice') ||
-          msg.includes('expired') ||
-          msg.includes('already used') ||
-          msg.includes('json-rpc') ||
-          msg.includes('replacement') ||
-          msg.includes('nonce') ||
-          msg.includes('dropped') ||
-          msg.includes('reverted');
-
-        if (!retryable || attempt === MAX_ATTEMPTS) {
-          alert('Transaction cancelled/failed: ' + (pickErr(err)));
-          break;
-        }
-        await new Promise(r => setTimeout(r, 1200)); // small backoff
-      }
-    }
-
-    btn.disabled = false; btn.textContent = 'Buy with Crypto (X402)';
+async function ensureNetwork(provider, inv) {
+  const targetNum = Number(inv.chain_id);
+  if (!Number.isFinite(targetNum) || targetNum <= 0) throw new Error('Invalid chain id');
+  const hex  = toHexChain(targetNum);
+  const meta = inv?.chain_meta ?? KNOWN_CHAINS[targetNum] ?? {
+    name: `Chain ${targetNum}`,
+    currency: { name: "Native", symbol: "NATIVE", decimals: 18 },
+    rpcUrls: [], explorerUrls: [],
+  };
+  try {
+    await provider.send("wallet_switchEthereumChain", [{ chainId: hex }]);
+  } catch (e) {
+    if (e?.code === 4001) throw e;
+    if (e?.code === 4902) {
+      const rpcUrls = (meta.rpcUrls && meta.rpcUrls.length) ? meta.rpcUrls : (KNOWN_CHAINS[targetNum]?.rpcUrls || []);
+      if (!rpcUrls.length) throw new Error(`Missing RPC URL for chain ${targetNum}`);
+      await provider.send("wallet_addEthereumChain", [{
+        chainId: hex,
+        chainName: meta.name || `Chain ${targetNum}`,
+        nativeCurrency: meta.currency || { name: "Native", symbol: "NATIVE", decimals: 18 },
+        rpcUrls,
+        blockExplorerUrls: meta.explorerUrls || [],
+      }]);
+      await provider.send("wallet_switchEthereumChain", [{ chainId: hex }]);
+    } else { throw e; }
   }
-
-  // ====== UI: showPayCTA ======
-  async function showPayCTA(videoId, meta){
-    const box = document.getElementById('x402Pay');
-    const sel = document.getElementById('x402Token');
-    const priceEl = document.getElementById('x402Price');
-    const btn = document.getElementById('btnX402');
-
-    const usd = (Number(meta?.price_cents || 0) / 100) || 0;
-    const idr = Math.round(usd * USD_TO_IDR);
-    priceEl.textContent = `Price: ${numUSD.format(usd)} (~${numIDR.format(idr)}) • payable with crypto token`;
-
-    // load token options
-    let opt=null;
-    try{
-      const r = await fetch('/api/pay/options?video_id='+encodeURIComponent(videoId));
-      opt = await r.json();
-    }catch{}
-    if(!opt || opt.ok!==true){
-      sel.innerHTML = `<option value="">(failed to load tokens)</option>`;
-      box.style.display=''; btn.disabled = true; return;
-    }
-
-    const tokens = Array.isArray(opt.tokens) ? opt.tokens : [];
-    sel.innerHTML = tokens.map(t => {
-      const isNative = !t.erc20;
-      const displaySym = (isNative && t.chain_id === 80002) ? 'MATIC' : (t.native_symbol || t.symbol);
-      // yang DIKIRIM = t.symbol apa adanya dari backend
-      const val = JSON.stringify({ chain_id: t.chain_id, symbol: t.symbol, erc20: t.erc20 || null });
-      return `<option value='${val}'>${t.chain} • ${displaySym}${t.erc20 ? ' (ERC-20)' : ''}</option>`;
-    }).join('') || `<option value="">(no active tokens)</option>`;
-
-    if(sel.value==='' && tokens.length){
-      const idx = tokens.findIndex(t=>t.symbol==='USDC');
-      sel.selectedIndex = (idx>=0 ? idx : 0);
-    }
-
-    box.style.display='';
-
-    // ✅ handler baru: gunakan flow dengan retry
-    btn.onclick = async () => {
-      const choice = sel.value ? JSON.parse(sel.value) : null;
-      if (!choice) return alert('Please select a token.');
-      try {
-        await payFlowWithRetry(videoId, choice, btn);
-      } catch (e) {
-        alert('Failed: ' + (pickErr(e)));
-      }
-    };
-  }
-
-  // ====== bootstrap halaman ======
-  (async () => {
-    const p = new URLSearchParams(location.search);
-    const vid = p.get('video_id');
-    if (!vid) return document.body.insertAdjacentHTML('beforeend','<p>video_id is missing</p>');
-    document.getElementById('selfLink').href = '/public/watch.html?video_id='+encodeURIComponent(vid);
-
-    let meta = null;
-    try {
-      const vr = await fetch('/api/videos');
-      const vj = await vr.json();
-      if (vr.ok && vj.videos) meta = vj.videos.find(x=>x.id===vid) || null;
-    } catch {}
-
-    const titleEl=document.getElementById('title'),
-          descEl=document.getElementById('desc'),
-          priceEl=document.getElementById('price');
-
-    if (meta) {
-      titleEl.textContent = meta.title || '(Untitled)';
-      descEl.textContent  = (meta.description || '').trim() || '(No description yet)';
-      const usd = (Number(meta.price_cents||0) / 100) || 0;
-      const idr = Math.round(usd * USD_TO_IDR);
-      priceEl.textContent=`💰 Price: ${numUSD.format(usd)} (~${numIDR.format(idr)}) • Owner: ${meta.owner_name}`;
-      renderOwnerContact(meta);
-    }
-
-    // request playlist / gate
-    const req = await fetch(`/api/request_play?video_id=${encodeURIComponent(vid)}`);
-    const play = await req.json().catch(()=>({}));
-    if (req.status === 403) {
-      await showPayCTA(vid, meta);
-      return;
-    }
-    if (!req.ok) return alert(play.error||'Failed to request playback.');
-
-    // init HLS
-    const video=document.getElementById('player');
-    const src=play.playlist;
-    if(Hls.isSupported()){
-      const hls=new Hls({autoStartLoad:true});
-      hls.loadSource(src); hls.attachMedia(video);
-      hls.on(Hls.Events.ERROR,(_,d)=>{
-        if(d?.fatal){
-          if(d.type===Hls.ErrorTypes.NETWORK_ERROR)hls.startLoad();
-          else if(d.type===Hls.ErrorTypes.MEDIA_ERROR)hls.recoverMediaError();
-          else{hls.destroy(); video.src=src;}
-        }
-      });
-    }else if(video.canPlayType('application/vnd.apple.mpegurl')) video.src=src;
-    else document.body.insertAdjacentHTML('beforeend','<p>Your browser does not support HLS.</p>');
-
-    // fullscreen
-    const wrap=document.getElementById('wrap'), fsBtn=document.getElementById('fsBtn');
-    async function toggleFS(){
-      const inFS=document.fullscreenElement===wrap||document.webkitFullscreenElement===wrap;
-      if(inFS)(document.exitFullscreen||document.webkitExitFullscreen)?.call(document);
-      else(wrap.requestFullscreen||wrap.webkitRequestFullscreen)?.call(wrap);
-    }
-    fsBtn.addEventListener('click',toggleFS);
-    addEventListener('keydown',e=>{if(e.key==='f')toggleFS();});
-    function onFSChange(){
-      const active=document.fullscreenElement===wrap||document.webkitFullscreenElement===wrap;
-      fsBtn.textContent=active?'Exit Fullscreen':'Fullscreen';
-    }
-    document.addEventListener('fullscreenchange',onFSChange);
-    document.addEventListener('webkitfullscreenchange',onFSChange);
-
-    // owner edit section
-    let isOwner=false,myMeta=null;
-    try{
-      const mr=await fetch('/api/my_videos');
-      const mj=await mr.json();
-      if(mr.ok&&mj.ok&&Array.isArray(mj.videos)){
-        myMeta=mj.videos.find(v=>v.id===vid)||null;
-        isOwner=!!myMeta;
-      }
-    }catch{}
-
-    if(isOwner){
-      const box=document.getElementById('ownerEdit');
-      const f=document.getElementById('editForm');
-      const ev_id=document.getElementById('ev_id');
-      const ev_title=document.getElementById('ev_title');
-      const ev_desc=document.getElementById('ev_desc');
-      const ev_price_cents=document.getElementById('ev_price_cents');
-      const ev_price_usd=document.getElementById('ev_price_usd');
-      const seed=myMeta||meta||{};
-
-      ev_id.value=vid;
-      ev_title.value=seed.title||'';
-      ev_desc.value=seed.description||'';
-
-      const seed_usd = (Number(seed.price_cents||0) / 100) || 0;
-      ev_price_usd.value = seed_usd > 0 ? seed_usd.toFixed(2) : '';
-
-      box.style.display='';
-
-      f.onsubmit=async(e)=>{
-        e.preventDefault();
-        const usd = Number(ev_price_usd.value || 0);
-        if(Number.isNaN(usd) || usd < 0) return toast('Price (USD) must be ≥ 0', false);
-
-        const cents = Math.round(usd * 100);
-        ev_price_cents.value = String(cents);
-
-        const body = new URLSearchParams(new FormData(f));
-        try {
-          const resp = await fetch('/api/videos/update', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body
-          });
-          const data = await resp.json().catch(()=> ({}));
-
-          if (!resp.ok || data?.ok !== true) {
-            return toast(data?.error || 'Failed to save changes.', false);
-          }
-
-          toast('Changes saved successfully. Reloading…', true);
-          location.reload();
-        } catch (e2) {
-          console.error('save error:', e2);
-          toast('Network error while saving. Please try again.', false);
-        }
+  await new Promise((resolve, reject) => {
+    const eth  = provider.provider || window.ethereum;
+    const done = (cid) => (cid||'').toLowerCase() === hex.toLowerCase();
+    const t    = setTimeout(()=>reject(new Error('Switch chain timed out')), 8000);
+    provider.send('eth_chainId',[]).then(cid=>{
+      if(done(cid)){ clearTimeout(t); resolve(); return; }
+      const onChanged = (newHex)=>{
+        if(done(newHex)){ clearTimeout(t); eth?.removeListener?.('chainChanged', onChanged); resolve(); }
       };
+      eth?.on?.('chainChanged', onChanged);
+    }).catch(err=>{ clearTimeout(t); reject(err); });
+  });
+}
 
-      ev_price_usd.addEventListener('input', () => {
-        const usd = Number(ev_price_usd.value || 0);
-        if (Number.isNaN(usd) || usd < 0) return;
-        const idr = Math.round(usd * USD_TO_IDR);
-        priceEl.textContent = `💰 Price (preview): ${numUSD.format(usd)} (~${numIDR.format(idr)}) • Owner: ${seed.owner_name || meta?.owner_name || 'You'}`;
-      });
+async function createInvoice(videoId, choice, payer) {
+  const invRes = await fetch('/api/pay/x402/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ video_id: videoId, chain_id: choice.chain_id, symbol: choice.symbol, token_address: choice.erc20, payer_address: payer })
+  });
+  const inv = await invRes.json().catch(() => ({}));
+  if (!invRes.ok || inv.ok !== true) throw new Error(inv.error || 'Failed to create invoice.');
+  return inv;
+}
+
+async function sendPayment(inv, provider, signer, payer) {
+  if (!isAddress(inv.x402_contract))   throw new Error('Invalid X402 contract address from server.');
+  if (!isAddress(inv.creator_wallet))  throw new Error('Invalid creator wallet address from server.');
+  if (inv.token_address && !isAddress(inv.token_address)) throw new Error('Invalid token address.');
+
+  const x402Addr   = getAddress(inv.x402_contract);
+  const creatorAddr= getAddress(inv.creator_wallet);
+  const tokenAddr  = inv.token_address ? getAddress(inv.token_address) : null;
+
+  const code = await provider.getCode(x402Addr);
+  if (!code || code === '0x') throw new Error(`X402 contract not deployed on chainId=${inv.chain_id}.`);
+
+  const contract         = new ethers.Contract(x402Addr, X402_ABI, signer);
+  const invoiceUidBytes32= inv.invoice_uid_bytes32 || inv.invoice_uid;
+  const creatorBp        = Number(inv.split_creator_bp || 9000);
+
+  const net = await provider.getNetwork();
+  if (Number(net.chainId) !== Number(inv.chain_id))
+    throw new Error(`Wrong network: wallet on ${net.chainId}, invoice requires ${inv.chain_id}`);
+
+  if (!tokenAddr) {
+    const bal          = await provider.getBalance(payer);
+    const gasPrice     = await provider.getGasPrice();
+    const gasLimitGuess= ethers.BigNumber.from(300000);
+    const need         = ethers.BigNumber.from(inv.amount_wei).add(gasPrice.mul(gasLimitGuess));
+    if (bal.lt(need)) throw new Error(
+      `Insufficient MATIC: have ${ethers.utils.formatEther(bal)}; need ~${ethers.utils.formatEther(need)}`);
+  }
+
+  try {
+    if (tokenAddr) {
+      await contract.estimateGas.payERC20Signed(
+        invoiceUidBytes32, tokenAddr, ethers.BigNumber.from(inv.amount_wei),
+        creatorAddr, creatorBp, inv.video_id,
+        ethers.BigNumber.from(inv.min_amount_wei), ethers.BigNumber.from(inv.deadline),
+        inv.v, inv.r, inv.s, { from: payer });
+    } else {
+      await contract.estimateGas.payNativeSigned(
+        invoiceUidBytes32, creatorAddr, creatorBp, inv.video_id,
+        ethers.BigNumber.from(inv.min_amount_wei), ethers.BigNumber.from(inv.deadline),
+        inv.v, inv.r, inv.s, { from: payer, value: ethers.BigNumber.from(inv.amount_wei) });
     }
-  })();
+  } catch (eg) { throw new Error('Preflight failed: ' + pickErr(eg)); }
+
+  if (tokenAddr) {
+    const erc20 = new ethers.Contract(tokenAddr, [
+      "function allowance(address owner, address spender) view returns (uint256)",
+      "function approve(address spender, uint256 value) returns (bool)"
+    ], signer);
+    const need      = ethers.BigNumber.from(inv.amount_wei);
+    const allowance = await erc20.allowance(payer, x402Addr);
+    if (allowance.lt(need)) { const txA = await erc20.approve(x402Addr, need); await txA.wait(); }
+    const tx = await contract.payERC20Signed(
+      invoiceUidBytes32, tokenAddr, need, creatorAddr, creatorBp, inv.video_id,
+      ethers.BigNumber.from(inv.min_amount_wei), ethers.BigNumber.from(inv.deadline),
+      inv.v, inv.r, inv.s, { gasLimit: ethers.BigNumber.from(300000) });
+    return await tx.wait();
+  } else {
+    const tx = await contract.payNativeSigned(
+      invoiceUidBytes32, creatorAddr, creatorBp, inv.video_id,
+      ethers.BigNumber.from(inv.min_amount_wei), ethers.BigNumber.from(inv.deadline),
+      inv.v, inv.r, inv.s,
+      { value: ethers.BigNumber.from(inv.amount_wei), gasLimit: ethers.BigNumber.from(300000) });
+    return await tx.wait();
+  }
+}
+
+async function payFlowWithRetry(videoId, choice, btn) {
+  const MAX_ATTEMPTS = 3;
+  if (!window.ethereum) return alert('MetaMask not detected.');
+  let provider = new ethers.providers.Web3Provider(window.ethereum, 'any');
+  await provider.send('eth_requestAccounts', []);
+  let signer = provider.getSigner();
+  const payer = await signer.getAddress();
+  btn.disabled = true; btn.textContent = 'Processing…';
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const inv = await createInvoice(videoId, choice, payer);
+      if (Number(inv.deadline || 0) <= Math.floor(Date.now() / 1000))
+        throw new Error('Invoice has expired. Please try again.');
+
+      await ensureNetwork(provider, inv);
+      provider = new ethers.providers.Web3Provider(window.ethereum, 'any');
+      await provider.ready;
+      signer = provider.getSigner();
+
+      await sendPayment(inv, provider, signer, payer);
+      toast('Payment sent. Verifying access…');
+      for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        const rq = await fetch(`/api/request_play?video_id=${encodeURIComponent(videoId)}`);
+        if (rq.ok) { location.reload(); return; }
+      }
+      alert('Payment succeeded but access has not been recorded yet. Please refresh in a few seconds.');
+      return;
+    } catch (err) {
+      const msg = (pickErr(err) || '').toLowerCase();
+      console.warn(`attempt ${attempt} failed:`, err);
+      if (msg.includes('user rejected') || msg.includes('user denied') || err?.code === 4001) {
+        alert('Transaction cancelled by user.'); break;
+      }
+      const retryable =
+        msg.includes('invoice') || msg.includes('expired') || msg.includes('already used') ||
+        msg.includes('json-rpc') || msg.includes('replacement') || msg.includes('nonce') ||
+        msg.includes('dropped')  || msg.includes('reverted');
+      if (!retryable || attempt === MAX_ATTEMPTS) {
+        alert('Transaction cancelled/failed: ' + pickErr(err)); break;
+      }
+      await new Promise(r => setTimeout(r, 1200));
+    }
+  }
+  btn.disabled = false; btn.textContent = 'Buy with Crypto (X402)';
+}
+
+async function showPayCTA(videoId, meta){
+  const box    = document.getElementById('x402Pay');
+  const sel    = document.getElementById('x402Token');
+  const priceEl= document.getElementById('x402Price');
+  const btn    = document.getElementById('btnX402');
+
+  const usd = (Number(meta?.price_cents || 0) / 100) || 0;
+  const idr = Math.round(usd * USD_TO_IDR);
+  priceEl.textContent = `Price: ${numUSD.format(usd)} (~${numIDR.format(idr)}) • payable with crypto token`;
+
+  let opt = null;
+  try{
+    const r = await fetch('/api/pay/options?video_id='+encodeURIComponent(videoId));
+    opt = await r.json();
+  }catch{}
+  if(!opt || opt.ok!==true){
+    sel.innerHTML = `<option value="">(failed to load tokens)</option>`;
+    box.classList.remove('d-none'); btn.disabled = true; return;
+  }
+
+  const tokens = Array.isArray(opt.tokens) ? opt.tokens : [];
+  sel.innerHTML = tokens.map(t => {
+    const isNative  = !t.erc20;
+    const displaySym= (isNative && t.chain_id === 80002) ? 'MATIC' : (t.native_symbol || t.symbol);
+    const val       = JSON.stringify({ chain_id: t.chain_id, symbol: t.symbol, erc20: t.erc20 || null });
+    return `<option value='${val}'>${t.chain} • ${displaySym}${t.erc20 ? ' (ERC-20)' : ''}</option>`;
+  }).join('') || `<option value="">(no active tokens)</option>`;
+
+  if(sel.value==='' && tokens.length){
+    const idx = tokens.findIndex(t=>t.symbol==='USDC');
+    sel.selectedIndex = (idx>=0 ? idx : 0);
+  }
+  box.classList.remove('d-none');
+
+  btn.onclick = async () => {
+    const choice = sel.value ? JSON.parse(sel.value) : null;
+    if (!choice) return alert('Please select a token.');
+    try { await payFlowWithRetry(videoId, choice, btn); }
+    catch (e) { alert('Failed: ' + pickErr(e)); }
+  };
+}
+
+// ====== bootstrap halaman ======
+(async () => {
+  const p   = new URLSearchParams(location.search);
+  const vid = p.get('video_id');
+  if (!vid) return document.body.insertAdjacentHTML('beforeend','<div class="container py-3"><p>video_id is missing</p></div>');
+  document.getElementById('selfLink').href = '/public/watch.html?video_id='+encodeURIComponent(vid);
+
+  let meta = null;
+  try {
+    const vr = await fetch('/api/videos');
+    const vj = await vr.json();
+    if (vr.ok && vj.videos) meta = vj.videos.find(x=>x.id===vid) || null;
+  } catch {}
+
+  const titleEl = document.getElementById('title');
+  const descEl  = document.getElementById('desc');
+  const priceEl = document.getElementById('price');
+
+  if (meta) {
+    titleEl.textContent = meta.title || '(Untitled)';
+    descEl.textContent  = (meta.description || '').trim() || '(No description yet)';
+    const usd = (Number(meta.price_cents||0) / 100) || 0;
+    const idr = Math.round(usd * USD_TO_IDR);
+    priceEl.textContent = `💰 Price: ${numUSD.format(usd)} (~${numIDR.format(idr)}) • Owner: ${meta.owner_name}`;
+    renderOwnerContact(meta);
+  }
+
+  const req  = await fetch(`/api/request_play?video_id=${encodeURIComponent(vid)}`);
+  const play = await req.json().catch(()=>({}));
+  if (req.status === 403) { await showPayCTA(vid, meta); return; }
+  if (!req.ok) return alert(play.error||'Failed to request playback.');
+
+  const video = document.getElementById('player');
+  const src   = play.playlist;
+  if(Hls.isSupported()){
+    const hls = new Hls({autoStartLoad:true});
+    hls.loadSource(src); hls.attachMedia(video);
+    hls.on(Hls.Events.ERROR,(_,d)=>{
+      if(d?.fatal){
+        if(d.type===Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
+        else if(d.type===Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+        else { hls.destroy(); video.src=src; }
+      }
+    });
+  } else if(video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src=src;
+  } else {
+    document.querySelector('.container').insertAdjacentHTML('beforeend','<p>Your browser does not support HLS.</p>');
+  }
+
+  // fullscreen
+  const wrap  = document.getElementById('wrap');
+  const fsBtn = document.getElementById('fsBtn');
+  async function toggleFS(){
+    const inFS = document.fullscreenElement===wrap || document.webkitFullscreenElement===wrap;
+    if(inFS)(document.exitFullscreen||document.webkitExitFullscreen)?.call(document);
+    else(wrap.requestFullscreen||wrap.webkitRequestFullscreen)?.call(wrap);
+  }
+  fsBtn.addEventListener('click',toggleFS);
+  addEventListener('keydown',e=>{ if(e.key==='f') toggleFS(); });
+  function onFSChange(){
+    const active = document.fullscreenElement===wrap || document.webkitFullscreenElement===wrap;
+    fsBtn.textContent = active ? 'Exit Fullscreen' : 'Fullscreen';
+  }
+  document.addEventListener('fullscreenchange',onFSChange);
+  document.addEventListener('webkitfullscreenchange',onFSChange);
+
+  // owner edit section
+  let isOwner=false, myMeta=null;
+  try{
+    const mr = await fetch('/api/my_videos');
+    const mj = await mr.json();
+    if(mr.ok && mj.ok && Array.isArray(mj.videos)){
+      myMeta  = mj.videos.find(v=>v.id===vid) || null;
+      isOwner = !!myMeta;
+    }
+  }catch{}
+
+  if(isOwner){
+    const box          = document.getElementById('ownerEdit');
+    const f            = document.getElementById('editForm');
+    const ev_id        = document.getElementById('ev_id');
+    const ev_title     = document.getElementById('ev_title');
+    const ev_desc      = document.getElementById('ev_desc');
+    const ev_price_cents= document.getElementById('ev_price_cents');
+    const ev_price_usd = document.getElementById('ev_price_usd');
+    const seed         = myMeta || meta || {};
+
+    ev_id.value    = vid;
+    ev_title.value = seed.title || '';
+    ev_desc.value  = seed.description || '';
+    const seed_usd = (Number(seed.price_cents||0) / 100) || 0;
+    ev_price_usd.value = seed_usd > 0 ? seed_usd.toFixed(2) : '';
+    box.classList.remove('d-none');
+
+    f.onsubmit = async(e)=>{
+      e.preventDefault();
+      const usd = Number(ev_price_usd.value || 0);
+      if(Number.isNaN(usd) || usd < 0) return toast('Price (USD) must be ≥ 0', false);
+      const cents = Math.round(usd * 100);
+      ev_price_cents.value = String(cents);
+      const body = new URLSearchParams(new FormData(f));
+      try {
+        const resp = await fetch('/api/videos/update', {
+          method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body
+        });
+        const data = await resp.json().catch(()=>({}));
+        if (!resp.ok || data?.ok !== true) return toast(data?.error || 'Failed to save changes.', false);
+        toast('Changes saved successfully. Reloading…', true);
+        location.reload();
+      } catch (e2) { toast('Network error while saving. Please try again.', false); }
+    };
+
+    ev_price_usd.addEventListener('input', () => {
+      const usd = Number(ev_price_usd.value || 0);
+      if (Number.isNaN(usd) || usd < 0) return;
+      const idr = Math.round(usd * USD_TO_IDR);
+      priceEl.textContent = `💰 Price (preview): ${numUSD.format(usd)} (~${numIDR.format(idr)}) • Owner: ${seed.owner_name || meta?.owner_name || 'You'}`;
+    });
+  }
+})();
 </script>
-
-
 </body>
 </html>

@@ -5,391 +5,390 @@
   <meta charset="utf-8">
   <title>Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="/public/styles.css">
-  <style>
-    :root { color-scheme: light dark; }
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Arial, sans-serif; margin: 16px; }
-    nav { display:flex; gap:12px; align-items:center; margin-bottom:16px; }
-    .spacer { flex: 1 1 auto; }
-    .badge { background: rgba(0,0,0,.08); padding: 4px 8px; border-radius: 8px; }
-    .card { border:1px solid rgba(0,0,0,.15); border-radius:12px; padding:16px; margin:18px 0; background:rgba(0,0,0,.03); }
-    label { display:block; margin:10px 0; }
-    input, select, button, textarea { font: inherit; padding:8px 10px; }
-    textarea { width: 100%; resize: vertical; }
-    button.primary { background:#0b67ff; color:#fff; border:0; border-radius:10px; padding:10px 14px; cursor:pointer; }
-    button.ghost { background:transparent; border:1px dashed rgba(0,0,0,.35); border-radius:10px; padding:8px 10px; cursor:pointer; }
-    small.muted { opacity:.8; }
-    .row { display:flex; gap:12px; align-items:center; flex-wrap: wrap; }
-    .list-empty { opacity:.75; padding:8px 0; }
-    code.kbd { background: rgba(0,0,0,.08); padding: 0 6px; border-radius: 6px; }
-  </style>
 </head>
-<body>
-  <nav>
-    <a href="/public/browse.html">Browse</a>
-    <a href="/public/dashboard.html" aria-current="page">Dashboard</a>
-    <span class="spacer"></span>
-    <span id="userbar" class="badge">Memuat user…</span>
-    <form id="logoutForm" onsubmit="return false">
-      <button id="logoutBtn" class="primary" type="button" title="Logout aman (POST)">Logout</button>
-    </form>
-  </nav>
+<body class="bg-light">
 
-  <h1>Dashboard Pengguna</h1>
-
-  <section class="card">
-    <p>Selamat datang di platform streaming video berbayar! Upload video Anda, tetapkan harga, dan dapatkan penghasilan dari penonton.</p>
-    <p class="muted">Tip: tekan <code class="kbd">F</code> di halaman Tonton untuk toggle fullscreen.</p>
-  </section>
-
-  <!-- ================= Edit Profile ================= -->
-  <section class="card">
-    <h2>Edit Profile & Kontak</h2>
-    <form id="profileForm">
-      <label>Email
-        <input name="email" type="email" readonly disabled>
-      </label>
-      <label>Nomor WhatsApp
-        <input name="whatsapp" placeholder="contoh: 62812xxxxxxx">
-      </label>
-      <label>Rekening Bank
-        <input name="bank_account" placeholder="BCA 1234567890 a/n Nama">
-      </label>
-
-      <!-- === PERUBAHAN: tetap pakai name="wallet_account", tetapi validasi sebagai EVM address === -->
-      <label>Creator EVM Wallet (payout)
-        <input
-          name="wallet_account"
-          placeholder="0x1234...abcd (42 chars)"
-          pattern="^$|^0x[a-fA-F0-9]{40}$"
-          title="Kosongkan, atau isi alamat EVM valid: 0x diikuti 40 karakter heksadesimal">
-      </label>
-
-      <!-- === PERUBAHAN: pilih preferensi chain untuk payout (opsional) === -->
-      <label>Preferred Chain
-        <select name="wallet_chain_id" id="wallet_chain_id">
-          <option value="">(Pilih chain)</option>
-          <option value="6342">Mega Testnet (6342)</option>
-          <option value="137">Polygon Mainnet (137)</option>
-          <option value="1">Ethereum Mainnet (1)</option>
-        </select>
-      </label>
-
-      <label>Deskripsi Profil
-        <textarea name="profile_desc" rows="3" placeholder="Tuliskan deskripsi singkat tentang Anda atau cara konfirmasi transfer."></textarea>
-      </label>
-      <button class="primary">Simpan Profile</button>
-    </form>
-    <small class="muted">Informasi ini akan muncul di halaman video Anda agar penonton bisa melakukan transfer & konfirmasi langsung.</small>
-  </section>
-
-  <!-- ================= Video Saya & Akses ================= -->
-  <section class="card">
-    <div class="row">
-      <h2 style="margin:0">Video Saya & Akses</h2>
-      <button id="refreshBtn" class="ghost" type="button" title="Refresh daftar">↻ Refresh</button>
+<!-- Navbar -->
+<nav class="navbar navbar-expand-md navbar-light bg-white shadow-sm">
+  <div class="container">
+    <a class="navbar-brand fw-bold" href="/public/browse.html">🎬 PPV Stream</a>
+    <button class="navbar-toggler" type="button"
+            data-bs-toggle="collapse" data-bs-target="#mainNav" aria-controls="mainNav"
+            aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="mainNav">
+      <ul class="navbar-nav me-auto mb-2 mb-md-0">
+        <li class="nav-item"><a class="nav-link" href="/public/browse.html">Browse</a></li>
+        <li class="nav-item"><a class="nav-link active" aria-current="page" href="/public/dashboard.html">Dashboard</a></li>
+      </ul>
+      <div class="d-flex align-items-center gap-2 mt-2 mt-md-0">
+        <span id="userbar" class="badge bg-secondary">Memuat user…</span>
+        <button id="logoutBtn" class="btn btn-sm btn-outline-danger" type="button">Logout</button>
+      </div>
     </div>
-    <div id="mine" class="list-empty">Memuat…</div>
-  </section>
+  </div>
+</nav>
 
-  <!-- ================= Upload ================= -->
-  <section class="card">
-    <h2>Upload Video</h2>
-    <form id="uploadForm" enctype="multipart/form-data">
-      <label>Judul
-        <input name="title" value="Untitled" required maxlength="160">
-      </label>
-      <label>Deskripsi (opsional)
-        <textarea name="description" rows="3" placeholder="Tuliskan ringkasan video…"></textarea>
-      </label>
-      <label>Harga (cents)
-        <input name="price_cents" type="number" min="0" value="0" required>
-      </label>
-      <label>File MP4
-        <input name="file" type="file" accept="video/mp4" required>
-      </label>
-      <button class="primary" type="submit">Upload</button>
-    </form>
-    <small class="muted">Catatan: pastikan file berformat MP4.</small>
-  </section>
+<div class="container py-4 pb-5">
 
-  <!-- ================= Allowlist ================= -->
-  <section class="card">
-    <h2>Grant Akses (Allowlist)</h2>
-    <form id="allow">
-      <label>Video
-        <select id="videoSelect" required></select>
-      </label>
-      <input type="hidden" name="video_id" id="videoIdHidden">
-      <small id="videoIdEcho" class="muted" style="display:block;margin:-6px 0 8px 0"></small>
+  <h1 class="mb-4">Dashboard Pengguna</h1>
 
-      <label>Username yg diizinkan
-        <input name="username" id="usernameInp" required>
-      </label>
-      <div id="lookup" class="muted" style="font-size:12px;min-height:1.2em"></div>
+  <!-- ===== Intro ===== -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-body">
+      <p class="mb-1">Selamat datang di platform streaming video berbayar! Upload video Anda, tetapkan harga, dan dapatkan penghasilan dari penonton.</p>
+      <p class="mb-0 text-muted small">Tip: tekan <kbd>F</kbd> di halaman Tonton untuk toggle fullscreen.</p>
+    </div>
+  </div>
 
-      <button class="primary">Tambah</button>
-    </form>
-  </section>
+  <!-- ===== Edit Profile ===== -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header fw-semibold">Edit Profile &amp; Kontak</div>
+    <div class="card-body">
+      <form id="profileForm">
+        <div class="mb-3">
+          <label for="profileEmail" class="form-label">Email</label>
+          <input id="profileEmail" name="email" type="email" class="form-control" readonly disabled>
+        </div>
+        <div class="mb-3">
+          <label for="profileWhatsapp" class="form-label">Nomor WhatsApp</label>
+          <input id="profileWhatsapp" name="whatsapp" class="form-control" placeholder="contoh: 62812xxxxxxx">
+        </div>
+        <div class="mb-3">
+          <label for="profileBank" class="form-label">Rekening Bank</label>
+          <input id="profileBank" name="bank_account" class="form-control" placeholder="BCA 1234567890 a/n Nama">
+        </div>
+        <div class="mb-3">
+          <label for="profileWallet" class="form-label">Creator EVM Wallet (payout)</label>
+          <input id="profileWallet" name="wallet_account" class="form-control font-monospace"
+                 placeholder="0x1234...abcd (42 chars)"
+                 pattern="^$|^0x[a-fA-F0-9]{40}$"
+                 title="Kosongkan, atau isi alamat EVM valid: 0x diikuti 40 karakter heksadesimal">
+        </div>
+        <div class="mb-3">
+          <label for="wallet_chain_id" class="form-label">Preferred Chain</label>
+          <select id="wallet_chain_id" name="wallet_chain_id" class="form-select">
+            <option value="">(Pilih chain)</option>
+            <option value="6342">Mega Testnet (6342)</option>
+            <option value="137">Polygon Mainnet (137)</option>
+            <option value="1">Ethereum Mainnet (1)</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label for="profileDesc" class="form-label">Deskripsi Profil</label>
+          <textarea id="profileDesc" name="profile_desc" rows="3" class="form-control"
+                    placeholder="Tuliskan deskripsi singkat tentang Anda atau cara konfirmasi transfer."></textarea>
+        </div>
+        <button class="btn btn-primary">Simpan Profile</button>
+      </form>
+      <p class="text-muted small mt-2 mb-0">Informasi ini akan muncul di halaman video Anda agar penonton bisa melakukan transfer &amp; konfirmasi langsung.</p>
+    </div>
+  </div>
 
-  <script>
-  // ===== util =====
-  function toast(msg, ok=true){ alert((ok ? "✅ " : "❌ ") + msg); }
-  function escapeHtml(s){
-    return String(s ?? '')
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&#039;');
+  <!-- ===== Video Saya & Akses ===== -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header d-flex align-items-center gap-2">
+      <span class="fw-semibold me-auto">Video Saya &amp; Akses</span>
+      <button id="refreshBtn" class="btn btn-sm btn-outline-secondary" type="button">↻ Refresh</button>
+    </div>
+    <div class="card-body">
+      <div id="mine" class="text-muted">Memuat…</div>
+    </div>
+  </div>
+
+  <!-- ===== Upload ===== -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header fw-semibold">Upload Video</div>
+    <div class="card-body">
+      <form id="uploadForm" enctype="multipart/form-data">
+        <div class="mb-3">
+          <label for="uploadTitle" class="form-label">Judul</label>
+          <input id="uploadTitle" name="title" class="form-control" value="Untitled" required maxlength="160">
+        </div>
+        <div class="mb-3">
+          <label for="uploadDesc" class="form-label">Deskripsi <span class="text-muted">(opsional)</span></label>
+          <textarea id="uploadDesc" name="description" rows="3" class="form-control"
+                    placeholder="Tuliskan ringkasan video…"></textarea>
+        </div>
+        <div class="mb-3">
+          <label for="uploadPrice" class="form-label">Harga (cents)</label>
+          <input id="uploadPrice" name="price_cents" type="number" min="0" value="0"
+                 class="form-control" required>
+        </div>
+        <div class="mb-3">
+          <label for="uploadFile" class="form-label">File MP4</label>
+          <input id="uploadFile" name="file" type="file" accept="video/mp4" class="form-control" required>
+        </div>
+        <button class="btn btn-primary" type="submit">Upload</button>
+      </form>
+      <p class="text-muted small mt-2 mb-0">Catatan: pastikan file berformat MP4.</p>
+    </div>
+  </div>
+
+  <!-- ===== Allowlist ===== -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header fw-semibold">Grant Akses (Allowlist)</div>
+    <div class="card-body">
+      <form id="allow">
+        <div class="mb-3">
+          <label for="videoSelect" class="form-label">Video</label>
+          <select id="videoSelect" class="form-select" required></select>
+          <input type="hidden" name="video_id" id="videoIdHidden">
+          <small id="videoIdEcho" class="text-muted"></small>
+        </div>
+        <div class="mb-3">
+          <label for="usernameInp" class="form-label">Username yg diizinkan</label>
+          <input id="usernameInp" name="username" class="form-control" required>
+          <div id="lookup" class="text-muted small mt-1"></div>
+        </div>
+        <button class="btn btn-primary">Tambah</button>
+      </form>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ===== util =====
+function toast(msg, ok=true){ alert((ok ? "✅ " : "❌ ") + msg); }
+function escapeHtml(s){
+  return String(s ?? '')
+    .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;').replaceAll("'", '&#039;');
+}
+
+// ===== user bar =====
+(async function loadMe(){
+  try {
+    const r = await fetch('/api/me');
+    const j = await r.json();
+    const el = document.getElementById('userbar');
+    if(j.ok && j.user){
+      el.innerHTML = `<b>${escapeHtml(j.user.username)}</b> &lt;${escapeHtml(j.user.email)}&gt;`;
+    } else {
+      el.innerHTML = `<a href="/public/auth/login.html">Login</a>`;
+    }
+  } catch {
+    document.getElementById('userbar').textContent='(gagal memuat)';
   }
+})();
 
-  // ===== user bar =====
-  (async function loadMe(){
-    try {
-      const r = await fetch('/api/me');
-      const j = await r.json();
-      const el = document.getElementById('userbar');
-      if(j.ok && j.user){
-        el.innerHTML = `Login: <b>${escapeHtml(j.user.username)}</b> &lt;${escapeHtml(j.user.email)}&gt;`;
-      } else {
-        el.innerHTML = `<a href="/public/auth/login.html">Login</a>`;
-      }
-    } catch {
-      document.getElementById('userbar').textContent='User: (gagal memuat)';
+// ===== Logout =====
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  try {
+    await fetch('/auth/logout', { method: 'POST' });
+    location.href = '/public/auth/login.html?status=ok';
+  } catch {
+    location.href = '/public/auth/login.html';
+  }
+});
+
+// ================= Edit Profile =================
+(async function initProfile(){
+  try {
+    const r = await fetch('/api/profile');
+    const j = await r.json();
+    if(j.ok && j.profile){
+      const f = document.getElementById('profileForm');
+      f.email.value         = j.profile.email         || '';
+      f.whatsapp.value      = j.profile.whatsapp       || '';
+      f.bank_account.value  = j.profile.bank_account   || '';
+      f.wallet_account.value= j.profile.wallet_account || '';
+      f.profile_desc.value  = j.profile.profile_desc   || '';
+      const sel = document.getElementById('wallet_chain_id');
+      if (sel && j.profile.wallet_chain_id != null) sel.value = String(j.profile.wallet_chain_id);
     }
-  })();
-
-  // ===== Logout =====
-  document.getElementById('logoutBtn').addEventListener('click', async () => {
-    try {
-      await fetch('/auth/logout', { method: 'POST' });
-      location.href = '/public/auth/login.html?status=ok';
-    } catch {
-      location.href = '/public/auth/login.html';
-    }
-  });
-
-  // ================= Edit Profile =================
-  (async function initProfile(){
-    try {
-      const r = await fetch('/api/profile');
-      const j = await r.json();
-      if(j.ok && j.profile){
-        const f = document.getElementById('profileForm');
-        f.email.value = j.profile.email || '';
-        f.whatsapp.value = j.profile.whatsapp || '';
-        f.bank_account.value = j.profile.bank_account || '';
-        f.wallet_account.value = j.profile.wallet_account || '';
-        f.profile_desc.value = j.profile.profile_desc || '';
-        // === PERUBAHAN: isi preferensi chain bila ada ===
-        const sel = document.getElementById('wallet_chain_id');
-        if (sel && j.profile.wallet_chain_id != null) {
-          sel.value = String(j.profile.wallet_chain_id);
-        }
-      }
-    } catch {}
-    document.getElementById('profileForm').addEventListener('submit', async (e)=>{
-      e.preventDefault();
-      const fd = new FormData(e.target);
-      fd.delete('email'); // jangan kirim email
-
-      // === PERUBAHAN: validasi client-side untuk EVM address ===
-      const addr = (fd.get('wallet_account')||'').toString().trim();
-      if (addr && !/^0x[a-fA-F0-9]{40}$/.test(addr)) {
-        return toast('Wallet harus alamat EVM valid: 0x + 40 hex', false);
-      }
-
-      const body = new URLSearchParams(fd);
-      try {
-        const r = await fetch('/api/profile_update', {
-          method:'POST',
-          headers:{'Content-Type':'application/x-www-form-urlencoded'},
-          body
-        });
-        const j = await r.json().catch(async()=>({ok:false,error:await r.text()}));
-        toast(j.ok ? 'Profile tersimpan' : 'Gagal: '+(j.error||'unknown'), j.ok);
-      } catch(err){ toast('Gagal: '+err, false); }
-    });
-  })();
-
-  // ================= Upload =================
-  const uploadForm = document.getElementById('uploadForm');
-  uploadForm.onsubmit = async (e) => {
+  } catch {}
+  document.getElementById('profileForm').addEventListener('submit', async (e)=>{
     e.preventDefault();
-    const formData = new FormData(uploadForm);
+    const fd = new FormData(e.target);
+    fd.delete('email');
+    const addr = (fd.get('wallet_account')||'').toString().trim();
+    if (addr && !/^0x[a-fA-F0-9]{40}$/.test(addr))
+      return toast('Wallet harus alamat EVM valid: 0x + 40 hex', false);
+    const body = new URLSearchParams(fd);
     try {
-      const r = await fetch('/api/upload', { method: 'POST', body: formData });
-      const j = (r.headers.get('content-type')||'').includes('application/json') ? await r.json() : { error: await r.text() };
-      if (!r.ok || j.ok === false) return toast(`Upload gagal: ${j.error || 'unknown error'}`, false);
-      toast(`Upload sukses. Video ID: ${j.video_id}`);
-      uploadForm.reset();
-      await loadMyVideos(); await renderMyVideos();
-    } catch (e2) { toast(`Upload gagal: ${e2}`, false); }
-  };
-
-  // ================= Allowlist =================
-  const allowForm    = document.getElementById('allow');
-  const videoSelect  = document.getElementById('videoSelect');
-  const videoHidden  = document.getElementById('videoIdHidden');
-  const videoEcho    = document.getElementById('videoIdEcho');
-  const usernameInp  = document.getElementById('usernameInp');
-  const lookupBox    = document.getElementById('lookup');
-
-  function syncVideoIdEcho(){
-    const vid = videoSelect.value || "";
-    videoHidden.value = vid;
-    videoEcho.textContent = vid ? `video_id: ${vid} ` : '';
-    if (vid) {
-      videoEcho.innerHTML = `video_id: ${escapeHtml(vid)} <button class="ghost" type="button" id="copyVidBtn">Copy</button>`;
-      const btn = document.getElementById('copyVidBtn');
-      btn.onclick = async () => {
-        try { await navigator.clipboard.writeText(vid); toast('Video ID disalin'); } catch {}
-      };
-    }
-  }
-
-  async function loadMyVideos(){
-    try {
-      const r = await fetch('/api/my_videos');
-      const j = await r.json();
-      if (j.ok && Array.isArray(j.videos) && j.videos.length) {
-        videoSelect.innerHTML = j.videos.map(v => `<option value="${v.id}">${escapeHtml(v.title)} — ${v.id}</option>`).join('');
-      } else {
-        videoSelect.innerHTML = '<option value="">(Belum ada video)</option>';
-      }
-    } catch {
-      videoSelect.innerHTML = '<option value="">Gagal load video</option>';
-    }
-    syncVideoIdEcho(); // set hidden setiap kali selesai memuat daftar
-  }
-
-  // Pastikan hidden ikut berubah saat user ganti pilihan
-  videoSelect.addEventListener('change', syncVideoIdEcho);
-
-  // Lookup user_id live (debounce)
-  let t;
-  usernameInp.addEventListener('input', () => {
-    clearTimeout(t);
-    const u = usernameInp.value.trim();
-    lookupBox.textContent = '';
-    if (!u) return;
-    t = setTimeout(async () => {
-      try {
-        const r = await fetch('/api/user_lookup?' + new URLSearchParams({ username: u }));
-        const j = await r.json();
-        lookupBox.textContent = (j.ok && j.user)
-          ? `→ user_id: ${j.user.id}`
-          : '→ user tidak ditemukan';
-      } catch {
-        lookupBox.textContent = '→ gagal lookup user';
-      }
-    }, 300);
-  });
-
-  allowForm.onsubmit = async (e) => {
-    e.preventDefault();
-    const uname = usernameInp.value.trim();
-    const vid = videoHidden.value.trim();
-
-    if (!vid) return toast('Pilih video terlebih dahulu (video_id kosong).', false);
-    if (!uname) return toast('Isi username dulu.', false);
-
-    // re-cek cepat (opsional)
-    try {
-      const r0 = await fetch('/api/user_lookup?' + new URLSearchParams({ username: uname }));
-      const j0 = await r0.json();
-      if (!(j0.ok && j0.user && j0.user.id)) {
-        lookupBox.textContent = '→ user tidak ditemukan';
-        return toast('Gagal: user tidak ditemukan', false);
-      }
-    } catch {}
-
-    const body = new URLSearchParams(new FormData(allowForm));
-    try {
-      const r = await fetch('/api/allow', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
+      const r = await fetch('/api/profile_update', {
+        method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body
+      });
       const j = await r.json().catch(async()=>({ok:false,error:await r.text()}));
-      if (!r.ok || j.ok === false) return toast(`Gagal allowlist: ${j.error||'unknown'}`, false);
+      toast(j.ok ? 'Profile tersimpan' : 'Gagal: '+(j.error||'unknown'), j.ok);
+    } catch(err){ toast('Gagal: '+err, false); }
+  });
+})();
 
-      // Info tambahan kalau duplikat (rows_affected=0)
-      if (typeof j.rows_affected === 'number' && j.rows_affected === 0) {
-        toast(`Allowlist: ${j.username} sudah ada untuk video ${j.video_id} (duplikat).`);
-      } else {
-        toast(`Allowlist sukses: ${j.username} → video ${j.video_id}`);
-      }
+// ================= Upload =================
+document.getElementById('uploadForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const formData = new FormData(e.target);
+  try {
+    const r = await fetch('/api/upload', { method: 'POST', body: formData });
+    const j = (r.headers.get('content-type')||'').includes('application/json')
+      ? await r.json() : { error: await r.text() };
+    if (!r.ok || j.ok === false) return toast(`Upload gagal: ${j.error || 'unknown error'}`, false);
+    toast(`Upload sukses. Video ID: ${j.video_id}`);
+    e.target.reset();
+    await loadMyVideos(); await renderMyVideos();
+  } catch (e2) { toast(`Upload gagal: ${e2}`, false); }
+};
 
-      allowForm.reset();
-      lookupBox.textContent = '';
-      syncVideoIdEcho(); // reset hidden setelah form direset
-      await renderMyVideos();
-    } catch (e2) { toast(`Gagal allowlist: ${e2}`, false); }
-  };
+// ================= Allowlist =================
+const allowForm   = document.getElementById('allow');
+const videoSelect = document.getElementById('videoSelect');
+const videoHidden = document.getElementById('videoIdHidden');
+const videoEcho   = document.getElementById('videoIdEcho');
+const usernameInp = document.getElementById('usernameInp');
+const lookupBox   = document.getElementById('lookup');
 
-  // ================= Render "Video Saya" =================
-  async function renderMyVideos() {
-    const box = document.getElementById('mine');
-    box.innerHTML = '<p>Memuat…</p>';
+function syncVideoIdEcho(){
+  const vid = videoSelect.value || '';
+  videoHidden.value = vid;
+  if (vid) {
+    videoEcho.innerHTML = `video_id: ${escapeHtml(vid)} <button class="btn btn-sm btn-outline-secondary py-0 px-1" type="button" id="copyVidBtn">Copy</button>`;
+    document.getElementById('copyVidBtn').onclick = async () => {
+      try { await navigator.clipboard.writeText(vid); toast('Video ID disalin'); } catch {}
+    };
+  } else {
+    videoEcho.textContent = '';
+  }
+}
+
+async function loadMyVideos(){
+  try {
+    const r = await fetch('/api/my_videos');
+    const j = await r.json();
+    if (j.ok && Array.isArray(j.videos) && j.videos.length) {
+      videoSelect.innerHTML = j.videos.map(v =>
+        `<option value="${v.id}">${escapeHtml(v.title)} — ${v.id}</option>`).join('');
+    } else {
+      videoSelect.innerHTML = '<option value="">(Belum ada video)</option>';
+    }
+  } catch {
+    videoSelect.innerHTML = '<option value="">Gagal load video</option>';
+  }
+  syncVideoIdEcho();
+}
+
+videoSelect.addEventListener('change', syncVideoIdEcho);
+
+let t;
+usernameInp.addEventListener('input', () => {
+  clearTimeout(t);
+  const u = usernameInp.value.trim();
+  lookupBox.textContent = '';
+  if (!u) return;
+  t = setTimeout(async () => {
     try {
-      const r = await fetch('/api/my_videos');
+      const r = await fetch('/api/user_lookup?' + new URLSearchParams({ username: u }));
       const j = await r.json();
-      if (!j.ok) return box.innerHTML = `<p class="muted">Gagal memuat: ${j.error || 'unknown'}</p>`;
-      if (!Array.isArray(j.videos) || j.videos.length === 0)
-        return box.innerHTML = '<p class="list-empty">Belum ada video yang Anda unggah.</p>';
+      lookupBox.textContent = (j.ok && j.user) ? `→ user_id: ${j.user.id}` : '→ user tidak ditemukan';
+    } catch { lookupBox.textContent = '→ gagal lookup user'; }
+  }, 300);
+});
 
-      const html = j.videos.map(v => {
-        const users = (v.allow_users || []).map(u => `<code>${escapeHtml(u)}</code>`).join(', ');
-        const priceIDR = (v.price_cents/100).toLocaleString('id-ID');
-        return `
-          <div class="card" style="background:rgba(0,0,0,.02)">
-            <h3 style="margin:0 0 6px 0">${escapeHtml(v.title)}</h3>
-            <small class="muted">ID: ${escapeHtml(v.id)} • Dibuat: ${escapeHtml(v.created_at)}</small>
-            <p style="margin:8px 0 4px 0">Harga sekarang: Rp ${priceIDR}</p>
-            <details>
-              <summary>Edit judul, deskripsi, dan harga (cent)</summary>
-              <form class="edit-form" data-video-id="${escapeHtml(v.id)}" style="margin-top:10px">
-                <!-- penting: name="id" agar cocok dengan UpdateVideoForm -->
+allowForm.onsubmit = async (e) => {
+  e.preventDefault();
+  const uname = usernameInp.value.trim();
+  const vid   = videoHidden.value.trim();
+  if (!vid)   return toast('Pilih video terlebih dahulu (video_id kosong).', false);
+  if (!uname) return toast('Isi username dulu.', false);
+
+  try {
+    const r0 = await fetch('/api/user_lookup?' + new URLSearchParams({ username: uname }));
+    const j0 = await r0.json();
+    if (!(j0.ok && j0.user && j0.user.id)) {
+      lookupBox.textContent = '→ user tidak ditemukan';
+      return toast('Gagal: user tidak ditemukan', false);
+    }
+  } catch {}
+
+  const body = new URLSearchParams(new FormData(allowForm));
+  try {
+    const r = await fetch('/api/allow', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
+    const j = await r.json().catch(async()=>({ok:false,error:await r.text()}));
+    if (!r.ok || j.ok === false) return toast(`Gagal allowlist: ${j.error||'unknown'}`, false);
+    if (typeof j.rows_affected === 'number' && j.rows_affected === 0) {
+      toast(`Allowlist: ${j.username} sudah ada untuk video ${j.video_id} (duplikat).`);
+    } else {
+      toast(`Allowlist sukses: ${j.username} → video ${j.video_id}`);
+    }
+    allowForm.reset(); lookupBox.textContent = ''; syncVideoIdEcho();
+    await renderMyVideos();
+  } catch (e2) { toast(`Gagal allowlist: ${e2}`, false); }
+};
+
+// ================= Render "Video Saya" =================
+async function renderMyVideos() {
+  const box = document.getElementById('mine');
+  box.innerHTML = '<p>Memuat…</p>';
+  try {
+    const r = await fetch('/api/my_videos');
+    const j = await r.json();
+    if (!j.ok) return void (box.innerHTML = `<p class="text-muted">Gagal memuat: ${j.error || 'unknown'}</p>`);
+    if (!Array.isArray(j.videos) || j.videos.length === 0)
+      return void (box.innerHTML = '<p class="text-muted">Belum ada video yang Anda unggah.</p>');
+
+    box.innerHTML = j.videos.map(v => {
+      const users    = (v.allow_users || []).map(u => `<code>${escapeHtml(u)}</code>`).join(', ');
+      const priceIDR = (v.price_cents/100).toLocaleString('id-ID');
+      return `
+        <div class="card mb-3">
+          <div class="card-body">
+            <h6 class="card-title fw-bold mb-1">${escapeHtml(v.title)}</h6>
+            <p class="text-muted small mb-1">ID: ${escapeHtml(v.id)} • Dibuat: ${escapeHtml(v.created_at)}</p>
+            <p class="mb-2">Harga sekarang: Rp ${priceIDR}</p>
+            <details class="mb-2">
+              <summary class="text-primary" style="cursor:pointer">Edit judul, deskripsi, dan harga (cent)</summary>
+              <form class="edit-form mt-3" data-video-id="${escapeHtml(v.id)}">
                 <input type="hidden" name="id" value="${escapeHtml(v.id)}">
-                <label>Judul
-                  <input name="title" required maxlength="160" value="${escapeHtml(v.title)}">
-                </label>
-                <label>Deskripsi
-                  <textarea name="description" rows="3">${escapeHtml(v.description || '')}</textarea>
-                </label>
-                <label>Harga (cents)
-                  <input name="price_cents" type="number" min="0" required value="${v.price_cents}">
-                </label>
-                <button class="primary" type="submit">Simpan Perubahan</button>
+                <div class="mb-2">
+                  <label class="form-label small">Judul</label>
+                  <input name="title" class="form-control form-control-sm" required maxlength="160" value="${escapeHtml(v.title)}">
+                </div>
+                <div class="mb-2">
+                  <label class="form-label small">Deskripsi</label>
+                  <textarea name="description" rows="2" class="form-control form-control-sm">${escapeHtml(v.description || '')}</textarea>
+                </div>
+                <div class="mb-2">
+                  <label class="form-label small">Harga (cents)</label>
+                  <input name="price_cents" type="number" min="0" class="form-control form-control-sm" required value="${v.price_cents}">
+                </div>
+                <button class="btn btn-primary btn-sm" type="submit">Simpan Perubahan</button>
               </form>
             </details>
-            <details style="margin-top:8px">
-              <summary>Allowlist (${v.allow_count})</summary>
-              <div style="margin-top:6px">${users || '<span class="muted">(Belum ada user diizinkan)</span>'}</div>
+            <details>
+              <summary class="text-secondary small" style="cursor:pointer">Allowlist (${v.allow_count})</summary>
+              <div class="mt-2 small">${users || '<span class="text-muted">(Belum ada user diizinkan)</span>'}</div>
             </details>
-          </div>`;
-      }).join('');
-      box.innerHTML = html;
-    } catch (e) { box.innerHTML = `<p class="muted">Error: ${e}</p>`; }
-  }
+          </div>
+        </div>`;
+    }).join('');
+  } catch (e) { box.innerHTML = `<p class="text-muted">Error: ${e}</p>`; }
+}
 
-  document.getElementById('mine').addEventListener('submit', async (e) => {
-    const form = e.target.closest('form.edit-form');
-    if (!form) return;
-    e.preventDefault();
-    const body = new URLSearchParams(new FormData(form));
-    const pc = Number(body.get('price_cents') || 0);
-    if (Number.isNaN(pc) || pc < 0) return toast('Harga (cents) harus >= 0', false);
-    try {
-      const r = await fetch('/api/video_update', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
-      const txt = await r.text(); // konsumsi sekali
-      let j; try { j = JSON.parse(txt); } catch { j = { ok:false, error: txt || 'non-JSON response' }; }
-      if (!r.ok || j.ok === false) toast('Gagal update: ' + (j.error || 'unknown'), false);
-      else { toast('Video berhasil diupdate'); await renderMyVideos(); await loadMyVideos(); }
-    } catch (err) { toast('Gagal update: ' + err, false); }
-  });
+document.getElementById('mine').addEventListener('submit', async (e) => {
+  const form = e.target.closest('form.edit-form');
+  if (!form) return;
+  e.preventDefault();
+  const body = new URLSearchParams(new FormData(form));
+  const pc = Number(body.get('price_cents') || 0);
+  if (Number.isNaN(pc) || pc < 0) return toast('Harga (cents) harus >= 0', false);
+  try {
+    const r   = await fetch('/api/video_update', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
+    const txt = await r.text();
+    let j; try { j = JSON.parse(txt); } catch { j = { ok:false, error: txt || 'non-JSON response' }; }
+    if (!r.ok || j.ok === false) toast('Gagal update: ' + (j.error || 'unknown'), false);
+    else { toast('Video berhasil diupdate'); await renderMyVideos(); await loadMyVideos(); }
+  } catch (err) { toast('Gagal update: ' + err, false); }
+});
 
-  // ===== Init =====
-  (async () => { await loadMyVideos(); await renderMyVideos(); })();
-  document.getElementById('refreshBtn').addEventListener('click', async () => { await loadMyVideos(); await renderMyVideos(); });
-  </script>
+// ===== Init =====
+(async () => { await loadMyVideos(); await renderMyVideos(); })();
+document.getElementById('refreshBtn').addEventListener('click', async () => { await loadMyVideos(); await renderMyVideos(); });
+</script>
 </body>
 </html>
