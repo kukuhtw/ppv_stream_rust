@@ -3,6 +3,9 @@
 // SMTP email sender using lettre.
 // Config is loaded from the `smtp_settings` table (single row, id=1).
 // Falls back to a no-op log if SMTP is disabled or misconfigured.
+//
+// Email subjects and message bodies are configurable through environment
+// variables. Built-in defaults are written in English.
 
 use anyhow::{anyhow, Result};
 use lettre::{
@@ -120,40 +123,87 @@ async fn send(cfg: &SmtpConfig, to_email: &str, to_name: &str, subject: &str, ht
 }
 
 // ---------------------------------------------------------------------------
+// Email template helpers
+// ---------------------------------------------------------------------------
+
+fn env_template(key: &str, default_value: &str) -> String {
+    std::env::var(key).unwrap_or_else(|_| default_value.to_string())
+}
+
+fn render_template(template: &str, values: &[(&str, &str)]) -> String {
+    values.iter().fold(template.to_string(), |acc, (key, value)| {
+        acc.replace(&format!("{{{{{key}}}}}"), value)
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Email templates
 // ---------------------------------------------------------------------------
 
-/// Kirim link reset password (digunakan oleh forgot-password flow).
+/// Send a password reset link for the forgot-password flow.
 pub async fn send_reset(pool: &PgPool, to_email: &str, token: &str, base_url: &str) {
     let cfg = SmtpConfig::load(pool).await;
     let reset_url = format!("{base_url}/public/auth/reset_password.html?token={token}");
-    let html = format!(r#"
-<p>Anda menerima email ini karena ada permintaan reset password untuk akun Anda.</p>
-<p><a href="{reset_url}" style="background:#dc3545;color:#fff;padding:10px 20px;text-decoration:none;border-radius:5px;display:inline-block;">Reset Password</a></p>
-<p>Link berlaku 2 jam. Jika bukan Anda yang meminta, abaikan email ini.</p>
-<p>Atau salin link berikut ke browser:<br><code>{reset_url}</code></p>
-"#);
-    if let Err(e) = send(&cfg, to_email, "", "Reset Password Akun Anda", &html).await {
+
+    let subject = env_template(
+        "EMAIL_RESET_PASSWORD_SUBJECT",
+        "Reset your PPV Stream password",
+    );
+
+    let template = env_template(
+        "EMAIL_RESET_PASSWORD_HTML",
+        r#"
+<p>You are receiving this email because a password reset was requested for your PPV Stream account.</p>
+<p><a href="{{reset_url}}" style="background:#dc3545;color:#fff;padding:10px 20px;text-decoration:none;border-radius:5px;display:inline-block;">Reset Password</a></p>
+<p>This link is valid for 2 hours. If you did not request this, you can safely ignore this email.</p>
+<p>You can also copy and paste this link into your browser:<br><code>{{reset_url}}</code></p>
+"#,
+    );
+
+    let html = render_template(&template, &[("reset_url", &reset_url)]);
+
+    if let Err(e) = send(&cfg, to_email, "", &subject, &html).await {
         warn!("send_reset failed: {e}");
     }
 }
 
-/// Notifikasi bahwa password telah berhasil diubah.
+/// Send a notification that the account password was changed successfully.
 pub async fn send_password_changed(pool: &PgPool, to_email: &str, username: &str) {
     let cfg = SmtpConfig::load(pool).await;
-    let html = format!(r#"
-<p>Halo <b>{username}</b>,</p>
-<p>Password akun Anda di <b>PPV Stream</b> baru saja berhasil diubah.</p>
-<p>Jika Anda tidak melakukan perubahan ini, segera hubungi admin atau gunakan fitur <b>Lupa Password</b> untuk mengamankan akun Anda.</p>
-<p>Email ini dikirim otomatis, mohon tidak membalas.</p>
-"#);
-    if let Err(e) = send(&cfg, to_email, username, "Password Anda Telah Diubah", &html).await {
+
+    let subject = env_template(
+        "EMAIL_PASSWORD_CHANGED_SUBJECT",
+        "Your PPV Stream password was changed",
+    );
+
+    let template = env_template(
+        "EMAIL_PASSWORD_CHANGED_HTML",
+        r#"
+<p>Hello <b>{{username}}</b>,</p>
+<p>Your PPV Stream account password was changed successfully.</p>
+<p>If you did not make this change, please contact the administrator immediately or use the forgot-password feature to secure your account.</p>
+<p>This is an automated email. Please do not reply.</p>
+"#,
+    );
+
+    let html = render_template(&template, &[("username", username)]);
+
+    if let Err(e) = send(&cfg, to_email, username, &subject, &html).await {
         warn!("send_password_changed failed: {e}");
     }
 }
 
-/// Kirim test email dari admin settings.
+/// Send a test email from the admin SMTP settings page.
 pub async fn send_test(cfg: &SmtpConfig, to_email: &str) -> Result<()> {
-    let html = "<p>Ini adalah test email dari <b>PPV Stream</b>. Konfigurasi SMTP Anda berhasil!</p>";
-    send(cfg, to_email, "Admin", "Test Email PPV Stream", html).await
+    let subject = env_template(
+        "EMAIL_TEST_SUBJECT",
+        "PPV Stream test email",
+    );
+
+    let html = env_template(
+        "EMAIL_TEST_HTML",
+        "<p>This is a test email from <b>PPV Stream</b>. Your SMTP configuration is working successfully.</p>",
+    );
+
+    send(cfg, to_email, "Admin", &subject, &html).await
 }
