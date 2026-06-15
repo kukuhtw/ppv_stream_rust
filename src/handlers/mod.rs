@@ -10,3 +10,4 @@ pub mod video;
 pub mod users; // <-- TAMBAHKAN BARIS INI
 pub mod kurs; // <-- WAJIB: expose router /api/kurs
 pub mod pay;
+pub mod payment_plugins;
