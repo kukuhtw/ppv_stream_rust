@@ -1,15 +1,4 @@
 // src/main.rs
-// Application entry point and HTTP server composition root.
-//
-// This file is responsible for:
-// 1. Initializing application logging.
-// 2. Loading runtime configuration from environment variables.
-// 3. Creating the PostgreSQL connection pool.
-// 4. Building and combining all HTTP route groups.
-// 5. Starting the Axum web server.
-// 6. Starting periodic playback session cleanup.
-// 7. Optionally starting the x402 blockchain payment watcher.
-
 use tracing_subscriber::fmt::init as tracing_init;
 
 #[cfg(feature = "x402-watcher")]
@@ -25,6 +14,7 @@ mod sessions;
 mod validators;
 mod worker;
 mod handlers;
+mod plugins;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -52,13 +42,18 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
         auth_admin::{post_admin_login, post_admin_logout, AuthAdminState},
         auth_user::{post_login, post_logout, post_register, AuthUserState},
         kurs::{router as kurs_router, KursState},
+        payment_plugins::{confirm_payment, create_payment_invoice, list_payment_plugins, PaymentPluginState},
         setup::{setup_admin, SetupState},
         stream::{request_play, serve_hls, start_cleanup_task, StreamState},
         upload::{upload_video, UploadState},
         users::{get_my_profile, public_profile, update_my_profile, UsersState},
         video::{add_allow, list_videos, my_videos, update_video, user_lookup, VideoState},
     };
+    use crate::plugins::payment::PaymentPluginRegistry;
     use crate::worker;
+
+    let payment_plugins = PaymentPluginRegistry::from_env();
+    tracing::info!("payment plugins enabled: {:?}", payment_plugins.names());
 
     let users_state = UsersState {
         pool: pool.clone(),
@@ -145,6 +140,14 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
             cfg: cfg.clone(),
         });
 
+    let payment_plugin_router = Router::new()
+        .route("/api/pay/providers", get(list_payment_plugins))
+        .route("/api/pay/:provider/start", post(create_payment_invoice))
+        .route("/api/pay/:provider/confirm", post(confirm_payment))
+        .with_state(PaymentPluginState {
+            registry: payment_plugins.clone(),
+        });
+
     let users_router = Router::new()
         .route("/api/profile", get(get_my_profile))
         .route("/api/profile_update", post(update_my_profile))
@@ -175,6 +178,7 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
         .merge(setup_router)
         .merge(upload_router)
         .merge(video_router)
+        .merge(payment_plugin_router)
         .merge(users_router)
         .merge(streaming_router)
         .merge(me_router)
