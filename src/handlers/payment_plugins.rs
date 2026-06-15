@@ -1,9 +1,6 @@
 // src/handlers/payment_plugins.rs
 //
 // Generic payment plugin HTTP handlers.
-//
-// These endpoints expose provider-neutral payment operations while the legacy
-// x402 endpoints remain available for backward compatibility.
 
 use axum::{
     extract::{Path, State},
@@ -59,6 +56,7 @@ pub async fn list_payment_plugins(
 
     Json(json!({
         "ok": true,
+        "default_provider": state.registry.default_provider_name(),
         "providers": providers
     }))
 }
