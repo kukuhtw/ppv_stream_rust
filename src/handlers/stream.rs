@@ -12,13 +12,20 @@ use axum::{
     response::IntoResponse,
     Json,
 };
+use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde_json::json;
 use sqlx::PgPool;
-use std::path::{Path, PathBuf};
-use tokio::fs;
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::Mutex,
+    time::{Duration, Instant},
+};
+use tokio::{fs, time::sleep};
 use tokio_util::io::ReaderStream;
 use tower_cookies::Cookies;
+use tracing::{error, warn};
 use uuid::Uuid;
 
 use crate::config::Config;
@@ -26,41 +33,36 @@ use crate::ffmpeg::run_ffmpeg;
 use crate::handlers::video::user_has_view_access;
 use crate::sessions;
 
-/// Shared state used by playback and HLS file handlers.
-///
-/// `pool` provides database access for authentication and authorization.
-/// `cfg` provides storage paths, watermark configuration, and HLS settings.
+const PLAYBACK_SESSION_TTL_SECONDS: u64 = 60 * 60;
+const PLAYLIST_READY_TIMEOUT_SECONDS: u64 = 30;
+
+#[derive(Clone, Debug)]
+struct PlaybackSession {
+    user_id: String,
+    expires_at: Instant,
+}
+
+static PLAYBACK_SESSIONS: Lazy<Mutex<HashMap<String, PlaybackSession>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+
 #[derive(Clone)]
 pub struct StreamState {
     pub pool: PgPool,
     pub cfg: Config,
 }
 
-/// Query parameters accepted by `GET /api/request_play`.
 #[derive(Deserialize)]
 pub struct RequestPlayQuery {
     pub video_id: String,
 }
 
-/// Creates a watermarked playback session for one authenticated viewer.
-///
-/// Flow:
-/// 1. Authenticate the current user.
-/// 2. Verify ownership or allowlist access.
-/// 3. Load video and viewer metadata.
-/// 4. Create a unique session directory.
-/// 5. Build a moving username and timestamp watermark.
-/// 6. Generate HLS output with FFmpeg.
-/// 7. Return the session playlist URL.
 pub async fn request_play(
     State(st): State<StreamState>,
     cookies: Cookies,
     Query(q): Query<RequestPlayQuery>,
 ) -> impl IntoResponse {
-    // Step 1: Authenticate the viewer using the signed session cookie and the
-    // server-side sessions table. Anonymous playback is not allowed.
     let (user_id, _is_admin) = match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await {
-        Some(v) => v,
+        Some(value) => value,
         None => {
             return (
                 StatusCode::UNAUTHORIZED,
@@ -70,9 +72,6 @@ pub async fn request_play(
         }
     };
 
-    // Step 2: Authorize playback. Access is granted when the viewer owns the
-    // video or is present in the allowlist. Successful purchases also create
-    // allowlist records, linking payment completion to playback access.
     match user_has_view_access(&st.pool, &q.video_id, &user_id).await {
         Ok(true) => {}
         Ok(false) => {
@@ -91,8 +90,6 @@ pub async fn request_play(
         }
     }
 
-    // Step 3: Load the source filename and display metadata for the requested
-    // video. `fetch_optional` distinguishes a missing record from a query error.
     let row = match sqlx::query! {
         r#"
         SELECT id, owner_id, filename, title, price_cents
@@ -105,7 +102,7 @@ pub async fn request_play(
     .fetch_optional(&st.pool)
     .await
     {
-        Ok(r) => r,
+        Ok(row) => row,
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -115,8 +112,7 @@ pub async fn request_play(
         }
     };
 
-    // Stop immediately when the requested video does not exist.
-    let Some(v) = row else {
+    let Some(video) = row else {
         return (
             StatusCode::NOT_FOUND,
             Json(json!({"ok": false, "error": "video not found"})),
@@ -124,8 +120,6 @@ pub async fn request_play(
             .into_response();
     };
 
-    // Step 4: Load the viewer username. The username becomes part of the
-    // watermark so leaked recordings can be associated with the viewer.
     let username: String = match sqlx::query_scalar! {
         r#"SELECT username FROM users WHERE id = $1 LIMIT 1"#,
         user_id
@@ -133,7 +127,7 @@ pub async fn request_play(
     .fetch_one(&st.pool)
     .await
     {
-        Ok(u) => u,
+        Ok(username) => username,
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -143,8 +137,10 @@ pub async fn request_play(
         }
     };
 
-    // Step 5: Ensure the HLS session root exists, then create a unique session
-    // directory for this playback request.
+    if let Err(e) = cleanup_expired_sessions(&st.cfg.hls_root).await {
+        warn!("playback session cleanup failed: {e}");
+    }
+
     if let Err(e) = fs::create_dir_all(&st.cfg.hls_root).await {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -164,12 +160,16 @@ pub async fn request_play(
             .into_response();
     }
 
-    // Step 6: Write watermark text into a file consumed by FFmpeg drawtext.
-    // FFmpeg expands the date and time template during encoding.
-    let wm_text = format!("• @{} • %Y-%m-%d %H\\:%M\\:%S", username);
-    let wm_file = session_dir.join("wm.txt");
+    let safe_username: String = username
+        .chars()
+        .filter(|character| !character.is_control())
+        .take(80)
+        .collect();
+    let watermark_text = format!("• @{} • %Y-%m-%d %H\\:%M\\:%S", safe_username);
+    let watermark_file = session_dir.join("wm.txt");
 
-    if let Err(e) = fs::write(&wm_file, &wm_text).await {
+    if let Err(e) = fs::write(&watermark_file, &watermark_text).await {
+        let _ = fs::remove_dir_all(&session_dir).await;
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"ok": false, "error": format!("write wm file: {e}")})),
@@ -177,81 +177,62 @@ pub async fn request_play(
             .into_response();
     }
 
-    // Step 7: Build a watermark position that changes every few seconds.
-    // A moving watermark is harder to remove through simple cropping or masking.
     const MOVE_INTERVAL: i32 = 5;
     const PADDING: i32 = 20;
 
     let font_path = st.cfg.watermark_font.as_str();
-    let seg_secs: u32 = st.cfg.hls_segment_seconds.max(3);
+    let segment_seconds = st.cfg.hls_segment_seconds.max(3);
 
-    // Generate deterministic pseudo-random X and Y positions using FFmpeg
-    // expressions based on playback time and video dimensions.
-    let x_expr_raw = format!(
-        "{pad} + (w-tw-{twopad})*mod(abs(sin(floor(t/{int})*12.9898)*43758.5453),1)",
+    let x_expression_raw = format!(
+        "{pad} + (w-tw-{twopad})*mod(abs(sin(floor(t/{interval})*12.9898)*43758.5453),1)",
         pad = PADDING,
         twopad = PADDING * 2,
-        int = MOVE_INTERVAL
+        interval = MOVE_INTERVAL
     );
-    let y_expr_raw = format!(
-        "{pad} + (h-th-{twopad})*mod(abs(sin((floor(t/{int})+1)*78.233)*12345.6789),1)",
+    let y_expression_raw = format!(
+        "{pad} + (h-th-{twopad})*mod(abs(sin((floor(t/{interval})+1)*78.233)*12345.6789),1)",
         pad = PADDING,
         twopad = PADDING * 2,
-        int = MOVE_INTERVAL
+        interval = MOVE_INTERVAL
     );
 
-    // Escape commas because commas separate filters in FFmpeg syntax.
-    let x_expr = x_expr_raw.replace(",", "\\,");
-    let y_expr = y_expr_raw.replace(",", "\\,");
-    let wm_path = wm_file.to_string_lossy();
+    let x_expression = x_expression_raw.replace(",", "\\,");
+    let y_expression = y_expression_raw.replace(",", "\\,");
+    let watermark_path = watermark_file.to_string_lossy();
 
-    // Draw a low-opacity offset shadow to keep the watermark readable over
-    // both bright and dark scenes.
     let drawtext_shadow = format!(
         "drawtext=fontfile={font}:textfile={textfile}:expansion=strftime:x={x}+10:y={y}+10:fontsize=20:fontcolor=white@0.15:box=0",
         font = font_path,
-        textfile = wm_path,
-        x = x_expr,
-        y = y_expr
+        textfile = watermark_path,
+        x = x_expression,
+        y = y_expression
     );
-
-    // Draw the main watermark with a semi-transparent dark background box.
     let drawtext_main = format!(
         "drawtext=fontfile={font}:textfile={textfile}:expansion=strftime:x={x}:y={y}:fontsize=20:fontcolor=white:box=1:boxcolor=black@0.35:boxborderw=8",
         font = font_path,
-        textfile = wm_path,
-        x = x_expr,
-        y = y_expr
+        textfile = watermark_path,
+        x = x_expression,
+        y = y_expression
     );
+    let video_filter = format!("{drawtext_shadow},{drawtext_main}");
 
-    // Apply both drawtext filters sequentially.
-    let vf_chain = format!(
-        "{shadow},{main}",
-        shadow = drawtext_shadow,
-        main = drawtext_main
-    );
-
-    // Step 8: Resolve the source media path from configured and legacy storage
-    // locations. Playback cannot continue when the source file is missing.
-    let input_path = match resolve_input_path(&st.cfg, &v.filename) {
-        Some(p) => p,
+    let input_path = match resolve_input_path(&st.cfg, &video.filename) {
+        Some(path) => path,
         None => {
+            let _ = fs::remove_dir_all(&session_dir).await;
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(json!({
                     "ok": false,
-                    "error": format!("source not found: {}", v.filename)
+                    "error": format!("source not found: {}", video.filename)
                 })),
             )
                 .into_response();
         }
     };
 
-    // Step 9: Build the FFmpeg command for one HLS rendition. The output file
-    // is named `master.m3u8`, although this command currently creates a single
-    // media playlist rather than a multi-variant adaptive bitrate master list.
-    let master_rel = "master.m3u8".to_string();
-    let args: Vec<String> = vec![
+    let playlist_name = "master.m3u8".to_string();
+    let arguments: Vec<String> = vec![
         "-hide_banner".into(),
         "-loglevel".into(),
         "error".into(),
@@ -259,7 +240,7 @@ pub async fn request_play(
         "-i".into(),
         input_path.to_string_lossy().to_string(),
         "-vf".into(),
-        vf_chain,
+        video_filter,
         "-c:v".into(),
         "libx264".into(),
         "-preset".into(),
@@ -279,27 +260,53 @@ pub async fn request_play(
         "-start_number".into(),
         "0".into(),
         "-hls_time".into(),
-        seg_secs.to_string(),
+        segment_seconds.to_string(),
         "-hls_playlist_type".into(),
         "event".into(),
         "-hls_flags".into(),
         "independent_segments+delete_segments".into(),
         "-hls_list_size".into(),
         "0".into(),
-        master_rel.clone(),
+        playlist_name.clone(),
     ];
 
-    // Run FFmpeg inside the session directory so the generated playlist and
-    // segments remain isolated under this playback session UUID.
-    if let Err(e) = run_ffmpeg(&args, &session_dir.to_string_lossy()).await {
+    PLAYBACK_SESSIONS.lock().unwrap().insert(
+        session.clone(),
+        PlaybackSession {
+            user_id: user_id.clone(),
+            expires_at: Instant::now() + Duration::from_secs(PLAYBACK_SESSION_TTL_SECONDS),
+        },
+    );
+
+    let session_dir_for_task = session_dir.clone();
+    let session_for_task = session.clone();
+    tokio::spawn(async move {
+        if let Err(e) = run_ffmpeg(&arguments, &session_dir_for_task.to_string_lossy()).await {
+            error!("playback ffmpeg failed for session {}: {}", session_for_task, e);
+            PLAYBACK_SESSIONS.lock().unwrap().remove(&session_for_task);
+            let _ = fs::remove_dir_all(&session_dir_for_task).await;
+        }
+    });
+
+    let playlist_path = session_dir.join(&playlist_name);
+    let ready_deadline = Instant::now() + Duration::from_secs(PLAYLIST_READY_TIMEOUT_SECONDS);
+    while !playlist_path.exists() && Instant::now() < ready_deadline {
+        sleep(Duration::from_millis(200)).await;
+    }
+
+    if !playlist_path.exists() {
+        PLAYBACK_SESSIONS.lock().unwrap().remove(&session);
+        let _ = fs::remove_dir_all(&session_dir).await;
         return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"ok": false, "error": format!("ffmpeg: {e}")})),
+            StatusCode::GATEWAY_TIMEOUT,
+            Json(json!({
+                "ok": false,
+                "error": "playlist was not generated within the startup timeout"
+            })),
         )
             .into_response();
     }
 
-    // Step 10: Return the playlist URL and playback metadata to the frontend.
     let playlist = format!("/hls/{}/master.m3u8", session);
     (
         StatusCode::OK,
@@ -307,23 +314,16 @@ pub async fn request_play(
             "ok": true,
             "session": session,
             "playlist": playlist,
-            "video_id": v.id,
-            "title": v.title,
-            "price_cents": v.price_cents,
-            "segment_seconds": seg_secs
+            "video_id": video.id,
+            "title": video.title,
+            "price_cents": video.price_cents,
+            "segment_seconds": segment_seconds,
+            "expires_in_seconds": PLAYBACK_SESSION_TTL_SECONDS
         })),
     )
         .into_response()
 }
 
-/// Resolves a database filename into an existing media source path.
-///
-/// Search order:
-/// 1. Existing absolute path.
-/// 2. Configured upload directory.
-/// 3. Configured media directory.
-/// 4. Legacy `uploads` directory.
-/// 5. Current working directory.
 fn resolve_input_path(cfg: &Config, filename_in_db: &str) -> Option<PathBuf> {
     let path = PathBuf::from(filename_in_db);
 
@@ -332,23 +332,20 @@ fn resolve_input_path(cfg: &Config, filename_in_db: &str) -> Option<PathBuf> {
     }
 
     if !cfg.upload_dir.trim().is_empty() {
-        let mut upload_candidate = PathBuf::from(&cfg.upload_dir);
-        upload_candidate.push(filename_in_db);
-        if upload_candidate.exists() {
-            return Some(upload_candidate);
+        let candidate = PathBuf::from(&cfg.upload_dir).join(filename_in_db);
+        if candidate.exists() {
+            return Some(candidate);
         }
     }
 
-    let mut media_candidate = PathBuf::from(&cfg.media_dir);
-    media_candidate.push(filename_in_db);
+    let media_candidate = PathBuf::from(&cfg.media_dir).join(filename_in_db);
     if media_candidate.exists() {
         return Some(media_candidate);
     }
 
-    let mut legacy_upload_candidate = PathBuf::from("uploads");
-    legacy_upload_candidate.push(filename_in_db);
-    if legacy_upload_candidate.exists() {
-        return Some(legacy_upload_candidate);
+    let legacy_candidate = PathBuf::from("uploads").join(filename_in_db);
+    if legacy_candidate.exists() {
+        return Some(legacy_candidate);
     }
 
     if Path::new(filename_in_db).exists() {
@@ -358,27 +355,72 @@ fn resolve_input_path(cfg: &Config, filename_in_db: &str) -> Option<PathBuf> {
     None
 }
 
-/// Streams one HLS playlist or segment from a playback session directory.
-///
-/// Route format: `GET /hls/:session/:file`
-///
-/// The function validates both path components, opens the file asynchronously,
-/// applies the correct content type, disables caching, and streams bytes without
-/// loading the complete file into memory.
+async fn cleanup_expired_sessions(hls_root: &str) -> std::io::Result<()> {
+    let expired_session_ids: Vec<String> = {
+        let mut sessions = PLAYBACK_SESSIONS.lock().unwrap();
+        let now = Instant::now();
+        let expired: Vec<String> = sessions
+            .iter()
+            .filter(|(_, session)| session.expires_at <= now)
+            .map(|(session_id, _)| session_id.clone())
+            .collect();
+        for session_id in &expired {
+            sessions.remove(session_id);
+        }
+        expired
+    };
+
+    for session_id in expired_session_ids {
+        let path = Path::new(hls_root).join(session_id);
+        match fs::remove_dir_all(path).await {
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e),
+        }
+    }
+
+    Ok(())
+}
+
 pub async fn serve_hls(
     State(st): State<StreamState>,
+    cookies: Cookies,
     AxumPath((session, file)): AxumPath<(String, String)>,
 ) -> impl IntoResponse {
-    // Reject unsafe path components before joining them with the HLS root.
     if !is_safe_token(&session) || !is_safe_file(&file) {
         return (StatusCode::BAD_REQUEST, "invalid path").into_response();
+    }
+
+    let (current_user_id, _) = match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await {
+        Some(value) => value,
+        None => return (StatusCode::UNAUTHORIZED, "not logged in").into_response(),
+    };
+
+    let session_record = {
+        let mut session_map = PLAYBACK_SESSIONS.lock().unwrap();
+        match session_map.get(&session).cloned() {
+            Some(record) if record.expires_at > Instant::now() => Some(record),
+            Some(_) => {
+                session_map.remove(&session);
+                None
+            }
+            None => None,
+        }
+    };
+
+    let Some(session_record) = session_record else {
+        let _ = fs::remove_dir_all(Path::new(&st.cfg.hls_root).join(&session)).await;
+        return (StatusCode::GONE, "playback session expired").into_response();
+    };
+
+    if session_record.user_id != current_user_id {
+        return (StatusCode::FORBIDDEN, "session does not belong to this user").into_response();
     }
 
     let file_path = Path::new(&st.cfg.hls_root).join(&session).join(&file);
 
     match fs::File::open(&file_path).await {
         Ok(file_handle) => {
-            // Determine the response MIME type from the filename extension.
             let content_type = match file_type(&file) {
                 FileType::M3U8 => "application/vnd.apple.mpegurl",
                 FileType::TS => "video/mp2t",
@@ -392,15 +434,11 @@ pub async fn serve_hls(
                 header::CONTENT_TYPE,
                 HeaderValue::from_static(content_type),
             );
-
-            // Session-specific watermarked output should not be retained by
-            // browsers or intermediary caches.
             headers.insert(
                 header::CACHE_CONTROL,
                 HeaderValue::from_static("no-store"),
             );
 
-            // Convert the asynchronous file handle into a streaming HTTP body.
             let stream = ReaderStream::new(file_handle);
             (
                 StatusCode::OK,
@@ -409,11 +447,13 @@ pub async fn serve_hls(
             )
                 .into_response()
         }
-        Err(_) => (StatusCode::NOT_FOUND, "segment not found").into_response(),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            (StatusCode::NOT_FOUND, "segment not found").into_response()
+        }
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "segment read failed").into_response(),
     }
 }
 
-/// Media file types supported by the HLS delivery endpoint.
 #[derive(Debug, Clone, Copy)]
 enum FileType {
     M3U8,
@@ -423,7 +463,6 @@ enum FileType {
     Unknown,
 }
 
-/// Classifies a requested filename so the correct HTTP content type can be used.
 fn file_type(name: &str) -> FileType {
     let lower = name.to_ascii_lowercase();
 
@@ -440,28 +479,21 @@ fn file_type(name: &str) -> FileType {
     }
 }
 
-/// Validates a playback session identifier.
-///
-/// UUID session IDs contain alphanumeric characters and hyphens. Underscores
-/// are also accepted for compatibility with possible future token formats.
 fn is_safe_token(value: &str) -> bool {
     !value.is_empty()
         && value
             .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+            .all(|character| character.is_ascii_alphanumeric() || character == '-' || character == '_')
 }
 
-/// Validates one HLS filename and prevents path traversal.
-///
-/// Directory separators and parent-directory markers are rejected. Only known
-/// playlist and media file extensions are permitted.
 fn is_safe_file(value: &str) -> bool {
+    let lower = value.to_ascii_lowercase();
     !value.is_empty()
         && !value.contains('/')
         && !value.contains('\\')
         && !value.contains("..")
-        && (value.ends_with(".m3u8")
-            || value.ends_with(".ts")
-            || value.ends_with(".m4s")
-            || value.ends_with(".mp4"))
+        && (lower.ends_with(".m3u8")
+            || lower.ends_with(".ts")
+            || lower.ends_with(".m4s")
+            || lower.ends_with(".mp4"))
 }
