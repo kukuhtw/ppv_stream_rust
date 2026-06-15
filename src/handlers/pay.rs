@@ -1,52 +1,58 @@
 // src/handlers/pay.rs
-// src/handlers/pay.rs
+//
+// Payment option, x402 invoice, cryptocurrency price, and payment confirmation handlers.
+//
+// This module is responsible for:
+// 1. Returning the payment methods supported for a video.
+// 2. Creating an x402 invoice and signing the payment authorization payload.
+// 3. Fetching and caching cryptocurrency market prices.
+// 4. Verifying an EVM transaction receipt and decoding the Paid smart contract event.
+// 5. Marking invoices as paid or underpaid.
+// 6. Unlocking purchased video access through purchases and allowlist records.
 
 use axum::{
     extract::{Query, State},
     response::IntoResponse,
     Json,
 };
+use ethabi::{Event, EventParam, ParamType, RawLog, Token as EventToken};
+use ethereum_types::H256;
+use ethers::abi::{encode as abi_encode, Token as AbiToken};
+use ethers::core::utils::keccak256;
+use ethers::signers::LocalWallet;
+use ethers::types::{Address, Signature, U256};
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use sqlx::types::BigDecimal;
 use sqlx::Row;
+use std::collections::HashMap;
+use std::str::FromStr;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use tower_cookies::Cookies;
 use uuid::Uuid;
 
+use crate::handlers::video::VideoState;
 use crate::sessions;
 
-// ===== tambahan util & cache untuk harga =====
-use once_cell::sync::Lazy;
-use std::collections::HashMap;
-use std::sync::Mutex;
-use std::time::{Duration, Instant};
-
-// ===== HEX utils =====
-use hex;
-
-// ===== tipe untuk NUMERIC =====
-use sqlx::types::BigDecimal;
-use std::str::FromStr;
-
-// ===== eth log decoding (ethabi) =====
-use ethabi::{Event, EventParam, ParamType, RawLog, Token as EvtToken};
-use ethereum_types::H256;
-
-// Gunakan VideoState dari modul video.
-use crate::handlers::video::VideoState;
-
-/* ============================================================
-   GET /api/pay/options?video_id=VID
-   ============================================================ */
+/// Returns the available payment configuration for one video.
+///
+/// Route: `GET /api/pay/options?video_id=<id>`
+///
+/// The response contains the video price, creator wallet information, preferred
+/// creator chain, and all active token configurations from `pay_tokens`.
 pub async fn pay_options(
     State(st): State<VideoState>,
-    Query(q): Query<std::collections::HashMap<String, String>>,
+    Query(query): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
-    let video_id = q.get("video_id").cloned().unwrap_or_default();
+    // Read the required video ID from the query string.
+    let video_id = query.get("video_id").cloned().unwrap_or_default();
     if video_id.is_empty() {
         return Json(json!({"ok": false, "error": "video_id required"}));
     }
 
-    // Ambil meta video + owner
+    // Load the requested video together with the creator wallet settings.
     let row = match sqlx::query(
         r#"
         SELECT v.id, v.price_cents, v.owner_id, u.wallet_account, u.wallet_chain_id
@@ -60,17 +66,18 @@ pub async fn pay_options(
     .fetch_optional(&st.pool)
     .await
     {
-        Ok(r) => r,
+        Ok(row) => row,
         Err(e) => {
             return Json(json!({"ok": false, "error": format!("db error: {e}")}));
         }
     };
 
-    let Some(vmeta) = row else {
+    let Some(video_metadata) = row else {
         return Json(json!({"ok": false, "error": "video not found"}));
     };
 
-    // Ambil daftar token (kompatibel erc20_address / erc20)
+    // Load every active payment token. COALESCE supports both the current
+    // `erc20_address` column and the legacy `erc20` column.
     let tokens = sqlx::query(
         r#"
         SELECT chain, chain_id, symbol, decimals,
@@ -84,48 +91,63 @@ pub async fn pay_options(
     .await
     .unwrap_or_default();
 
+    // Convert database rows into the frontend payment option response.
     Json(json!({
         "ok": true,
         "video_id": video_id,
-        "price_cents": vmeta.try_get::<i64,_>("price_cents").unwrap_or(0),
-        "creator_id": vmeta.try_get::<String,_>("owner_id").unwrap_or_default(),
-        "creator_wallet": vmeta.try_get::<Option<String>,_>("wallet_account").ok().flatten(),
-        "creator_chain_id": vmeta.try_get::<Option<i64>,_>("wallet_chain_id").ok().flatten(),
-        "tokens": tokens.iter().map(|t| json!({
-            "chain": t.try_get::<String,_>("chain").unwrap_or_default(),
-            "chain_id": t.try_get::<i64,_>("chain_id").unwrap_or_default(),
-            "symbol": t.try_get::<String,_>("symbol").unwrap_or_default(),
-            "decimals": t.try_get::<i32,_>("decimals").unwrap_or_default(),
-            // Frontend field "erc20" diisi dari kolom yg kompatibel
-            "erc20": t.try_get::<Option<String>,_>("erc20_address").ok().flatten(),
-        })).collect::<Vec<_>>()
+        "price_cents": video_metadata.try_get::<i64, _>("price_cents").unwrap_or(0),
+        "creator_id": video_metadata
+            .try_get::<String, _>("owner_id")
+            .unwrap_or_default(),
+        "creator_wallet": video_metadata
+            .try_get::<Option<String>, _>("wallet_account")
+            .ok()
+            .flatten(),
+        "creator_chain_id": video_metadata
+            .try_get::<Option<i64>, _>("wallet_chain_id")
+            .ok()
+            .flatten(),
+        "tokens": tokens
+            .iter()
+            .map(|token| {
+                json!({
+                    "chain": token.try_get::<String, _>("chain").unwrap_or_default(),
+                    "chain_id": token.try_get::<i64, _>("chain_id").unwrap_or_default(),
+                    "symbol": token.try_get::<String, _>("symbol").unwrap_or_default(),
+                    "decimals": token.try_get::<i32, _>("decimals").unwrap_or_default(),
+                    "erc20": token
+                        .try_get::<Option<String>, _>("erc20_address")
+                        .ok()
+                        .flatten(),
+                })
+            })
+            .collect::<Vec<_>>()
     }))
 }
 
-/* ============================================================
-   POST /api/pay/x402/start
-   ============================================================ */
+/// JSON request body accepted by `POST /api/pay/x402/start`.
 #[derive(Deserialize)]
 pub struct StartPayReq {
     pub video_id: String,
     pub chain_id: i64,
     pub symbol: String,
     pub token_address: Option<String>,
-    pub payer_address: String, // <— diperlukan untuk payload signature
+    pub payer_address: String,
 }
 
+/// JSON response returned after an x402 payment invoice is created and signed.
 #[derive(Serialize)]
 pub struct StartPayResp {
     pub ok: bool,
     pub invoice_uid: String,
-    pub invoice_uid_bytes32: String, // 0x…32 bytes keccak(invoice_uid)
+    pub invoice_uid_bytes32: String,
     pub video_id: String,
     pub chain_id: i64,
     pub symbol: String,
     pub token_address: Option<String>,
-    pub amount_wei: String,          // nominal yang harus dibayar (string decimal)
-    pub min_amount_wei: String,      // sama dengan amount_wei, untuk verifikasi onchain
-    pub deadline: u64,               // unix ts
+    pub amount_wei: String,
+    pub min_amount_wei: String,
+    pub deadline: u64,
     pub v: u8,
     pub r: String,
     pub s: String,
@@ -135,35 +157,44 @@ pub struct StartPayResp {
     pub creator_wallet: String,
 }
 
-// ===== ethers untuk keccak256, abi-encode & signing =====
-use ethers::abi::{encode as abi_encode, Token as AbiToken};
-use ethers::core::utils::keccak256;
-// use ethers::signers::{LocalWallet, Signer};
-use ethers::types::{Address, Signature, U256};
-use ethers::signers::LocalWallet;
-
+/// Creates a pending x402 invoice and signs the smart contract authorization payload.
+///
+/// Route: `POST /api/pay/x402/start`
+///
+/// Flow:
+/// 1. Authenticate the buyer.
+/// 2. Validate the payer address and payment parameters.
+/// 3. Load video, creator wallet, and token metadata.
+/// 4. Convert the configured price into token base units.
+/// 5. Create and persist a pending invoice.
+/// 6. ABI encode and hash the contract verification payload.
+/// 7. Sign the payload using the administrative signing key.
+/// 8. Return invoice and signature fields to the frontend.
 pub async fn x402_start(
     State(st): State<VideoState>,
     cookies: Cookies,
     Json(body): Json<StartPayReq>,
 ) -> impl IntoResponse {
-    let (buyer_id, _) = match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await { 
-        Some(v) => v,
+    // Authenticate the buyer from the signed session cookie.
+    let (buyer_id, _) = match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await {
+        Some(value) => value,
         None => return Json(json!({"ok": false, "error": "not logged in"})),
     };
 
+    // Validate mandatory payment fields before querying the database.
     if body.video_id.is_empty() || body.chain_id == 0 || body.symbol.is_empty() {
         return Json(json!({"ok": false, "error": "invalid params"}));
     }
 
-    // ===== validasi payer_address dari frontend =====
-    let payer_addr = match Address::from_str(&body.payer_address) {
-        Ok(a) => a,
+    // Parse and validate the buyer wallet as an EVM address. The payer address
+    // becomes part of the signed smart contract authorization payload.
+    let payer_address = match Address::from_str(&body.payer_address) {
+        Ok(address) => address,
         Err(_) => return Json(json!({"ok": false, "error": "invalid payer_address"})),
     };
 
-    // ===== ambil meta video & kreator =====
-    let vmeta = sqlx::query(
+    // Load the video price, creator ID, and creator wallet.
+    let video_metadata = sqlx::query(
         r#"
         SELECT v.price_cents, v.owner_id, u.wallet_account
         FROM videos v
@@ -177,21 +208,25 @@ pub async fn x402_start(
     .await
     .unwrap_or(None);
 
-    let Some(vmeta) = vmeta else {
+    let Some(video_metadata) = video_metadata else {
         return Json(json!({"ok": false, "error": "video not found"}));
     };
 
-    let creator_wallet_str = match vmeta.try_get::<Option<String>, _>("wallet_account") {
-        Ok(Some(w)) if !w.is_empty() => w,
+    // A creator wallet is required because the smart contract splits payment
+    // between the creator and platform administrator.
+    let creator_wallet_string = match video_metadata.try_get::<Option<String>, _>("wallet_account") {
+        Ok(Some(wallet)) if !wallet.is_empty() => wallet,
         _ => return Json(json!({"ok": false, "error": "creator has no wallet"})),
     };
-    let creator_addr = match Address::from_str(&creator_wallet_str) {
-        Ok(a) => a,
+
+    let creator_address = match Address::from_str(&creator_wallet_string) {
+        Ok(address) => address,
         Err(_) => return Json(json!({"ok": false, "error": "invalid creator wallet"})),
     };
 
-    // ===== token info =====
-    let tinfo = sqlx::query(
+    // Validate that the requested token configuration is active and matches
+    // the selected chain, symbol, and optional token contract address.
+    let token_info = sqlx::query(
         r#"
         SELECT decimals,
                COALESCE(erc20_address, erc20) AS erc20_address
@@ -209,33 +244,46 @@ pub async fn x402_start(
     .await
     .unwrap_or(None);
 
-    let Some(tinfo) = tinfo else {
+    let Some(token_info) = token_info else {
         return Json(json!({"ok": false, "error": "token not supported"}));
     };
 
-    let decimals = tinfo.try_get::<i32, _>("decimals").unwrap_or(18) as u32;
-    let price_cents: i64 = vmeta.try_get::<i64, _>("price_cents").unwrap_or(0);
+    let decimals = token_info
+        .try_get::<i32, _>("decimals")
+        .unwrap_or(18) as u32;
+    let price_cents: i64 = video_metadata
+        .try_get::<i64, _>("price_cents")
+        .unwrap_or(0);
 
-    // cents -> wei (ceil)
+    // Convert price cents into token base units and round upward. For example,
+    // an 18-decimal token uses 10^18 base units per whole token.
     let token_amount_wei: u128 = if price_cents <= 0 {
         0
     } else {
-        let num = (price_cents as u128).saturating_mul(10u128.pow(decimals));
-        num.saturating_add(99) / 100
+        let numerator = (price_cents as u128).saturating_mul(10u128.pow(decimals));
+        numerator.saturating_add(99) / 100
     };
+
     if token_amount_wei == 0 {
-        return Json(json!({"ok": false, "error": "calculated amount is zero"}));
+        return Json(json!({
+            "ok": false,
+            "error": "calculated amount is zero"
+        }));
     }
 
-    // ===== buat invoice uid + hash =====
+    // Generate an application invoice ID and its bytes32 Keccak hash. The hash
+    // is used as the indexed invoice UID in the smart contract Paid event.
     let invoice_uid = Uuid::new_v4().to_string();
     let invoice_uid_bytes32 = H256::from_slice(&keccak256(invoice_uid.as_bytes()));
-
-    // simpan ke DB
-    let token_amount_bd = BigDecimal::from_str(&token_amount_wei.to_string())
-        .unwrap_or_else(|_| BigDecimal::from(0));
     let invoice_uid_hash_hex = format!("{:#066x}", invoice_uid_bytes32);
 
+    // PostgreSQL NUMERIC values are represented through BigDecimal so token
+    // amounts are stored without floating point precision loss.
+    let token_amount_decimal = BigDecimal::from_str(&token_amount_wei.to_string())
+        .unwrap_or_else(|_| BigDecimal::from(0));
+
+    // Persist a pending invoice before returning the signing payload. The stored
+    // invoice is later matched against the on-chain Paid event.
     let _ = sqlx::query(
         r#"
         INSERT INTO x402_invoices
@@ -254,68 +302,82 @@ pub async fn x402_start(
     .bind(&invoice_uid_hash_hex)
     .bind(&buyer_id)
     .bind(&body.video_id)
-    .bind(vmeta.try_get::<String, _>("owner_id").unwrap_or_default())
+    .bind(
+        video_metadata
+            .try_get::<String, _>("owner_id")
+            .unwrap_or_default(),
+    )
     .bind(body.chain_id)
     .bind(&body.symbol)
     .bind(&body.token_address)
     .bind(price_cents)
-    .bind(&token_amount_bd)
-    .bind(&token_amount_bd)
+    .bind(&token_amount_decimal)
+    .bind(&token_amount_decimal)
     .execute(&st.pool)
     .await;
 
-    // ===== siapkan nilai yang ditandatangani =====
+    // Load the target smart contract address. The frontend is expected to
+    // perform an additional deployed-code validation before submitting payment.
     let x402_contract = std::env::var("X402_CONTRACT_ADDRESS").unwrap_or_default();
-    let _contract_addr = match Address::from_str(&x402_contract) {
-        Ok(a) => a,
-        Err(_) => Address::zero(), // front-end juga mengecek code!=0
-    };
+    let _contract_address = Address::from_str(&x402_contract).unwrap_or(Address::zero());
 
-    let token_addr = if let Some(t) = &body.token_address {
-        Address::from_str(t).unwrap_or(Address::zero())
-    } else {
-        Address::zero() // native
-    };
+    // A missing token address represents payment with the native chain asset.
+    let token_address = body
+        .token_address
+        .as_deref()
+        .and_then(|value| Address::from_str(value).ok())
+        .unwrap_or(Address::zero());
 
-    let creator_bp: u16 = 9000;
-    let min_amount_wei = U256::from_dec_str(&token_amount_wei.to_string()).unwrap();
-    let deadline: u64 = (chrono::Utc::now().timestamp() as u64) + 900; // 15 menit
+    // The creator receives 90 percent and the administrator receives 10 percent.
+    // Basis points use 10,000 as 100 percent.
+    let creator_basis_points: u16 = 9000;
+    let minimum_amount_wei = U256::from_dec_str(&token_amount_wei.to_string()).unwrap();
+    let deadline: u64 = (chrono::Utc::now().timestamp() as u64) + 900;
     let video_hash = H256::from_slice(&keccak256(body.video_id.as_bytes()));
 
-    // ABI-encode sesuai _verify(...) di kontrak
-    // (invoiceUid, token, minAmountWei, creator, creatorBp, keccak256(videoId), payer, deadline)
-    let encoded = abi_encode(&[
+    // ABI encode values in the exact order expected by the smart contract
+    // verification function.
+    let encoded_payload = abi_encode(&[
         AbiToken::FixedBytes(invoice_uid_bytes32.as_bytes().to_vec()),
-        AbiToken::Address(token_addr),
-        AbiToken::Uint(min_amount_wei),
-        AbiToken::Address(creator_addr),
-        AbiToken::Uint(U256::from(creator_bp)),
+        AbiToken::Address(token_address),
+        AbiToken::Uint(minimum_amount_wei),
+        AbiToken::Address(creator_address),
+        AbiToken::Uint(U256::from(creator_basis_points)),
         AbiToken::FixedBytes(video_hash.as_bytes().to_vec()),
-        AbiToken::Address(payer_addr),
+        AbiToken::Address(payer_address),
         AbiToken::Uint(U256::from(deadline)),
     ]);
-    let msg_hash = H256::from_slice(&keccak256(&encoded));
-    // EIP-191 "\x19Ethereum Signed Message:\n32"
-    let eth_hash = H256::from_slice(
-        &keccak256([b"\x19Ethereum Signed Message:\n32", msg_hash.as_bytes()].concat()),
-    );
 
-    // Sign pakai private key admin
-    let admin_pk = std::env::var("X402_ADMIN_PRIVKEY").unwrap_or_default();
-    if admin_pk.is_empty() {
-        return Json(json!({"ok": false, "error": "X402_ADMIN_PRIVKEY not set"}));
+    // Hash the ABI payload and then apply the EIP-191 personal-sign prefix for
+    // a 32-byte message.
+    let message_hash = H256::from_slice(&keccak256(&encoded_payload));
+    let ethereum_signed_hash = H256::from_slice(&keccak256(
+        [b"\x19Ethereum Signed Message:\n32", message_hash.as_bytes()].concat(),
+    ));
+
+    // The administrative private key signs the authorization payload. The key
+    // must only be supplied through secure runtime configuration.
+    let admin_private_key = std::env::var("X402_ADMIN_PRIVKEY").unwrap_or_default();
+    if admin_private_key.is_empty() {
+        return Json(json!({
+            "ok": false,
+            "error": "X402_ADMIN_PRIVKEY not set"
+        }));
     }
-    let admin_wallet: LocalWallet = match admin_pk.parse() {
-        Ok(w) => w,
+
+    let admin_wallet: LocalWallet = match admin_private_key.parse() {
+        Ok(wallet) => wallet,
         Err(_) => return Json(json!({"ok": false, "error": "bad admin privkey"})),
     };
-    // sign_hash adalah sinkron (tidak perlu .await)
-    let sig: Signature = match admin_wallet.sign_hash(eth_hash) {
-        Ok(s) => s,
+
+    // `sign_hash` is synchronous because the private key is available locally.
+    let signature: Signature = match admin_wallet.sign_hash(ethereum_signed_hash) {
+        Ok(signature) => signature,
         Err(e) => return Json(json!({"ok": false, "error": format!("sign: {e}")})),
     };
 
-    let resp = StartPayResp {
+    // Return all values required by the frontend to call the smart contract.
+    let response = StartPayResp {
         ok: true,
         invoice_uid,
         invoice_uid_bytes32: format!("{:#066x}", invoice_uid_bytes32),
@@ -324,180 +386,255 @@ pub async fn x402_start(
         symbol: body.symbol,
         token_address: body.token_address,
         amount_wei: token_amount_wei.to_string(),
-        min_amount_wei: min_amount_wei.to_string(),
+        min_amount_wei: minimum_amount_wei.to_string(),
         deadline,
-        v: sig.v as u8,
-        r: format!("{:#066x}", sig.r),
-        s: format!("{:#066x}", sig.s),
+        v: signature.v as u8,
+        r: format!("{:#066x}", signature.r),
+        s: format!("{:#066x}", signature.s),
         split_creator_bp: 9000,
         split_admin_bp: 1000,
         x402_contract,
-        creator_wallet: creator_wallet_str,
+        creator_wallet: creator_wallet_string,
     };
 
-    Json(json!(resp))
+    Json(json!(response))
 }
 
-/* ============================================================
-   GET /api/crypto_price?ids=ethereum,usd-coin&vs=idr,usd
-   ============================================================ */
-
+/// One in-memory cryptocurrency price cache entry.
 #[derive(Clone, Debug)]
 struct CacheEntry {
+    /// Time at which the response was cached.
     at: Instant,
+    /// Raw CoinGecko JSON response.
     json: serde_json::Value,
 }
 
+/// Process-local cryptocurrency price cache protected by a mutex.
 static PRICE_CACHE: Lazy<Mutex<HashMap<String, CacheEntry>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
+/// Query parameters accepted by `GET /api/crypto_price`.
 #[derive(Deserialize)]
 pub struct PriceQs {
-    pub ids: String,        // contoh: ethereum,usd-coin,polygon-pos
-    pub vs: Option<String>, // contoh: idr,usd (default: idr)
+    /// Comma-separated CoinGecko asset IDs.
+    pub ids: String,
+    /// Optional comma-separated quote currencies. Defaults to IDR.
+    pub vs: Option<String>,
 }
 
-pub async fn crypto_price(Query(q): Query<PriceQs>) -> impl IntoResponse {
-    let ids = q.ids.trim();
+/// Fetches cryptocurrency prices from CoinGecko with a sixty-second memory cache.
+///
+/// Route example:
+/// `GET /api/crypto_price?ids=ethereum,usd-coin&vs=idr,usd`
+pub async fn crypto_price(Query(query): Query<PriceQs>) -> impl IntoResponse {
+    let ids = query.ids.trim();
     if ids.is_empty() {
         return Json(json!({"ok": false, "error": "ids required"}));
     }
-    let vs = q.vs.unwrap_or_else(|| "idr".to_string());
 
-    let key = format!("{}|{}", ids, vs);
+    let quote_currencies = query.vs.unwrap_or_else(|| "idr".to_string());
+    let cache_key = format!("{}|{}", ids, quote_currencies);
 
-    // 1) Cache 60 detik
-    if let Some(hit) = PRICE_CACHE.lock().unwrap().get(&key) {
-        if hit.at.elapsed() < Duration::from_secs(60) {
-            return Json(json!({"ok": true, "data": hit.json}));
+    // Return a cached response while it is younger than sixty seconds.
+    if let Some(cache_hit) = PRICE_CACHE.lock().unwrap().get(&cache_key) {
+        if cache_hit.at.elapsed() < Duration::from_secs(60) {
+            return Json(json!({"ok": true, "data": cache_hit.json}));
         }
     }
 
-    // 2) Panggil CoinGecko
+    // Build the CoinGecko simple-price endpoint using encoded query parameters.
     let mut url = reqwest::Url::parse("https://api.coingecko.com/api/v3/simple/price")
-        .expect("hardcoded url valid");
+        .expect("hardcoded CoinGecko URL must be valid");
     url.query_pairs_mut()
         .append_pair("ids", ids)
-        .append_pair("vs_currencies", &vs);
+        .append_pair("vs_currencies", &quote_currencies);
 
+    // Fetch, parse, cache, and return the external price response.
     match reqwest::Client::new().get(url).send().await {
-        Ok(resp) if resp.status().is_success() => match resp.json::<serde_json::Value>().await {
-            Ok(val) => {
-                PRICE_CACHE.lock().unwrap().insert(
-                    key.clone(),
-                    CacheEntry {
-                        at: Instant::now(),
-                        json: val.clone(),
-                    },
-                );
-                Json(json!({"ok": true, "data": val}))
+        Ok(response) if response.status().is_success() => {
+            match response.json::<serde_json::Value>().await {
+                Ok(value) => {
+                    PRICE_CACHE.lock().unwrap().insert(
+                        cache_key,
+                        CacheEntry {
+                            at: Instant::now(),
+                            json: value.clone(),
+                        },
+                    );
+                    Json(json!({"ok": true, "data": value}))
+                }
+                Err(e) => Json(json!({"ok": false, "error": format!("parse: {e}")})),
             }
-            Err(e) => Json(json!({"ok": false, "error": format!("parse: {e}")})),
-        },
-        Ok(resp) => {
-            let code = resp.status();
-            Json(json!({"ok": false, "error": format!("coingecko http {code}")}))
         }
+        Ok(response) => Json(json!({
+            "ok": false,
+            "error": format!("coingecko http {}", response.status())
+        })),
         Err(e) => Json(json!({"ok": false, "error": format!("fetch: {e}")})),
     }
 }
 
-/* ============================================================
-   POST /api/pay/x402/confirm
-   ============================================================ */
+/// JSON request body accepted by `POST /api/pay/x402/confirm`.
 #[derive(Deserialize)]
 pub struct ConfirmReq {
     pub invoice_uid: String,
     pub tx_hash: String,
 }
 
+/// Defines the smart contract `Paid` event ABI used to decode transaction logs.
+///
+/// Solidity event:
+/// `Paid(bytes32 invoiceUid, address payer, address creator, address admin,
+/// address token, uint256 amountWei, string videoId)`
 fn paid_event_abi() -> Event {
-    // event Paid(bytes32 indexed invoiceUid, address indexed payer, address indexed creator,
-    //            address admin, address token, uint256 amountWei, string videoId)
     Event {
         name: "Paid".to_string(),
         inputs: vec![
-            EventParam { name: "invoiceUid".into(), kind: ParamType::FixedBytes(32), indexed: true },
-            EventParam { name: "payer".into(),      kind: ParamType::Address,        indexed: true },
-            EventParam { name: "creator".into(),    kind: ParamType::Address,        indexed: true },
-            EventParam { name: "admin".into(),      kind: ParamType::Address,        indexed: false },
-            EventParam { name: "token".into(),      kind: ParamType::Address,        indexed: false },
-            EventParam { name: "amountWei".into(),  kind: ParamType::Uint(256),      indexed: false },
-            EventParam { name: "videoId".into(),    kind: ParamType::String,         indexed: false },
+            EventParam {
+                name: "invoiceUid".into(),
+                kind: ParamType::FixedBytes(32),
+                indexed: true,
+            },
+            EventParam {
+                name: "payer".into(),
+                kind: ParamType::Address,
+                indexed: true,
+            },
+            EventParam {
+                name: "creator".into(),
+                kind: ParamType::Address,
+                indexed: true,
+            },
+            EventParam {
+                name: "admin".into(),
+                kind: ParamType::Address,
+                indexed: false,
+            },
+            EventParam {
+                name: "token".into(),
+                kind: ParamType::Address,
+                indexed: false,
+            },
+            EventParam {
+                name: "amountWei".into(),
+                kind: ParamType::Uint(256),
+                indexed: false,
+            },
+            EventParam {
+                name: "videoId".into(),
+                kind: ParamType::String,
+                indexed: false,
+            },
         ],
         anonymous: false,
     }
 }
 
+/// Confirms an x402 payment by verifying the on-chain transaction receipt.
+///
+/// Route: `POST /api/pay/x402/confirm`
+///
+/// Verification flow:
+/// 1. Load the expected invoice from PostgreSQL.
+/// 2. Fetch the transaction receipt from the configured EVM RPC endpoint.
+/// 3. Require a successful transaction status.
+/// 4. Locate a Paid event emitted by the configured x402 contract.
+/// 5. Match the indexed invoice UID and decode amount and video ID.
+/// 6. Compare the paid amount against the required amount.
+/// 7. Update invoice status.
+/// 8. Create purchase and allowlist records when fully paid.
 pub async fn x402_confirm(
     State(st): State<VideoState>,
-    Json(b): Json<ConfirmReq>,
+    Json(body): Json<ConfirmReq>,
 ) -> impl IntoResponse {
-    if b.invoice_uid.is_empty() || b.tx_hash.is_empty() {
+    // Reject incomplete confirmation requests.
+    if body.invoice_uid.is_empty() || body.tx_hash.is_empty() {
         return Json(json!({"ok": false, "error": "invalid params"}));
     }
 
-    // Ambil invoice (butuh required_amount_wei untuk validasi)
-    let inv = sqlx::query!(
+    // Load the invoice and required token amount used for receipt validation.
+    let invoice = sqlx::query!(
         r#"
         SELECT id, user_id, video_id, invoice_uid, invoice_uid_hash, required_amount_wei
         FROM x402_invoices
         WHERE invoice_uid=$1
         LIMIT 1
         "#,
-        b.invoice_uid
+        body.invoice_uid
     )
     .fetch_optional(&st.pool)
     .await
     .unwrap_or(None);
 
-    let Some(inv) = inv else {
+    let Some(invoice) = invoice else {
         return Json(json!({"ok": false, "error": "invoice not found"}));
     };
 
-    // RPC HTTP wajib tersedia
-    let rpc = std::env::var("X402_RPC_HTTP").unwrap_or_default();
-    if rpc.is_empty() {
+    // The HTTP RPC endpoint is required to fetch the transaction receipt.
+    let rpc_url = std::env::var("X402_RPC_HTTP").unwrap_or_default();
+    if rpc_url.is_empty() {
         return Json(json!({"ok": false, "error": "X402_RPC_HTTP not set"}));
     }
 
-    // Ambil receipt
-    let payload = serde_json::json!({
-      "jsonrpc":"2.0","id":1,"method":"eth_getTransactionReceipt","params":[b.tx_hash]
+    // Build an Ethereum JSON-RPC request for `eth_getTransactionReceipt`.
+    let rpc_payload = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_getTransactionReceipt",
+        "params": [body.tx_hash]
     });
 
-    let resp = match reqwest::Client::new().post(&rpc).json(&payload).send().await {
-        Ok(r) => r,
+    let rpc_response = match reqwest::Client::new()
+        .post(&rpc_url)
+        .json(&rpc_payload)
+        .send()
+        .await
+    {
+        Ok(response) => response,
         Err(e) => return Json(json!({"ok": false, "error": format!("rpc: {e}")})),
     };
 
-    let receipt: serde_json::Value = match resp.json().await {
-        Ok(v) => v,
-        Err(e) => return Json(json!({"ok": false, "error": format!("rpc parse: {e}")})),
+    let receipt: serde_json::Value = match rpc_response.json().await {
+        Ok(receipt) => receipt,
+        Err(e) => {
+            return Json(json!({
+                "ok": false,
+                "error": format!("rpc parse: {e}")
+            }))
+        }
     };
 
-    let status_hex = receipt.pointer("/result/status").and_then(|v| v.as_str()).unwrap_or("0x0");
-    if status_hex != "0x1" {
+    // Ethereum receipt status `0x1` means the transaction executed successfully.
+    let transaction_status = receipt
+        .pointer("/result/status")
+        .and_then(|value| value.as_str())
+        .unwrap_or("0x0");
+
+    if transaction_status != "0x1" {
         return Json(json!({"ok": false, "error": "tx failed"}));
     }
 
-    // Decode log Paid & validasi invoiceUid + ambil amountWei & videoId
-    let paid_ev = paid_event_abi();
-    let paid_sig_lc = format!("0x{}", hex::encode(paid_ev.signature().to_fixed_bytes())).to_lowercase();
+    // Compute the expected event signature topic from the Paid ABI.
+    let paid_event = paid_event_abi();
+    let paid_signature = format!(
+        "0x{}",
+        hex::encode(paid_event.signature().to_fixed_bytes())
+    )
+    .to_lowercase();
 
+    // Only events emitted by the configured x402 contract are accepted.
     let x402_contract = std::env::var("X402_CONTRACT_ADDRESS")
         .unwrap_or_default()
         .to_lowercase();
 
     let logs = receipt
         .pointer("/result/logs")
-        .and_then(|v| v.as_array())
+        .and_then(|value| value.as_array())
         .cloned()
         .unwrap_or_default();
 
-    // Expected topic[1] (invoiceUid) adalah keccak(invoice_uid string) — sama dg invoice_uid_hash
-    // invoice_uid_hash disimpan sebagai "0x..." -> normalisasi ke lowercase untuk perbandingan.
-    let expected_invoice_topic = inv
+    // `topic[1]` must equal the bytes32 hash created from the invoice UUID.
+    let expected_invoice_topic = invoice
         .invoice_uid_hash
         .as_deref()
         .unwrap_or("")
@@ -506,83 +643,120 @@ pub async fn x402_confirm(
     let mut matched_amount_wei: Option<BigDecimal> = None;
     let mut matched_video_id: Option<String> = None;
 
-    'scan: for lg in logs {
-        let addr = lg.get("address").and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
-        if addr != x402_contract {
+    // Scan receipt logs until a matching Paid event is decoded.
+    'scan: for log in logs {
+        let emitting_address = log
+            .get("address")
+            .and_then(|value| value.as_str())
+            .unwrap_or("")
+            .to_lowercase();
+
+        if emitting_address != x402_contract {
             continue;
         }
 
-        let topics = lg.get("topics").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+        let topics = log
+            .get("topics")
+            .and_then(|value| value.as_array())
+            .cloned()
+            .unwrap_or_default();
+
         if topics.is_empty() {
             continue;
         }
 
-        // topic[0] harus = signature event "Paid"
-        let t0_lc = topics[0].as_str().unwrap_or("").to_lowercase();
-        if t0_lc != paid_sig_lc {
+        // `topic[0]` identifies the event type and must match Paid.
+        let event_signature_topic = topics[0]
+            .as_str()
+            .unwrap_or("")
+            .to_lowercase();
+
+        if event_signature_topic != paid_signature {
             continue;
         }
 
-        // Pastikan topics[1] = invoiceUid (bytes32) cocok
-        if topics.len() >= 2 {
-            let t1 = topics[1].as_str().unwrap_or("").to_lowercase();
-            if t1 != expected_invoice_topic {
-                continue;
-            }
-        } else {
+        // `topic[1]` contains the indexed invoice UID hash.
+        if topics.len() < 2 {
             continue;
         }
 
-        // Decode data
-        let data_hex = lg.get("data").and_then(|v| v.as_str()).unwrap_or("");
+        let invoice_topic = topics[1]
+            .as_str()
+            .unwrap_or("")
+            .to_lowercase();
+
+        if invoice_topic != expected_invoice_topic {
+            continue;
+        }
+
+        // Decode the non-indexed event data and convert topics into H256 values
+        // required by ethabi RawLog.
+        let data_hex = log.get("data").and_then(|value| value.as_str()).unwrap_or("");
         let data_bytes = hex::decode(data_hex.trim_start_matches("0x")).unwrap_or_default();
 
-        // Konversi semua topics ke H256 untuk RawLog
         let topics_h256: Vec<H256> = topics
             .iter()
-            .filter_map(|t| t.as_str())
-            .filter_map(|s| H256::from_str(s).ok())
+            .filter_map(|topic| topic.as_str())
+            .filter_map(|topic| H256::from_str(topic).ok())
             .collect();
 
-        let raw = RawLog {
+        let raw_log = RawLog {
             topics: topics_h256,
             data: data_bytes,
         };
 
-        if let Ok(parsed) = paid_ev.parse_log(raw) {
-            // Ambil amountWei & videoId by name (lebih aman daripada by index)
-            if let Some(p) = parsed.params.iter().find(|p| p.name == "amountWei") {
-                if let EvtToken::Uint(u) = &p.value {
-                    let amt_str = u.to_string();
-                    matched_amount_wei =
-                        Some(BigDecimal::from_str(&amt_str).unwrap_or(BigDecimal::from(0)));
+        if let Ok(parsed_log) = paid_event.parse_log(raw_log) {
+            // Find values by parameter name rather than array index so the code
+            // remains readable and less sensitive to event field ordering.
+            if let Some(parameter) = parsed_log
+                .params
+                .iter()
+                .find(|parameter| parameter.name == "amountWei")
+            {
+                if let EventToken::Uint(amount) = &parameter.value {
+                    matched_amount_wei = Some(
+                        BigDecimal::from_str(&amount.to_string())
+                            .unwrap_or_else(|_| BigDecimal::from(0)),
+                    );
                 }
             }
-            if let Some(p) = parsed.params.iter().find(|p| p.name == "videoId") {
-                if let EvtToken::String(s) = &p.value {
-                    matched_video_id = Some(s.clone());
+
+            if let Some(parameter) = parsed_log
+                .params
+                .iter()
+                .find(|parameter| parameter.name == "videoId")
+            {
+                if let EventToken::String(video_id) = &parameter.value {
+                    matched_video_id = Some(video_id.clone());
                 }
             }
+
             break 'scan;
         }
     }
 
-    let Some(paid_amt) = matched_amount_wei else {
+    let Some(paid_amount) = matched_amount_wei else {
         return Json(json!({"ok": false, "error": "Paid event not found"}));
     };
 
-    // (Opsional): pastikan videoId pada event = invoice.video_id
-    if let Some(ev_vid) = matched_video_id.as_ref() {
-        if ev_vid != &inv.video_id {
-            return Json(json!({"ok": false, "error": "mismatched videoId in event"}));
+    // When the event contains a video ID, require it to match the invoice.
+    if let Some(event_video_id) = matched_video_id.as_ref() {
+        if event_video_id != &invoice.video_id {
+            return Json(json!({
+                "ok": false,
+                "error": "mismatched videoId in event"
+            }));
         }
     }
 
-    // Bandingkan: paid >= required ?
-    let required = inv.required_amount_wei.unwrap_or(BigDecimal::from(0));
-    let is_enough = paid_amt >= required;
+    // Compare the verified on-chain payment with the invoice requirement.
+    let required_amount = invoice
+        .required_amount_wei
+        .unwrap_or_else(|| BigDecimal::from(0));
+    let is_fully_paid = paid_amount >= required_amount;
 
-    // Update invoice status + catat tx & akumulasi paid_amount_wei
+    // Persist the transaction hash, accumulated paid amount, and final invoice
+    // status. Accumulation allows a future top-up confirmation flow.
     let _ = sqlx::query!(
         r#"
         UPDATE x402_invoices
@@ -592,50 +766,61 @@ pub async fn x402_confirm(
                paid_amount_wei = COALESCE(paid_amount_wei, 0) + $3
          WHERE id = $4
         "#,
-        if is_enough { "paid" } else { "underpaid" },
-        b.tx_hash,
-        &paid_amt,
-        inv.id
+        if is_fully_paid { "paid" } else { "underpaid" },
+        body.tx_hash,
+        &paid_amount,
+        invoice.id
     )
     .execute(&st.pool)
     .await;
 
-    if !is_enough {
-        let missing = (&required - paid_amt).max(BigDecimal::from(0));
+    // Return the missing amount when payment is below the invoice requirement.
+    if !is_fully_paid {
+        let missing_amount = (&required_amount - paid_amount).max(BigDecimal::from(0));
         return Json(json!({
             "ok": false,
             "underpaid": true,
-            "missing_wei": missing.to_string(),
+            "missing_wei": missing_amount.to_string(),
             "message": "Payment below required amount. Please top up the remainder to unlock."
         }));
     }
 
-    // ===== Unlock (idempotent) =====
+    // Record the purchase idempotently so repeated confirmations do not create
+    // duplicate purchase rows.
     let _ = sqlx::query!(
-        r#"INSERT INTO purchases (user_id, video_id, created_at)
-           VALUES ($1,$2,NOW())
-           ON CONFLICT DO NOTHING"#,
-        inv.user_id,
-        inv.video_id
+        r#"
+        INSERT INTO purchases (user_id, video_id, created_at)
+        VALUES ($1,$2,NOW())
+        ON CONFLICT DO NOTHING
+        "#,
+        invoice.user_id,
+        invoice.video_id
     )
     .execute(&st.pool)
     .await;
 
-    // allowlist by username
-    let uname = sqlx::query_scalar::<_, Option<String>>(r#"SELECT username FROM users WHERE id=$1"#)
-        .bind(&inv.user_id)
-        .fetch_one(&st.pool)
-        .await
-        .unwrap_or(None)
-        .unwrap_or_default();
+    // Resolve the buyer username because playback authorization currently uses
+    // the `(video_id, username)` allowlist rather than a direct user ID relation.
+    let username = sqlx::query_scalar::<_, Option<String>>(
+        r#"SELECT username FROM users WHERE id=$1"#,
+    )
+    .bind(&invoice.user_id)
+    .fetch_one(&st.pool)
+    .await
+    .unwrap_or(None)
+    .unwrap_or_default();
 
-    if !uname.is_empty() {
+    // Insert the allowlist entry idempotently. `user_has_view_access` later uses
+    // this record to authorize the buyer's playback request.
+    if !username.is_empty() {
         let _ = sqlx::query!(
-            r#"INSERT INTO allowlist (video_id, username)
-               VALUES ($1,$2)
-               ON CONFLICT (video_id, username) DO NOTHING"#,
-            inv.video_id,
-            uname
+            r#"
+            INSERT INTO allowlist (video_id, username)
+            VALUES ($1,$2)
+            ON CONFLICT (video_id, username) DO NOTHING
+            "#,
+            invoice.video_id,
+            username
         )
         .execute(&st.pool)
         .await;
