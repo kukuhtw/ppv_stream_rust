@@ -6,6 +6,7 @@
 // support PayPal, Stripe, Midtrans, Xendit, and x402 without hardcoding every
 // provider directly inside HTTP handlers.
 
+pub mod env;
 pub mod models;
 pub mod registry;
 pub mod traits;
