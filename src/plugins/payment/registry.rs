@@ -37,11 +37,11 @@ impl PaymentPluginRegistry {
         let mut registry = Self::new();
         for provider in enabled.split(',').map(|value| value.trim().to_ascii_lowercase()) {
             match provider.as_str() {
-                "paypal" => registry.register(Arc::new(PaypalPaymentPlugin)),
-                "stripe" => registry.register(Arc::new(StripePaymentPlugin)),
-                "midtrans" => registry.register(Arc::new(MidtransPaymentPlugin)),
-                "xendit" => registry.register(Arc::new(XenditPaymentPlugin)),
-                "x402" => registry.register(Arc::new(X402PaymentPlugin)),
+                "paypal" => registry.register(Arc::new(PaypalPaymentPlugin::from_env())),
+                "stripe" => registry.register(Arc::new(StripePaymentPlugin::from_env())),
+                "midtrans" => registry.register(Arc::new(MidtransPaymentPlugin::from_env())),
+                "xendit" => registry.register(Arc::new(XenditPaymentPlugin::from_env())),
+                "x402" => registry.register(Arc::new(X402PaymentPlugin::from_env())),
                 "" => {}
                 _ => tracing::warn!("unknown payment plugin configured: {}", provider),
             }
@@ -61,6 +61,10 @@ impl PaymentPluginRegistry {
 
     pub fn default(&self) -> Option<Arc<dyn PaymentPlugin>> {
         self.default_provider.as_deref().and_then(|provider| self.get(provider))
+    }
+
+    pub fn default_provider_name(&self) -> Option<String> {
+        self.default_provider.clone()
     }
 
     pub fn names(&self) -> Vec<String> {
