@@ -55,7 +55,7 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
     use crate::plugins::payment::PaymentPluginRegistry;
     use crate::worker;
 
-    let payment_plugins = PaymentPluginRegistry::from_env();
+    let payment_plugins = PaymentPluginRegistry::from_env_with_pool(Some(pool.clone()));
     tracing::info!("payment plugins enabled: {:?}", payment_plugins.names());
 
     let users_state = UsersState {
