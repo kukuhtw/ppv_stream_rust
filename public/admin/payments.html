@@ -26,6 +26,7 @@
       <ul class="navbar-nav ms-auto">
         <li class="nav-item"><a class="nav-link text-white" href="/public/admin/dashboard.html">Dashboard</a></li>
         <li class="nav-item"><a class="nav-link text-white active" href="/public/admin/payments.html">Pembayaran</a></li>
+        <li class="nav-item"><a class="nav-link text-white" href="/public/admin/settings.html">Pengaturan</a></li>
         <li class="nav-item"><a class="nav-link text-white" href="/admin/data">Raw Data</a></li>
         <li class="nav-item"><a class="nav-link text-white" href="/browse">Browse Site</a></li>
       </ul>
@@ -49,7 +50,7 @@
     <div class="card-body py-2">
       <div class="row g-2 align-items-end">
         <div class="col-auto">
-          <label class="form-label mb-0 small fw-semibold">Provider</label>
+          <label for="fProvider" class="form-label mb-0 small fw-semibold">Provider</label>
           <select id="fProvider" class="form-select form-select-sm" onchange="loadPayments()">
             <option value="">Semua</option>
             <option value="stripe">Stripe</option>
@@ -59,7 +60,7 @@
           </select>
         </div>
         <div class="col-auto">
-          <label class="form-label mb-0 small fw-semibold">Status</label>
+          <label for="fStatus" class="form-label mb-0 small fw-semibold">Status</label>
           <select id="fStatus" class="form-select form-select-sm" onchange="loadPayments()">
             <option value="">Semua</option>
             <option value="pending">Pending</option>
@@ -70,7 +71,7 @@
           </select>
         </div>
         <div class="col-auto">
-          <label class="form-label mb-0 small fw-semibold">Limit</label>
+          <label for="fLimit" class="form-label mb-0 small fw-semibold">Limit</label>
           <select id="fLimit" class="form-select form-select-sm" onchange="loadPayments()">
             <option value="50">50</option>
             <option value="100" selected>100</option>

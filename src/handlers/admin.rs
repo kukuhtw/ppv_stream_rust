@@ -483,3 +483,98 @@ pub async fn admin_disburse(
 
     Json(json!({"ok": true, "method": "manual", "invoice_uid": uid}))
 }
+
+// ---------------------------------------------------------------------------
+// SMTP settings — GET /admin/smtp  /  POST /admin/smtp
+// ---------------------------------------------------------------------------
+
+pub async fn admin_smtp_get(State(st): State<AdminState>) -> impl IntoResponse {
+    let row = sqlx::query(
+        "SELECT host, port, username, password, from_email, from_name, use_tls, enabled
+         FROM smtp_settings WHERE id = 1"
+    )
+    .fetch_optional(&st.pool)
+    .await;
+
+    match row {
+        Ok(Some(r)) => {
+            Json(json!({
+                "ok": true,
+                "smtp": {
+                    "host":       r.try_get::<String,  _>("host").unwrap_or_default(),
+                    "port":       r.try_get::<i32,     _>("port").unwrap_or(587),
+                    "username":   r.try_get::<String,  _>("username").unwrap_or_default(),
+                    "password":   r.try_get::<String,  _>("password").unwrap_or_default(),
+                    "from_email": r.try_get::<String,  _>("from_email").unwrap_or_default(),
+                    "from_name":  r.try_get::<String,  _>("from_name").unwrap_or_else(|_| "PPV Stream".into()),
+                    "use_tls":    r.try_get::<bool,    _>("use_tls").unwrap_or(true),
+                    "enabled":    r.try_get::<bool,    _>("enabled").unwrap_or(false),
+                }
+            }))
+        }
+        _ => Json(json!({"ok": false, "error": "smtp_settings not found"})),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct SmtpSavePayload {
+    pub host:       String,
+    pub port:       i32,
+    pub username:   String,
+    pub password:   String,
+    pub from_email: String,
+    pub from_name:  String,
+    pub use_tls:    bool,
+    pub enabled:    bool,
+    /// Optional: send a test email to this address after saving
+    pub test_email: Option<String>,
+}
+
+pub async fn admin_smtp_save(
+    State(st): State<AdminState>,
+    Json(p):   Json<SmtpSavePayload>,
+) -> impl IntoResponse {
+    let res = sqlx::query(
+        r#"INSERT INTO smtp_settings (id, host, port, username, password, from_email, from_name, use_tls, enabled, updated_at)
+           VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, now())
+           ON CONFLICT (id) DO UPDATE
+             SET host=$1, port=$2, username=$3, password=$4,
+                 from_email=$5, from_name=$6, use_tls=$7, enabled=$8, updated_at=now()"#,
+    )
+    .bind(&p.host)
+    .bind(p.port)
+    .bind(&p.username)
+    .bind(&p.password)
+    .bind(&p.from_email)
+    .bind(&p.from_name)
+    .bind(p.use_tls)
+    .bind(p.enabled)
+    .execute(&st.pool)
+    .await;
+
+    if let Err(e) = res {
+        return Json(json!({"ok": false, "error": format!("db: {e}")}));
+    }
+
+    // Optional test email
+    if let Some(test_to) = &p.test_email {
+        if !test_to.trim().is_empty() {
+            let cfg = crate::email::SmtpConfig {
+                host:       p.host.clone(),
+                port:       p.port as u16,
+                username:   p.username.clone(),
+                password:   p.password.clone(),
+                from_email: p.from_email.clone(),
+                from_name:  p.from_name.clone(),
+                use_tls:    p.use_tls,
+                enabled:    true, // force enabled for test
+            };
+            if let Err(e) = crate::email::send_test(&cfg, test_to).await {
+                return Json(json!({"ok": true, "saved": true, "test_error": e.to_string()}));
+            }
+            return Json(json!({"ok": true, "saved": true, "test_sent": true}));
+        }
+    }
+
+    Json(json!({"ok": true, "saved": true}))
+}

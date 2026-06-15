@@ -203,7 +203,9 @@ pub async fn post_forgot(
             .execute(&st.pool)
             .await;
 
-            let _ = email::send_reset(&f.email, &token).await;
+            let base_url = std::env::var("BASE_URL")
+                .unwrap_or_else(|_| "http://localhost:8080".into());
+            email::send_reset(&st.pool, &f.email, &token, &base_url).await;
         }
         _ => { /* abaikan error & none untuk tidak bocorkan info */ }
     }
@@ -299,4 +301,91 @@ pub async fn post_reset(
 
     // Sukses → balik ke login
     Redirect::to("/public/auth/login.html?status=ok")
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/change_password  (requires active session)
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+pub struct ChangePasswordPayload {
+    pub current_password: String,
+    pub new_password:     String,
+}
+
+pub async fn change_password(
+    State(st):  State<AuthUserState>,
+    cookies:    Cookies,
+    axum::Json(payload): axum::Json<ChangePasswordPayload>,
+) -> impl IntoResponse {
+    use axum::Json;
+    use serde_json::json;
+
+    // Require active session
+    let (user_id, _is_admin) = match crate::sessions::current_user_id(&st.pool, &cookies).await {
+        Ok(Some(u)) => u,
+        _ => return Json(json!({"ok": false, "error": "not logged in"})),
+    };
+
+    if !validators::valid_password(&payload.new_password) {
+        return Json(json!({"ok": false, "error": "new_password too weak (min 8 chars)"}));
+    }
+    if payload.current_password == payload.new_password {
+        return Json(json!({"ok": false, "error": "new password must differ from current"}));
+    }
+
+    // Fetch current hash + email + username
+    let row = sqlx::query!(
+        "SELECT password_hash, email, username FROM users WHERE id = $1",
+        user_id
+    )
+    .fetch_optional(&st.pool)
+    .await;
+
+    let row = match row {
+        Ok(Some(r)) => r,
+        _ => return Json(json!({"ok": false, "error": "user not found"})),
+    };
+
+    // Verify current password
+    let parsed = match PasswordHash::new(&row.password_hash) {
+        Ok(h) => h,
+        Err(_) => return Json(json!({"ok": false, "error": "server error"})),
+    };
+    if Argon2::default()
+        .verify_password(payload.current_password.as_bytes(), &parsed)
+        .is_err()
+    {
+        return Json(json!({"ok": false, "error": "current_password salah"}));
+    }
+
+    // Hash new password
+    let salt  = SaltString::generate(&mut OsRng);
+    let new_hash = match Argon2::default().hash_password(payload.new_password.as_bytes(), &salt) {
+        Ok(h) => h.to_string(),
+        Err(_) => return Json(json!({"ok": false, "error": "server error"})),
+    };
+
+    // Update DB
+    if sqlx::query!(
+        "UPDATE users SET password_hash = $1 WHERE id = $2",
+        new_hash,
+        user_id
+    )
+    .execute(&st.pool)
+    .await
+    .is_err()
+    {
+        return Json(json!({"ok": false, "error": "db error"}));
+    }
+
+    // Send notification email (fire-and-forget)
+    let pool_clone = st.pool.clone();
+    let email_addr = row.email.clone().unwrap_or_default();
+    let username   = row.username.clone();
+    tokio::spawn(async move {
+        email::send_password_changed(&pool_clone, &email_addr, &username).await;
+    });
+
+    Json(json!({"ok": true}))
 }

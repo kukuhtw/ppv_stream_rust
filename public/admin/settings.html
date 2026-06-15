@@ -1,0 +1,226 @@
+<!-- public/admin/settings.html -->
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>Admin — Pengaturan SMTP</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+<nav class="navbar navbar-expand-md navbar-dark bg-danger shadow-sm">
+  <div class="container-fluid">
+    <a class="navbar-brand fw-bold" href="/public/admin/dashboard.html">Admin Panel</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navMenu">
+      <ul class="navbar-nav ms-auto">
+        <li class="nav-item"><a class="nav-link text-white" href="/public/admin/dashboard.html">Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link text-white" href="/public/admin/payments.html">Pembayaran</a></li>
+        <li class="nav-item"><a class="nav-link text-white active" href="/public/admin/settings.html">Pengaturan</a></li>
+        <li class="nav-item"><a class="nav-link text-white" href="/admin/data">Raw Data</a></li>
+        <li class="nav-item"><a class="nav-link text-white" href="/browse">Browse Site</a></li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<div class="container py-4" style="max-width: 680px;">
+  <h4 class="mb-4">Pengaturan Email (SMTP)</h4>
+
+  <div id="alert" class="d-none mb-3"></div>
+
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <form id="smtpForm">
+        <div class="row g-3">
+
+          <div class="col-12">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="smtpEnabled" name="enabled">
+              <label class="form-check-label fw-semibold" for="smtpEnabled">Aktifkan pengiriman email</label>
+            </div>
+            <div class="form-text">Jika dimatikan, email hanya dicatat di log server.</div>
+          </div>
+
+          <div class="col-md-8">
+            <label for="smtpHost" class="form-label">SMTP Host <span class="text-danger">*</span></label>
+            <input id="smtpHost" name="host" type="text" class="form-control"
+                   placeholder="smtp.gmail.com / smtp.mailgun.org">
+          </div>
+          <div class="col-md-4">
+            <label for="smtpPort" class="form-label">Port</label>
+            <input id="smtpPort" name="port" type="number" class="form-control" value="587" min="1" max="65535">
+          </div>
+
+          <div class="col-md-6">
+            <label for="smtpUser" class="form-label">Username / Email</label>
+            <input id="smtpUser" name="username" type="text" class="form-control"
+                   placeholder="noreply@yourdomain.com" autocomplete="username">
+          </div>
+          <div class="col-md-6">
+            <label for="smtpPass" class="form-label">Password / App Password</label>
+            <div class="input-group">
+              <input id="smtpPass" name="password" type="password" class="form-control"
+                     autocomplete="current-password" placeholder="••••••••">
+              <button class="btn btn-outline-secondary" type="button"
+                      onclick="togglePass()">Lihat</button>
+            </div>
+          </div>
+
+          <div class="col-md-8">
+            <label for="smtpFrom" class="form-label">From Email <span class="text-danger">*</span></label>
+            <input id="smtpFrom" name="from_email" type="email" class="form-control"
+                   placeholder="noreply@yourdomain.com">
+          </div>
+          <div class="col-md-4">
+            <label for="smtpFromName" class="form-label">From Name</label>
+            <input id="smtpFromName" name="from_name" type="text" class="form-control"
+                   value="PPV Stream">
+          </div>
+
+          <div class="col-12">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="smtpTls" name="use_tls" checked>
+              <label class="form-check-label" for="smtpTls">
+                Gunakan TLS (port 465) — matikan jika pakai STARTTLS (port 587)
+              </label>
+            </div>
+          </div>
+
+          <div class="col-12 border-top pt-3">
+            <label for="testEmail" class="form-label fw-semibold">Test Email</label>
+            <div class="input-group">
+              <input id="testEmail" type="email" class="form-control"
+                     placeholder="Kirim test email ke alamat ini (opsional)">
+              <button class="btn btn-outline-info" type="button" onclick="sendTest()">Kirim Test</button>
+            </div>
+            <div class="form-text">Menggunakan konfigurasi di atas, disimpan dulu sebelum kirim.</div>
+          </div>
+
+        </div><!-- /row -->
+
+        <div class="mt-4 d-flex gap-2">
+          <button type="submit" class="btn btn-danger px-4">Simpan Pengaturan</button>
+          <button type="button" class="btn btn-outline-secondary" onclick="loadSettings()">Reset</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card mt-4 shadow-sm">
+    <div class="card-header fw-semibold small">Panduan Konfigurasi</div>
+    <div class="card-body small text-muted">
+      <dl class="row mb-0">
+        <dt class="col-sm-4">Gmail</dt>
+        <dd class="col-sm-8">Host: <code>smtp.gmail.com</code>, Port: <code>587</code>, gunakan App Password (bukan password akun). Matikan TLS, gunakan STARTTLS.</dd>
+        <dt class="col-sm-4">Mailgun</dt>
+        <dd class="col-sm-8">Host: <code>smtp.mailgun.org</code>, Port: <code>587</code>, Username: alamat email Mailgun, Password: SMTP password dari dashboard.</dd>
+        <dt class="col-sm-4">Mailtrap (dev)</dt>
+        <dd class="col-sm-8">Host: <code>sandbox.smtp.mailtrap.io</code>, Port: <code>587</code>. Cocok untuk testing tanpa kirim email asli.</dd>
+        <dt class="col-sm-4">Brevo / Sendinblue</dt>
+        <dd class="col-sm-8">Host: <code>smtp-relay.brevo.com</code>, Port: <code>587</code>.</dd>
+      </dl>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+function showAlert(type, msg) {
+  const el = document.getElementById('alert');
+  el.className = `alert alert-${type} alert-dismissible fade show`;
+  el.innerHTML = `${msg}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+}
+
+function togglePass() {
+  const f = document.getElementById('smtpPass');
+  f.type = f.type === 'password' ? 'text' : 'password';
+}
+
+async function loadSettings() {
+  try {
+    const r = await fetch('/admin/smtp');
+    const j = await r.json();
+    if (!j.ok) return;
+    const s = j.smtp;
+    document.getElementById('smtpHost').value     = s.host       || '';
+    document.getElementById('smtpPort').value     = s.port       || 587;
+    document.getElementById('smtpUser').value     = s.username   || '';
+    document.getElementById('smtpPass').value     = s.password   || '';
+    document.getElementById('smtpFrom').value     = s.from_email || '';
+    document.getElementById('smtpFromName').value = s.from_name  || 'PPV Stream';
+    document.getElementById('smtpEnabled').checked = !!s.enabled;
+    document.getElementById('smtpTls').checked     = !!s.use_tls;
+  } catch (e) {
+    showAlert('warning', 'Gagal memuat pengaturan: ' + e.message);
+  }
+}
+
+function buildPayload(testEmail) {
+  return {
+    host:       document.getElementById('smtpHost').value.trim(),
+    port:       parseInt(document.getElementById('smtpPort').value) || 587,
+    username:   document.getElementById('smtpUser').value.trim(),
+    password:   document.getElementById('smtpPass').value,
+    from_email: document.getElementById('smtpFrom').value.trim(),
+    from_name:  document.getElementById('smtpFromName').value.trim() || 'PPV Stream',
+    use_tls:    document.getElementById('smtpTls').checked,
+    enabled:    document.getElementById('smtpEnabled').checked,
+    test_email: testEmail || null,
+  };
+}
+
+document.getElementById('smtpForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = e.submitter;
+  btn.disabled = true;
+  btn.textContent = 'Menyimpan...';
+  try {
+    const r = await fetch('/admin/smtp', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(buildPayload(null)),
+    });
+    const j = await r.json();
+    if (j.ok) showAlert('success', 'Pengaturan berhasil disimpan.');
+    else      showAlert('danger', 'Gagal: ' + (j.error || 'unknown'));
+  } catch (e) {
+    showAlert('danger', 'Error: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Simpan Pengaturan';
+  }
+});
+
+async function sendTest() {
+  const to = document.getElementById('testEmail').value.trim();
+  if (!to) { showAlert('warning', 'Isi dulu alamat email tujuan test.'); return; }
+  const btn = document.querySelector('button[onclick="sendTest()"]');
+  btn.disabled = true;
+  btn.textContent = 'Mengirim...';
+  try {
+    const r = await fetch('/admin/smtp', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(buildPayload(to)),
+    });
+    const j = await r.json();
+    if (j.test_sent)  showAlert('success', `Test email berhasil dikirim ke <b>${to}</b>!`);
+    else if (j.test_error) showAlert('danger', `Pengaturan tersimpan, tapi test gagal: ${j.test_error}`);
+    else if (j.ok)    showAlert('success', 'Tersimpan (test email tidak dikirim).');
+    else              showAlert('danger', 'Error: ' + (j.error || 'unknown'));
+  } catch (e) {
+    showAlert('danger', 'Error: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Kirim Test';
+  }
+}
+
+loadSettings();
+</script>
+</body>
+</html>

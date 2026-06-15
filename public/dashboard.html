@@ -88,6 +88,38 @@
     </div>
   </div>
 
+  <!-- ===== Ganti Password ===== -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header fw-semibold">Ganti Password</div>
+    <div class="card-body">
+      <div id="pwAlert" class="d-none mb-3"></div>
+      <form id="changePassForm" autocomplete="off">
+        <div class="mb-3">
+          <label for="cpCurrent" class="form-label">Password Saat Ini</label>
+          <div class="input-group">
+            <input id="cpCurrent" name="current_password" type="password" class="form-control"
+                   autocomplete="current-password" required placeholder="Password lama Anda">
+            <button class="btn btn-outline-secondary" type="button" data-toggle-pass="cpCurrent">Lihat</button>
+          </div>
+        </div>
+        <div class="mb-3">
+          <label for="cpNew" class="form-label">Password Baru</label>
+          <div class="input-group">
+            <input id="cpNew" name="new_password" type="password" class="form-control"
+                   autocomplete="new-password" required placeholder="Min. 8 karakter">
+            <button class="btn btn-outline-secondary" type="button" data-toggle-pass="cpNew">Lihat</button>
+          </div>
+        </div>
+        <div class="mb-3">
+          <label for="cpConfirm" class="form-label">Konfirmasi Password Baru</label>
+          <input id="cpConfirm" type="password" class="form-control"
+                 autocomplete="new-password" required placeholder="Ulangi password baru">
+        </div>
+        <button class="btn btn-warning" type="submit">Ubah Password</button>
+      </form>
+    </div>
+  </div>
+
   <!-- ===== Video Saya & Akses ===== -->
   <div class="card shadow-sm mb-4">
     <div class="card-header d-flex align-items-center gap-2">
@@ -154,7 +186,64 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 // ===== util =====
-function toast(msg, ok=true){ alert((ok ? "✅ " : "❌ ") + msg); }
+function toast(msg, ok=true){ alert((ok ? "OK: " : "GAGAL: ") + msg); }
+function showPwAlert(type, msg) {
+  const el = document.getElementById('pwAlert');
+  el.className = `alert alert-${type}`;
+  el.textContent = msg;
+}
+
+// ===== Toggle password visibility =====
+document.querySelectorAll('[data-toggle-pass]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const inp = document.getElementById(btn.dataset.togglePass);
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+    btn.textContent = inp.type === 'password' ? 'Lihat' : 'Sembunyikan';
+  });
+});
+
+// ===== Ganti Password =====
+document.getElementById('changePassForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const current = document.getElementById('cpCurrent').value;
+  const newPass  = document.getElementById('cpNew').value;
+  const confirm  = document.getElementById('cpConfirm').value;
+  const pwAlert  = document.getElementById('pwAlert');
+  pwAlert.className = 'd-none';
+
+  if (newPass !== confirm) {
+    showPwAlert('danger', 'Konfirmasi password tidak cocok.');
+    return;
+  }
+  if (newPass.length < 8) {
+    showPwAlert('danger', 'Password baru minimal 8 karakter.');
+    return;
+  }
+
+  const btn = e.submitter;
+  btn.disabled = true;
+  btn.textContent = 'Memproses...';
+
+  try {
+    const r = await fetch('/api/change_password', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ current_password: current, new_password: newPass }),
+    });
+    const j = await r.json();
+    if (j.ok) {
+      showPwAlert('success', 'Password berhasil diubah! Notifikasi dikirim ke email Anda.');
+      e.target.reset();
+    } else {
+      showPwAlert('danger', 'Gagal: ' + (j.error || 'Unknown error'));
+    }
+  } catch (err) {
+    showPwAlert('danger', 'Error: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Ubah Password';
+  }
+});
 function escapeHtml(s){
   return String(s ?? '')
     .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
