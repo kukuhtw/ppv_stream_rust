@@ -25,7 +25,10 @@ pub struct PaymentPluginRegistry {
 
 impl PaymentPluginRegistry {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            plugins:          HashMap::new(),
+            default_provider: None,
+        }
     }
 
     pub fn from_env() -> Self {
