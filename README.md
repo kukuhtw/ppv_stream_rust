@@ -182,16 +182,21 @@ The new version is significantly **faster** (buffered I/O, single-process multi-
 
 ## 🚀 Key Features
 
-* 🔐 **User & Admin Authentication** (login/register/reset password)  
-* 🎥 **Video Upload** (MP4, stored securely in `/storage/`)  
-* 💧 **Dynamic Watermarking** – watermark moves randomly every few seconds  
-* ⚡ **HLS Transcoding via FFmpeg** – fast, segmented streaming  
-* 💰 **Pay-Per-View Access** – users pay per video  
-* 👥 **Allowlist System** – creators can manually grant view access  
-* 📊 **Dashboard** for video management and viewer control  
-* 🖥️ **Responsive Frontend** – HTML + JS in `/public`  
-* 🧩 **Admin Panel** – manage users and video content  
-* 💵 **USD → IDR Conversion** for pricing ($1 = Rp17,000)  
+* 🔐 **User & Admin Authentication** (login/register/reset password/change password)
+* 🎥 **Video Upload** (MP4, stored securely in `/storage/`)
+* 💧 **Dynamic Watermarking** – watermark moves randomly every few seconds
+* ⚡ **HLS Transcoding via FFmpeg** – fast, segmented streaming
+* 💰 **Pay-Per-View Access** – users pay per video
+* 👥 **Allowlist System** – creators can manually grant view access
+* 📊 **Dashboard** for video management and viewer control
+* 🖥️ **Responsive Frontend** – HTML + JS in `/public`
+* 🧩 **Admin Panel** – manage users, fiat payments, SMTP settings, and video content
+* 💵 **USD → IDR Conversion** for pricing ($1 = Rp17,000)
+* 💳 **Multi-Provider Fiat Payment** – Stripe, PayPal, Midtrans, Xendit via plugin architecture
+* 🔔 **Webhook Receivers** – each provider delivers payment notifications automatically
+* 📧 **SMTP Email Notifications** – password reset, change-password confirmation
+* 🏦 **Auto-Disburse** – Xendit auto-transfers 90% of payment to creator's bank account
+* 📊 **Admin Payment Dashboard** – monitor all fiat invoices, trigger manual disburse
 
 ---
 
@@ -205,7 +210,7 @@ This section describes the platform's primary business workflows from the perspe
 |---|---|
 | **Viewer / buyer** | Registers, logs in, selects a video, pays for access, and watches unlocked content. |
 | **Creator / video owner** | Completes payment profile details, uploads videos, sets prices, manages metadata, and grants manual access. |
-| **Platform administrator** | Bootstraps or logs in as an administrator and monitors users, sessions, videos, allowlists, purchases, and password resets. |
+| **Platform administrator** | Bootstraps or logs in as an administrator; monitors users, sessions, videos, allowlists, purchases, fiat invoices; configures SMTP; and triggers disburse. |
 | **Backend system** | Authenticates sessions, stores metadata, runs transcoding, verifies payments, manages access rights, and serves HLS. |
 | **X402 smart contract** | Processes on-chain payments and splits funds between the creator and administrator according to basis points signed by the backend. |
 
@@ -270,12 +275,25 @@ This section describes the platform's primary business workflows from the perspe
 5. The backend returns the `/hls/:session/master.m3u8` playlist URL.
 6. Playlists and segments are streamed with `Cache-Control: no-store` and validated path and file names.
 
-### 7. Administrator Monitoring
+### 7. Fiat Payment with Provider Plugins
+
+1. A buyer selects a fiat provider (Stripe, PayPal, Midtrans, or Xendit) and starts a checkout via `POST /api/pay/:provider/start`.
+2. The backend pre-inserts a `fiat_invoices` row with status `pending` and returns the payment URL (checkout page or invoice URL).
+3. The buyer completes payment on the provider's hosted page.
+4. The provider sends a webhook to `POST /api/pay/:provider/webhook` with payment notification.
+5. The backend verifies the webhook signature (HMAC for Stripe, signature-verify API for PayPal, SHA-512 for Midtrans, callback token for Xendit).
+6. On verified payment, the backend updates `fiat_invoices` to `paid`, inserts a `purchases` row, and inserts an `allowlist` row granting permanent access.
+7. For Xendit, the backend automatically calls the Xendit Disbursements API to transfer 90% of the payment to the creator's bank account.
+
+### 8. Administrator Monitoring
 
 1. An administrator logs in with an account whose `is_admin` flag is enabled.
-2. The `GET /admin/data` endpoint validates both the session and administrator role.
-3. The dashboard displays records and aggregate counts for users, sessions, videos, allowlists, purchases, and password resets.
-4. The `/setup_admin` endpoint can create or promote the initial administrator when a bootstrap token is configured.
+2. The `GET /admin/data` endpoint shows raw records for users, sessions, videos, allowlists, purchases, and password resets.
+3. The `GET /admin/payments` endpoint shows fiat invoice monitoring with filter by provider and status.
+4. The admin can trigger disburse for paid invoices via `POST /admin/payments/:uid/disburse`.
+5. SMTP settings for email notifications are managed via `GET/POST /admin/smtp`.
+6. Admin can change their own password via `POST /admin/change_password`.
+7. The `/setup_admin` endpoint can create or promote the initial administrator when a bootstrap token is configured.
 
 ---
 
@@ -289,6 +307,13 @@ This section describes the platform's primary business workflows from the perspe
 | User login/logout | `POST /auth/login`, `POST /auth/logout` | `src/handlers/auth_user.rs`, `src/sessions.rs` | Creates or removes the session and signed cookie. |
 | Administrator login/logout | `POST /admin/login`, `POST /admin/logout` | `src/handlers/auth_admin.rs`, `src/sessions.rs` | Validates `is_admin` and manages the session. |
 | Forgot/reset password | `POST /auth/forgot`, `POST /auth/reset` | `src/handlers/password.rs`, `src/handlers/auth_user.rs` | Creates a reset token, replaces the password hash, and marks the token as used. |
+| User change password | `POST /api/change_password` | `src/handlers/auth_user.rs::change_password` | Verifies current password, hashes new password, sends email notification. |
+| Admin change password | `POST /admin/change_password` | `src/handlers/auth_admin.rs::admin_change_password` | Same flow as user change password but requires admin session. |
+| Fiat invoice creation | `POST /api/pay/:provider/start` | `src/handlers/payment_plugins.rs::create_payment_invoice` | Pre-inserts `fiat_invoices`, calls plugin, returns payment URL. |
+| Fiat payment webhook | `POST /api/pay/:provider/webhook` | `src/handlers/payment_plugins.rs::handle_webhook` | Verifies webhook, marks invoice paid, inserts purchase and allowlist. |
+| Admin payment monitor | `GET /admin/payments` | `src/handlers/admin.rs::admin_payments` | Filtered list of fiat invoices with totals. |
+| Admin disburse | `POST /admin/payments/:uid/disburse` | `src/handlers/admin.rs::admin_disburse` | Xendit: calls API; others: marks manual. |
+| SMTP settings | `GET/POST /admin/smtp` | `src/handlers/admin.rs::admin_smtp_get/save` | Reads/saves smtp_settings row, optionally sends test email. |
 | Creator profile | `GET /api/profile`, `POST /api/profile_update` | `src/handlers/users.rs` | Reads or updates profile, contact, bank, and wallet details. |
 | Marketplace browsing | `GET /api/videos` | `src/handlers/video.rs::list_videos` | Joins video data with creator profile data. |
 | Video upload | `POST /api/upload` | `src/handlers/upload.rs::upload_video` | Writes the file, inserts video metadata, and enqueues a job. |
@@ -638,7 +663,13 @@ The service will start on **http://localhost:8080**
 
 ## 🗃️ Database Schema
 
-The database schema includes the core `users`, `sessions`, `password_resets`, `videos`, `allowlist`, and `purchases` tables, as well as the `pay_tokens` and `x402_invoices` crypto-payment tables. See **Business Process-to-Database Mapping** above for each table's responsibilities, relationships, statuses, and source-of-truth rules.
+The database schema includes:
+- **Core tables**: `users`, `sessions`, `password_resets`, `videos`, `allowlist`, `purchases`
+- **Crypto payment tables**: `pay_tokens`, `x402_invoices`, `pay_tokens_compat` (view)
+- **Fiat payment tables**: `fiat_invoices` (migration `026_fiat_invoices.sql`)
+- **System config tables**: `smtp_settings` (migration `027_smtp_settings.sql`)
+
+See **Business Process-to-Database Mapping** above for each table's responsibilities, relationships, statuses, and source-of-truth rules.
 
 ---
 

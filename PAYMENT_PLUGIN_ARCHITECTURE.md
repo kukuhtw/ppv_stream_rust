@@ -1,12 +1,12 @@
-# Payment Plugin Customization Architecture
+# Payment Plugin Architecture
 
-This repository now has a payment plugin foundation under:
+This repository has a fully implemented payment plugin system under:
 
 ```text
 src/plugins/payment/
 ```
 
-The goal is to make payment providers configurable without hardcoding all provider logic directly inside `src/handlers/pay.rs`.
+The goal is to make payment providers configurable without hardcoding all provider logic directly inside `src/handlers/pay.rs`. All five providers (x402, Stripe, PayPal, Midtrans, Xendit) are now fully implemented.
 
 ## Supported Provider Targets
 
@@ -56,6 +56,7 @@ X402_CHAIN_ID=80002
 PAYPAL_ENV=sandbox
 PAYPAL_CLIENT_ID=...
 PAYPAL_CLIENT_SECRET=...
+PAYPAL_WEBHOOK_ID=...
 ```
 
 ### Stripe
@@ -97,6 +98,7 @@ Provider-specific routes:
 ```text
 POST /api/pay/:provider/start
 POST /api/pay/:provider/confirm
+POST /api/pay/:provider/webhook   ← receives payment notifications from the provider
 ```
 
 Legacy x402 routes remain available:
@@ -316,59 +318,51 @@ return provider raw payload for auditing
 
 ## Provider Mapping
 
-| Provider | Typical Flow | Confirmation |
+| Provider | Flow | Webhook Verification | Auto-Disburse |
+|---|---|---|---|
+| x402 | Blockchain authorization payload | Transaction receipt via RPC or event watcher | On-chain instant (smart contract splits at payment) |
+| PayPal | Orders v2 API → redirect checkout → capture | `/v1/notifications/verify-webhook-signature` API | No — needs PayPal Payouts API |
+| Stripe | Checkout Session → hosted page → redirect | HMAC-SHA256 on raw body vs `STRIPE_WEBHOOK_SECRET` | No — needs Stripe Connect |
+| Midtrans | Snap API → hosted payment page | SHA-512(order_id + status_code + gross_amount + server_key) | No — no Midtrans payout API |
+| Xendit | Invoice API → hosted invoice → callback | `x-callback-token` header check | Yes — Xendit Disbursements API (90% to creator bank) |
+
+## Webhook Flow
+
+When a provider sends a payment notification to `POST /api/pay/:provider/webhook`:
+
+1. Raw request bytes and all headers are extracted.
+2. The plugin's `confirm_payment()` verifies authenticity (signature/token).
+3. On `PaymentStatus::Paid`: invoice is updated, `purchases` and `allowlist` rows are inserted.
+4. For Xendit: `XenditPaymentPlugin::disburse_to_creator()` is called automatically.
+5. The buyer now has permanent access to the video.
+
+## Database Tables
+
+The plugin system writes to:
+
+| Table | Written by |
+|---|---|
+| `fiat_invoices` | `create_payment_invoice` — pre-inserted as `pending` |
+| `fiat_invoices` | `handle_webhook` — updated to `paid` with `paid_at` and `provider_ref` |
+| `purchases` | `handle_webhook` — one row per successful fiat payment |
+| `allowlist` | `handle_webhook` — grants permanent playback access |
+| `fiat_invoices` | `admin_disburse` — sets `disbursed_at` and `disburse_ref` |
+
+## Implementation Status
+
+All phases complete:
+
+| Phase | Description | Status |
 |---|---|---|
-| x402 | Blockchain authorization payload | Transaction receipt or watcher |
-| PayPal | Redirect checkout | Order capture or notification |
-| Stripe | Checkout Session or Payment Intent | Event notification |
-| Midtrans | Hosted payment page or payment token | Notification callback |
-| Xendit | Invoice or payment request | Callback notification |
-
-## Migration Plan
-
-### Phase 1
-
-Create the plugin trait, model, registry, and provider skeleton.
-
-Status: done.
-
-### Phase 2
-
-Expose generic HTTP handlers and wire them into the Axum router.
-
-Status: done.
-
-### Phase 3
-
-Add provider environment configuration and capability reporting.
-
-Status: done.
-
-### Phase 4
-
-Add default provider routes.
-
-Status: done.
-
-### Phase 5
-
-Move x402 invoice creation into the x402 plugin.
-
-Status: done.
-
-### Phase 6
-
-Move x402 receipt verification into the x402 plugin.
-
-Status: next.
-
-### Phase 7
-
-Implement Midtrans and Xendit first for Indonesia payment support.
-
-### Phase 8
-
-Implement PayPal and Stripe for international users.
+| 1 | Plugin trait, model, registry, provider skeletons | Done |
+| 2 | Generic HTTP handlers wired into Axum router | Done |
+| 3 | Provider environment configuration and capability reporting | Done |
+| 4 | Default provider routes | Done |
+| 5 | x402 invoice creation in plugin | Done |
+| 6 | x402 receipt verification in plugin | Done |
+| 7 | Midtrans and Xendit full implementation | Done |
+| 8 | PayPal and Stripe full implementation | Done |
+| 9 | Webhook handler, DB writes, allowlist grant, Xendit auto-disburse | Done |
 
 ## Important Note
 

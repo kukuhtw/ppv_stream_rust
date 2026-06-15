@@ -110,6 +110,42 @@
     </div>
   </div>
 
+  <!-- Ganti Password Admin -->
+  <div class="card mt-4 shadow-sm">
+    <div class="card-header fw-semibold">Ganti Password Admin</div>
+    <div class="card-body">
+      <div id="pwAlert" class="d-none mb-3"></div>
+      <form id="changePassForm">
+        <div class="row g-3">
+          <div class="col-12">
+            <label for="cpCurrent" class="form-label">Password Sekarang <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input id="cpCurrent" type="password" class="form-control" autocomplete="current-password" placeholder="Password saat ini">
+              <button class="btn btn-outline-secondary" type="button" data-toggle-pass="cpCurrent">Lihat</button>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label for="cpNew" class="form-label">Password Baru <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input id="cpNew" type="password" class="form-control" autocomplete="new-password" placeholder="Min. 8 karakter">
+              <button class="btn btn-outline-secondary" type="button" data-toggle-pass="cpNew">Lihat</button>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label for="cpConfirm" class="form-label">Konfirmasi Password Baru <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input id="cpConfirm" type="password" class="form-control" autocomplete="new-password" placeholder="Ulangi password baru">
+              <button class="btn btn-outline-secondary" type="button" data-toggle-pass="cpConfirm">Lihat</button>
+            </div>
+          </div>
+        </div>
+        <div class="mt-3">
+          <button type="submit" class="btn btn-warning px-4">Ubah Password</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div class="card mt-4 shadow-sm">
     <div class="card-header fw-semibold small">Panduan Konfigurasi</div>
     <div class="card-body small text-muted">
@@ -221,6 +257,60 @@ async function sendTest() {
 }
 
 loadSettings();
+
+// Toggle password visibility
+document.querySelectorAll('[data-toggle-pass]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const f = document.getElementById(btn.dataset.togglePass);
+    f.type = f.type === 'password' ? 'text' : 'password';
+  });
+});
+
+function showPwAlert(type, msg) {
+  const el = document.getElementById('pwAlert');
+  el.className = `alert alert-${type} alert-dismissible fade show`;
+  el.innerHTML = `${msg}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+}
+
+document.getElementById('changePassForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const cur     = document.getElementById('cpCurrent').value;
+  const nw      = document.getElementById('cpNew').value;
+  const confirm = document.getElementById('cpConfirm').value;
+
+  if (!cur || !nw || !confirm) {
+    return showPwAlert('warning', 'Semua field wajib diisi.');
+  }
+  if (nw.length < 8) {
+    return showPwAlert('warning', 'Password baru minimal 8 karakter.');
+  }
+  if (nw !== confirm) {
+    return showPwAlert('warning', 'Konfirmasi password tidak cocok.');
+  }
+
+  const btn = e.submitter;
+  btn.disabled = true;
+  btn.textContent = 'Memproses...';
+  try {
+    const r = await fetch('/admin/change_password', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({current_password: cur, new_password: nw}),
+    });
+    const j = await r.json();
+    if (j.ok) {
+      showPwAlert('success', 'Password berhasil diubah! Notifikasi email telah dikirim.');
+      document.getElementById('changePassForm').reset();
+    } else {
+      showPwAlert('danger', 'Gagal: ' + (j.error || 'Unknown error'));
+    }
+  } catch (err) {
+    showPwAlert('danger', 'Error: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Ubah Password';
+  }
+});
 </script>
 </body>
 </html>

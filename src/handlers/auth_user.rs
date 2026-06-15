@@ -322,9 +322,8 @@ pub async fn change_password(
     use serde_json::json;
 
     // Require active session
-    let (user_id, _is_admin) = match crate::sessions::current_user_id(&st.pool, &cookies).await {
-        Ok(Some(u)) => u,
-        _ => return Json(json!({"ok": false, "error": "not logged in"})),
+    let Some((user_id, _is_admin)) = sessions::current_user_id(&st.pool, &st.cfg, &cookies).await else {
+        return Json(json!({"ok": false, "error": "not logged in"}));
     };
 
     if !validators::valid_password(&payload.new_password) {
@@ -348,7 +347,10 @@ pub async fn change_password(
     };
 
     // Verify current password
-    let parsed = match PasswordHash::new(&row.password_hash) {
+    let Some(ph) = row.password_hash.as_deref() else {
+        return Json(json!({"ok": false, "error": "server error"}));
+    };
+    let parsed = match PasswordHash::new(ph) {
         Ok(h) => h,
         Err(_) => return Json(json!({"ok": false, "error": "server error"})),
     };

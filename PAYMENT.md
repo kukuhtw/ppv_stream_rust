@@ -2,9 +2,12 @@
 
 ## Overview
 
-This platform is a **Pay-Per-View (PPV) streaming service**. Buyers pay directly to access a specific video. Revenue is automatically split between the **creator (owner)** and the **platform admin** at the moment of payment — no manual forwarding by admin, no escrow.
+This platform is a **Pay-Per-View (PPV) streaming service**. Buyers pay directly to access a specific video. Revenue is automatically split between the **creator (owner)** and the **platform admin** at the moment of payment.
 
-The primary payment method is **x402 (on-chain crypto)**. Traditional payment gateways (Stripe, PayPal, Midtrans, Xendit) are wired up in the plugin architecture but not yet implemented.
+Two payment paths are available:
+
+1. **x402 (on-chain crypto)** — primary; funds split on-chain via smart contract, instant.
+2. **Fiat payment plugins** — Stripe, PayPal, Midtrans, Xendit; all fully implemented with webhook receivers and automatic DB access grants.
 
 ---
 
@@ -185,15 +188,92 @@ The creator can also set a **Preferred Chain** (Mega Testnet, Polygon Mainnet, E
 
 ---
 
+---
+
+## Fiat Payment Flow (Stripe / PayPal / Midtrans / Xendit)
+
+All four fiat providers share the same database-backed flow:
+
+```
+Buyer clicks "Pay with [Provider]"
+    │
+    ▼
+POST /api/pay/:provider/start
+    │  - Pre-insert fiat_invoices (status = pending, invoice_uid = UUID)
+    │  - Call provider API to create checkout/invoice
+    │  - Update fiat_invoices with provider_ref and payment_url
+    │  - Return payment_url to frontend
+    │
+    ▼
+Browser redirects buyer to provider hosted page
+    │
+    ▼
+Buyer completes payment on provider page
+    │
+    ▼
+Provider sends webhook → POST /api/pay/:provider/webhook
+    │  - Extract raw body bytes (needed for HMAC verification)
+    │  - Verify signature:
+    │    • Stripe: HMAC-SHA256 raw body vs STRIPE_WEBHOOK_SECRET
+    │    • PayPal: POST to /v1/notifications/verify-webhook-signature API
+    │    • Midtrans: SHA-512(order_id + status_code + gross_amount + server_key)
+    │    • Xendit: x-callback-token header check
+    │  - On PaymentStatus::Paid:
+    │    → UPDATE fiat_invoices SET status='paid', paid_at=now()
+    │    → INSERT purchases (user_id, video_id)
+    │    → INSERT allowlist (video_id, username) — grants permanent access
+    │    → [Xendit only] POST /disbursements → 90% to creator's bank account
+    │
+    ▼
+Buyer now has permanent access to the video ✅
+```
+
+### Provider-Specific Details
+
+| Provider | Checkout API | Webhook Verification | Creator Payout |
+|---|---|---|---|
+| **Stripe** | `POST /v1/checkout/sessions` → `url` | HMAC-SHA256 on raw bytes | Manual via Stripe dashboard |
+| **PayPal** | `POST /v2/checkout/orders` → `approve` link | `/v1/notifications/verify-webhook-signature` | Manual via PayPal dashboard |
+| **Midtrans** | `POST /snap/v1/transactions` → `redirect_url` | SHA-512 hash of concatenated fields | Manual (no Midtrans payout API) |
+| **Xendit** | `POST /v2/invoices` → `invoice_url` | `x-callback-token` header | **Automatic** via Xendit Disbursements API |
+
+### Creator Bank Account for Xendit
+
+For Xendit auto-disburse to work, the creator must set their bank account in **Dashboard → Edit Profile**:
+
+```
+Format: BANK_CODE ACCOUNT_NUMBER a/n FULL_NAME
+Example: BCA 1234567890 a/n Budi Santoso
+```
+
+The backend splits this string on `a/n` to extract the bank code, account number, and holder name for the Xendit Disbursements API call.
+
+---
+
+## Admin Payment Monitoring
+
+The admin dashboard at `/public/admin/payments.html` provides:
+
+- Filter by provider (Stripe/PayPal/Midtrans/Xendit) and status (pending/paid/failed)
+- Total counts: all, paid, pending, failed
+- Table showing invoice UID, buyer, video, amount, status, timestamps
+- **Disburse button** for paid-but-not-yet-disbursed invoices:
+  - Xendit: triggers real Disbursements API call
+  - Others: marks `disburse_ref='manual'` (admin confirms they did it via provider dashboard)
+
+API: `GET /admin/payments?provider=&status=&limit=`
+Disburse: `POST /admin/payments/:invoice_uid/disburse`
+
+---
+
 ## Summary
 
 ```
-Buyer pays X → Contract splits instantly → Creator gets 0.9X, Admin gets 0.1X
-                                         → Backend records purchase + allowlist
-                                         → Buyer can now stream the video
+x402: Buyer → Smart contract → Creator gets 0.9X instantly, Admin gets 0.1X
+Fiat: Buyer → Provider hosted page → Webhook → Backend grants access → Admin triggers disburse
 ```
 
-- **No admin middleman** — split happens on-chain, trustlessly
-- **Revenue share: 90% creator / 10% admin** — hardcoded in source
+- **Revenue share: 90% creator / 10% admin** — enforced in smart contract (x402) or admin-triggered disburse (fiat)
 - **Access: permanent** — stored in `allowlist` table
-- **Crypto only (today)** — Stripe/PayPal/Midtrans/Xendit are stubs
+- **Xendit only**: auto-disburse to creator's bank via Xendit API on webhook receipt
+- **All others**: admin manually transfers via provider dashboard, then clicks Disburse in admin panel

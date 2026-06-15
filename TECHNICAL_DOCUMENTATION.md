@@ -62,28 +62,43 @@ src/
 ├── main.rs
 ├── config.rs
 ├── db.rs
-├── email.rs
+├── email.rs                  ← SMTP email (lettre); send_reset, send_password_changed, send_test
 ├── ffmpeg.rs
 ├── sessions.rs
 ├── validators.rs
 ├── worker.rs
-├── auth.rs
-├── bootstrap.rs
-├── hls.rs
-├── token.rs
+├── auth.rs                   (legacy)
+├── bootstrap.rs              (legacy)
+├── hls.rs                    (legacy)
+├── token.rs                  (legacy)
 ├── handlers/
 │   ├── mod.rs
-│   ├── admin.rs
-│   ├── auth_admin.rs
-│   ├── auth_user.rs
+│   ├── admin.rs              ← admin_data, admin_payments, admin_disburse, admin_smtp_get/save
+│   ├── auth_admin.rs         ← post_admin_login/logout, admin_change_password
+│   ├── auth_user.rs          ← post_register/login/logout/forgot/reset, change_password
 │   ├── kurs.rs
 │   ├── me.rs
-│   ├── pay.rs
+│   ├── pay.rs                ← x402 payment handlers
+│   ├── payment_plugins.rs    ← fiat plugin handlers: create_invoice, handle_webhook
 │   ├── setup.rs
 │   ├── stream.rs
 │   ├── upload.rs
 │   ├── users.rs
 │   └── video.rs
+├── plugins/
+│   ├── mod.rs
+│   └── payment/
+│       ├── mod.rs
+│       ├── models.rs
+│       ├── traits.rs
+│       ├── registry.rs
+│       └── providers/
+│           ├── mod.rs
+│           ├── x402.rs
+│           ├── stripe.rs     ← Checkout Sessions + HMAC-SHA256 webhook
+│           ├── paypal.rs     ← Orders v2 + verify-webhook-signature
+│           ├── midtrans.rs   ← Snap API + SHA-512 webhook
+│           └── xendit.rs     ← Invoice API + callback token + auto-disburse
 ├── services/
 │   └── x402_watcher.rs
 └── bin/
@@ -142,8 +157,15 @@ Registered routes include:
 | `POST /auth/register` | `auth_user::post_register` |
 | `POST /auth/login` | `auth_user::post_login` |
 | `POST /auth/logout` | `auth_user::post_logout` |
+| `POST /api/change_password` | `auth_user::change_password` |
 | `POST /admin/login` | `auth_admin::post_admin_login` |
 | `POST /admin/logout` | `auth_admin::post_admin_logout` |
+| `POST /admin/change_password` | `auth_admin::admin_change_password` |
+| `GET /admin/data` | `admin::admin_data` |
+| `GET /admin/payments` | `admin::admin_payments` |
+| `POST /admin/payments/:uid/disburse` | `admin::admin_disburse` |
+| `GET /admin/smtp` | `admin::admin_smtp_get` |
+| `POST /admin/smtp` | `admin::admin_smtp_save` |
 | `GET /setup_admin` | `setup::setup_admin` |
 | `POST /api/upload` | `upload::upload_video` |
 | `GET /api/videos` | `video::list_videos` |
@@ -155,6 +177,12 @@ Registered routes include:
 | `POST /api/pay/x402/start` | `pay::x402_start` |
 | `GET /api/crypto_price` | `pay::crypto_price` |
 | `POST /api/pay/x402/confirm` | `pay::x402_confirm` |
+| `GET /api/pay/providers` | `payment_plugins::list_payment_plugins` |
+| `POST /api/pay/start` | `payment_plugins::create_default_payment_invoice` |
+| `POST /api/pay/confirm` | `payment_plugins::confirm_default_payment` |
+| `POST /api/pay/:provider/start` | `payment_plugins::create_payment_invoice` |
+| `POST /api/pay/:provider/confirm` | `payment_plugins::confirm_payment` |
+| `POST /api/pay/:provider/webhook` | `payment_plugins::handle_webhook` |
 | `GET /api/profile` | `users::get_my_profile` |
 | `POST /api/profile_update` | `users::update_my_profile` |
 | `GET /api/user_profile` | `users::public_profile` |
@@ -310,9 +338,31 @@ Requires a minimum length of eight characters.
 
 ## 6.3 `src/email.rs`
 
-### `send_reset(email, token)`
+This module manages outgoing email through `lettre` with `AsyncSmtpTransport<Tokio1Executor>`.
 
-Development only password reset sender. It logs the reset link rather than sending a real email. Production deployment should replace this with SMTP or an email provider integration.
+### `SmtpConfig`
+
+Holds SMTP connection parameters: `host`, `port`, `username`, `password`, `from_email`, `from_name`, `use_tls`, `enabled`.
+
+### `SmtpConfig::load(pool)`
+
+Reads SMTP settings from the `smtp_settings` table (row id=1). Uses `sqlx::query()` for runtime reflection so no live DB is required at compile time.
+
+### `send(cfg, to_email, to_name, subject, html)`
+
+Builds a `lettre::Message` and sends via `relay()` (TLS port 465) or `starttls_relay()` (STARTTLS port 587) depending on `use_tls`. If `cfg.enabled` is false, the message is logged only.
+
+### `send_reset(pool, to_email, token, base_url)`
+
+Sends a password-reset email with an HTML button linking to `/auth/reset_password.html?token=...`. Used by `post_forgot()`.
+
+### `send_password_changed(pool, to_email, username)`
+
+Sends a security notification email when a password is successfully changed. Called fire-and-forget via `tokio::spawn` from both `change_password` and `admin_change_password`.
+
+### `send_test(cfg, to_email)`
+
+Sends a test email using the provided `SmtpConfig` directly (does not reload from DB). Used by `admin_smtp_save()` when `test_email` is present in the payload.
 
 # 7. User Authentication Handlers
 
@@ -357,6 +407,22 @@ Authenticates a user with Argon2, requires `is_admin != 0`, then creates an admi
 
 Destroys the current session and redirects to the admin login page.
 
+### `admin_change_password()`
+
+Allows an authenticated admin to change their password. Flow:
+
+1. Verify admin session via `sessions::current_user_id` and confirm `is_admin = true`.
+2. Validate new password length ≥ 8 and differs from current.
+3. Load `password_hash, email, username` from `users` using `sqlx::query()`.
+4. Verify current password with Argon2.
+5. Hash new password with Argon2 and `SaltString::generate`.
+6. `UPDATE users SET password_hash` in PostgreSQL.
+7. Fire-and-forget `email::send_password_changed()` via `tokio::spawn`.
+
+### `change_password()` (in `auth_user.rs`)
+
+Same flow as above but for regular users. Requires non-admin session, same validation and email notification pattern.
+
 # 8. User and Administration Handlers
 
 ## 8.1 `src/handlers/me.rs`
@@ -383,18 +449,35 @@ Loads a profile by `user_id` or `username`. The current implementation exposes e
 
 ### `admin_data()`
 
-Builds an HTML page containing recent rows and total counts for:
+Builds an HTML page containing recent rows and total counts for: users, sessions, videos, allowlist, purchases, and password resets. Contains an internal `esc()` HTML escaping helper.
 
-* users
-* sessions
-* videos
-* allowlist
-* purchases
-* password resets
+Note: admin session check is commented out in this handler; route is not protected in the current implementation.
 
-The function contains an internal `esc()` helper for HTML escaping.
+### `admin_payments()`
 
-Important concern: the admin session check is commented out. The route is therefore not protected in the current implementation.
+Returns JSON with fiat invoice monitoring data. Accepts query parameters `provider`, `status`, and `limit`. Builds a dynamic SQL string and returns:
+
+```json
+{
+  "ok": true,
+  "totals": {"all": 42, "paid": 10, "pending": 30, "failed": 2},
+  "items": [...]
+}
+```
+
+Each item includes `invoice_uid`, `provider`, `buyer_username`, `buyer_email`, `video_title`, `amount`, `currency`, `status`, `created_at`, `paid_at`, `disbursed_at`, `disburse_ref`, `creator_bank`.
+
+### `admin_disburse()`
+
+Triggers a disburse for a paid, not-yet-disbursed invoice. For Xendit, calls the real Disbursements API and stores the disburse reference. For other providers, marks `disburse_ref='manual'` and sets `disbursed_at`. Returns JSON with `ok`, `method`, and `disburse_ref`.
+
+### `admin_smtp_get()`
+
+Returns the current `smtp_settings` row as JSON. Used by `public/admin/settings.html` to pre-populate the form.
+
+### `admin_smtp_save()`
+
+Accepts `SmtpSavePayload` with all SMTP fields. UPSERTs into `smtp_settings`. If `test_email` is present, calls `email::send_test()` and returns `test_sent` or `test_error` in the response.
 
 ## 8.4 `src/handlers/setup.rs`
 
@@ -929,18 +1012,63 @@ flowchart TB
     watcher --> db
 ```
 
-# 19. Database Tables Inferred from the Code
+# 19. Database Tables
 
-| Table | Used for |
-|---|---|
-| `users` | Identity, roles, creator profile, wallet data |
-| `sessions` | Server side sessions |
-| `videos` | Video metadata and processing state |
-| `allowlist` | Playback authorization |
-| `purchases` | Completed content purchases |
-| `password_resets` | Password recovery tokens |
-| `pay_tokens` | Supported blockchain tokens |
-| `x402_invoices` | Payment invoices and transaction state |
+| Table | Used for | Migration |
+|---|---|---|
+| `users` | Identity, roles, creator profile, wallet, bank data | `sql/001_init.sql` |
+| `sessions` | Server side sessions with HMAC-signed cookies | `sql/004_sessions.sql` |
+| `videos` | Video metadata and HLS processing state | `sql/001_init.sql` |
+| `allowlist` | Playback authorization `(video_id, username)` pairs | `sql/005_allowlist.sql` |
+| `purchases` | Completed content purchases ledger | `sql/001_init.sql` |
+| `password_resets` | Single-use password recovery tokens | `sql/003_password_resets.sql` |
+| `pay_tokens` | Supported EVM blockchain payment tokens | `migrations/021_pay_tokens.sql` |
+| `x402_invoices` | On-chain payment invoices and transaction state | `migrations/014_x402_invoice.sql` |
+| `pay_tokens_compat` | Compatibility view for legacy `erc20` column name | `migrations/024_pay_tokens_compat_view.sql` |
+| `fiat_invoices` | Fiat payment invoices (Stripe/PayPal/Midtrans/Xendit) | `migrations/026_fiat_invoices.sql` |
+| `smtp_settings` | SMTP email configuration (single row, id=1) | `migrations/027_smtp_settings.sql` |
+
+### `fiat_invoices` Schema
+
+```sql
+CREATE TABLE IF NOT EXISTS fiat_invoices (
+  id          BIGSERIAL PRIMARY KEY,
+  invoice_uid TEXT NOT NULL UNIQUE,
+  provider    TEXT NOT NULL,              -- stripe, paypal, midtrans, xendit
+  provider_ref TEXT,                      -- provider's own order/invoice ID
+  user_id     TEXT NOT NULL REFERENCES users(id),
+  video_id    TEXT NOT NULL REFERENCES videos(id),
+  creator_id  TEXT NOT NULL REFERENCES users(id),
+  amount      BIGINT NOT NULL,
+  currency    TEXT NOT NULL DEFAULT 'USD',
+  status      TEXT NOT NULL DEFAULT 'pending',  -- pending, paid, failed, expired, cancelled
+  payment_url TEXT,
+  buyer_email TEXT,
+  meta        JSONB,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  paid_at     TIMESTAMPTZ,
+  disbursed_at TIMESTAMPTZ,
+  disburse_ref TEXT
+);
+```
+
+### `smtp_settings` Schema
+
+```sql
+CREATE TABLE IF NOT EXISTS smtp_settings (
+  id         SERIAL PRIMARY KEY,
+  host       TEXT NOT NULL DEFAULT '',
+  port       INTEGER NOT NULL DEFAULT 587,
+  username   TEXT NOT NULL DEFAULT '',
+  password   TEXT NOT NULL DEFAULT '',
+  from_email TEXT NOT NULL DEFAULT '',
+  from_name  TEXT NOT NULL DEFAULT 'PPV Stream',
+  use_tls    BOOLEAN NOT NULL DEFAULT true,
+  enabled    BOOLEAN NOT NULL DEFAULT false,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- Row id=1 is always present (seeded by migration)
+```
 
 # 20. Important Technical Risks and Refactoring Priorities
 

@@ -39,7 +39,7 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
     use crate::handlers::me::{me, MeState};
     use crate::handlers::{
         admin::{admin_data, admin_disburse, admin_payments, admin_smtp_get, admin_smtp_save, AdminState},
-        auth_admin::{post_admin_login, post_admin_logout, AuthAdminState},
+        auth_admin::{admin_change_password, post_admin_login, post_admin_logout, AuthAdminState},
         auth_user::{change_password, post_login, post_logout, post_register, AuthUserState},
         kurs::{router as kurs_router, KursState},
         payment_plugins::{
@@ -109,6 +109,7 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
             get(|| async { Redirect::to("/public/admin/login.html") }).post(post_admin_login),
         )
         .route("/admin/logout", post(post_admin_logout))
+        .route("/admin/change_password", post(admin_change_password))
         .with_state(AuthAdminState {
             pool: pool.clone(),
             cfg: cfg.clone(),

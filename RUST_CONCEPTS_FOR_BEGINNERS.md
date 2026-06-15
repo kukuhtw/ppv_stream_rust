@@ -1092,7 +1092,76 @@ Add `Debug` to one request structure and log it safely without exposing password
 
 Change worker concurrency from two to one and observe how jobs are serialized.
 
-# 17. Key Takeaways
+# 17. Payment Plugin System Patterns
+
+The fiat payment plugin system in `src/plugins/payment/` introduces three new Rust patterns worth understanding.
+
+## 17.1 Trait Objects for Runtime Plugin Selection
+
+```rust
+// traits.rs
+#[async_trait::async_trait]
+pub trait PaymentPlugin: Send + Sync {
+    fn provider_key(&self) -> &'static str;
+    async fn create_invoice(&self, req: CreateInvoiceRequest) -> anyhow::Result<Invoice>;
+    async fn confirm_payment(&self, req: ConfirmPaymentRequest) -> anyhow::Result<PaymentResult>;
+}
+```
+
+The registry stores plugins as:
+
+```rust
+HashMap<String, Arc<dyn PaymentPlugin>>
+```
+
+`Arc<dyn PaymentPlugin>` is a reference-counted pointer to any type that implements `PaymentPlugin`. This lets the application choose between Stripe, PayPal, Midtrans, or Xendit at runtime based on environment variables, without changing code paths.
+
+`Send + Sync` bounds are required because plugins are stored in shared state and called from multiple Tokio threads.
+
+`#[async_trait::async_trait]` is a proc-macro that rewrites async trait methods because Rust's own async trait support has limitations with object safety.
+
+## 17.2 Fire-and-Forget with `tokio::spawn`
+
+When a payment password is changed, an email notification is sent without blocking the HTTP response:
+
+```rust
+let pool_clone = st.pool.clone();
+let email_addr = row.email.clone();
+let username   = row.username.clone();
+tokio::spawn(async move {
+    crate::email::send_password_changed(&pool_clone, &email_addr, &username).await;
+});
+```
+
+Key points:
+
+* `tokio::spawn` creates a new independent Tokio task. The spawned task runs concurrently with the rest of the handler.
+* The handler returns immediately without waiting for the email to be sent.
+* `async move` captures `pool_clone`, `email_addr`, and `username` by value so they live as long as the spawned task needs them.
+* This pattern is called "fire-and-forget" because the caller does not await the result.
+
+If the email fails, the error is silently ignored. For critical notifications, consider logging or storing failures in the database.
+
+## 17.3 Raw Bytes in Webhook Handlers
+
+Webhook signature verification requires the exact bytes the provider sent, before any JSON parsing changes whitespace or field order:
+
+```rust
+pub async fn handle_webhook(
+    Path(provider): Path<String>,
+    headers: HeaderMap,
+    body: Bytes,          // raw body bytes
+) -> impl IntoResponse {
+    // Store raw body as base64 so plugins can recover it
+    let raw_b64 = base64::encode(&body);
+    payload["__raw__"] = json!(raw_b64);
+    ...
+}
+```
+
+If you parse `body` into JSON first and then re-serialize it, whitespace and key ordering may change, making the HMAC signature mismatch. By extracting `Bytes` directly and keeping the raw value, each provider plugin can apply its own signature check on the original bytes.
+
+# 18. Key Takeaways
 
 The PPV Stream application demonstrates that Rust language concepts are not isolated academic topics.
 
@@ -1103,11 +1172,13 @@ They directly support production behavior:
 * Lifetimes prevent invalid references during asynchronous work.
 * Pattern matching makes absence and failure explicit.
 * Traits connect application types to Axum, Serde, parsing, and async I/O.
+* Trait objects (`Arc<dyn Trait>`) allow runtime plugin selection for payment providers.
 * Generic bounds allow reusable helpers to accept asynchronous closures.
 * Error handling avoids hidden exceptions.
 * Iterators express data transformation clearly.
 * Smart pointers make shared state safe.
 * Tokio concurrency separates HTTP requests from expensive processing.
+* Fire-and-forget spawns handle side effects (email) without blocking responses.
 * Macros reduce boilerplate for SQL, JSON, logging, async runtime setup, and blockchain bindings.
 
 This repository is therefore a useful practical learning project for moving from basic Rust syntax into real web, database, multimedia, and blockchain development.
