@@ -38,7 +38,7 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
     use crate::handlers::pay;
     use crate::handlers::me::{me, MeState};
     use crate::handlers::{
-        admin::{admin_data, AdminState},
+        admin::{admin_data, admin_disburse, admin_payments, AdminState},
         auth_admin::{post_admin_login, post_admin_logout, AuthAdminState},
         auth_user::{post_login, post_logout, post_register, AuthUserState},
         kurs::{router as kurs_router, KursState},
@@ -77,7 +77,9 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
         .nest_service("/static_hls", hls_service);
 
     let admin_pages_router = Router::new()
-        .route("/admin/data", get(admin_data))
+        .route("/admin/data",                    get(admin_data))
+        .route("/admin/payments",                get(admin_payments))
+        .route("/admin/payments/:uid/disburse",  post(admin_disburse))
         .with_state(AdminState { pool: pool.clone() });
 
     let user_auth_router = Router::new()

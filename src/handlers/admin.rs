@@ -1,12 +1,12 @@
 // src/handlers/admin.rs
 use axum::{
-    extract::{Query, State},
-    response::Html,
+    extract::{Path, Query, State},
+    response::{Html, IntoResponse},
+    Json,
 };
 use serde::Deserialize;
-use sqlx::Row; // untuk akses row.get::<T,_>()
-               // use crate::sessions; // jika ingin cek session admin
-               // use tower_cookies::Cookies;
+use serde_json::json;
+use sqlx::Row;
 
 #[derive(Clone)]
 pub struct AdminState {
@@ -296,4 +296,190 @@ pub async fn admin_data(
     html.push_str("</tbody></table></div>");
 
     Html(html)
+}
+
+// ---------------------------------------------------------------------------
+// Payment monitoring — GET /admin/payments?provider=&status=&limit=
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+pub struct PaymentsQuery {
+    pub provider: Option<String>,
+    pub status:   Option<String>,
+    pub limit:    Option<i64>,
+}
+
+pub async fn admin_payments(
+    State(st): State<AdminState>,
+    Query(q):  Query<PaymentsQuery>,
+) -> impl IntoResponse {
+    let limit    = q.limit.unwrap_or(100).min(1000);
+    let provider = q.provider.as_deref().unwrap_or("");
+    let status   = q.status.as_deref().unwrap_or("");
+
+    // Build WHERE clauses dynamically using runtime query (not macro) to avoid DB-at-build-time
+    let base_sql = r#"
+        SELECT
+            fi.invoice_uid,
+            fi.provider,
+            fi.status,
+            fi.amount,
+            fi.currency,
+            fi.payment_url,
+            fi.buyer_email,
+            fi.created_at::TEXT    AS created_at,
+            fi.paid_at::TEXT       AS paid_at,
+            fi.disbursed_at::TEXT  AS disbursed_at,
+            fi.disburse_ref,
+            buyer.username         AS buyer_username,
+            v.title                AS video_title,
+            creator.username       AS creator_username,
+            creator.bank_account   AS creator_bank
+        FROM fiat_invoices fi
+        JOIN users  buyer   ON buyer.id   = fi.user_id
+        JOIN videos v       ON v.id       = fi.video_id
+        JOIN users  creator ON creator.id = fi.creator_id
+    "#;
+
+    let mut conditions: Vec<String> = vec![];
+    if !provider.is_empty() { conditions.push(format!("fi.provider = '{}'", provider.replace('\'', "''"))); }
+    if !status.is_empty()   { conditions.push(format!("fi.status = '{}'",   status.replace('\'', "''"))); }
+
+    let where_clause = if conditions.is_empty() {
+        String::new()
+    } else {
+        format!("WHERE {}", conditions.join(" AND "))
+    };
+
+    let sql = format!("{base_sql} {where_clause} ORDER BY fi.created_at DESC LIMIT {limit}");
+
+    let rows = sqlx::query(&sql)
+        .fetch_all(&st.pool)
+        .await
+        .unwrap_or_default();
+
+    let items: Vec<serde_json::Value> = rows.iter().map(|r| {
+        json!({
+            "invoice_uid":      r.try_get::<String, _>("invoice_uid").unwrap_or_default(),
+            "provider":         r.try_get::<String, _>("provider").unwrap_or_default(),
+            "status":           r.try_get::<String, _>("status").unwrap_or_default(),
+            "amount":           r.try_get::<i64,   _>("amount").unwrap_or(0),
+            "currency":         r.try_get::<String, _>("currency").unwrap_or_default(),
+            "payment_url":      r.try_get::<Option<String>, _>("payment_url").unwrap_or(None),
+            "buyer_email":      r.try_get::<Option<String>, _>("buyer_email").unwrap_or(None),
+            "created_at":       r.try_get::<Option<String>, _>("created_at").unwrap_or(None),
+            "paid_at":          r.try_get::<Option<String>, _>("paid_at").unwrap_or(None),
+            "disbursed_at":     r.try_get::<Option<String>, _>("disbursed_at").unwrap_or(None),
+            "disburse_ref":     r.try_get::<Option<String>, _>("disburse_ref").unwrap_or(None),
+            "buyer_username":   r.try_get::<String, _>("buyer_username").unwrap_or_default(),
+            "video_title":      r.try_get::<Option<String>, _>("video_title").unwrap_or(None),
+            "creator_username": r.try_get::<String, _>("creator_username").unwrap_or_default(),
+            "creator_bank":     r.try_get::<Option<String>, _>("creator_bank").unwrap_or(None),
+        })
+    }).collect();
+
+    // Totals for filter status badge counts
+    let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM fiat_invoices")
+        .fetch_one(&st.pool).await.unwrap_or(0);
+    let total_paid: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM fiat_invoices WHERE status='paid'")
+        .fetch_one(&st.pool).await.unwrap_or(0);
+    let total_pending: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM fiat_invoices WHERE status='pending'")
+        .fetch_one(&st.pool).await.unwrap_or(0);
+    let total_failed: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM fiat_invoices WHERE status IN ('failed','expired','cancelled')")
+        .fetch_one(&st.pool).await.unwrap_or(0);
+
+    Json(json!({
+        "ok": true,
+        "totals": {
+            "all":     total,
+            "paid":    total_paid,
+            "pending": total_pending,
+            "failed":  total_failed,
+        },
+        "items": items
+    }))
+}
+
+// ---------------------------------------------------------------------------
+// Manual disburse — POST /admin/payments/:uid/disburse
+// ---------------------------------------------------------------------------
+//
+// For Xendit: triggers the Disbursement API (same as the auto-webhook path).
+// For Stripe / PayPal / Midtrans: marks the record as disbursed (admin confirms
+//   they have already transferred via the provider's own dashboard).
+
+pub async fn admin_disburse(
+    State(st):       State<AdminState>,
+    Path(uid):       Path<String>,
+) -> impl IntoResponse {
+    // Fetch invoice + creator bank_account in one query
+    let row = sqlx::query(
+        r#"SELECT fi.provider, fi.amount, fi.currency, fi.status, fi.disbursed_at,
+                  creator.bank_account AS creator_bank
+           FROM fiat_invoices fi
+           JOIN users creator ON creator.id = fi.creator_id
+           WHERE fi.invoice_uid = $1"#,
+    )
+    .bind(&uid)
+    .fetch_optional(&st.pool)
+    .await;
+
+    let row = match row {
+        Ok(Some(r)) => r,
+        Ok(None)    => return Json(json!({"ok": false, "error": "invoice not found"})),
+        Err(e)      => return Json(json!({"ok": false, "error": format!("db: {e}")})),
+    };
+
+    let status:       String         = row.try_get("status").unwrap_or_default();
+    let disbursed_at: Option<String> = row.try_get("disbursed_at").unwrap_or(None);
+    let provider:     String         = row.try_get("provider").unwrap_or_default();
+    let amount:       i64            = row.try_get("amount").unwrap_or(0);
+
+    if status != "paid" {
+        return Json(json!({"ok": false, "error": "invoice is not paid yet"}));
+    }
+    if disbursed_at.is_some() {
+        return Json(json!({"ok": false, "error": "already disbursed"}));
+    }
+
+    if provider == "xendit" {
+        // Try actual Xendit disbursement
+        use crate::plugins::payment::providers::xendit::XenditPaymentPlugin;
+        let creator_bank: Option<String> = row.try_get("creator_bank").unwrap_or(None);
+
+        match creator_bank {
+            Some(ba) if !ba.trim().is_empty() => {
+                let xp = XenditPaymentPlugin::from_env();
+                match xp.disburse_to_creator(&ba, amount, &uid).await {
+                    Ok(resp) => {
+                        let disburse_ref = resp["id"].as_str().unwrap_or("").to_string();
+                        let _ = sqlx::query(
+                            "UPDATE fiat_invoices SET disbursed_at = now(), disburse_ref = $1 WHERE invoice_uid = $2"
+                        )
+                        .bind(&disburse_ref)
+                        .bind(&uid)
+                        .execute(&st.pool)
+                        .await;
+                        return Json(json!({"ok": true, "disburse_ref": disburse_ref, "method": "xendit_api"}));
+                    }
+                    Err(e) => {
+                        return Json(json!({"ok": false, "error": format!("xendit disburse: {e}")}));
+                    }
+                }
+            }
+            _ => {
+                return Json(json!({"ok": false, "error": "creator has no bank_account set"}));
+            }
+        }
+    }
+
+    // For all other providers: admin confirms manual disbursement
+    let _ = sqlx::query(
+        "UPDATE fiat_invoices SET disbursed_at = now(), disburse_ref = 'manual' WHERE invoice_uid = $1"
+    )
+    .bind(&uid)
+    .execute(&st.pool)
+    .await;
+
+    Json(json!({"ok": true, "method": "manual", "invoice_uid": uid}))
 }

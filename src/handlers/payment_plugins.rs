@@ -103,7 +103,7 @@ async fn create_invoice_with_provider(
 
     // Fetch video info (title + creator_id) for the fiat_invoices row
     let video_row = sqlx::query!(
-        "SELECT title, user_id AS creator_id FROM videos WHERE id = $1",
+        "SELECT title, owner_id AS creator_id FROM videos WHERE id = $1",
         payload.video_id
     )
     .fetch_optional(&state.pool)
@@ -288,10 +288,15 @@ pub async fn handle_webhook(
     // ---- Grant access ----
     let invoice_uid = &result.invoice_id;
 
-    // Fetch the invoice row we pre-inserted during create_invoice
+    // Single JOIN fetches invoice + buyer username + creator bank_account in one round trip
     let inv = sqlx::query!(
-        r#"SELECT user_id, video_id, creator_id, amount, currency
-           FROM fiat_invoices WHERE invoice_uid = $1"#,
+        r#"SELECT fi.user_id, fi.video_id, fi.creator_id, fi.amount, fi.currency,
+                  buyer.username  AS buyer_username,
+                  creator.bank_account AS creator_bank
+           FROM fiat_invoices fi
+           JOIN users buyer   ON buyer.id   = fi.user_id
+           JOIN users creator ON creator.id = fi.creator_id
+           WHERE fi.invoice_uid = $1"#,
         invoice_uid
     )
     .fetch_optional(&state.pool)
@@ -309,21 +314,7 @@ pub async fn handle_webhook(
         }
     };
 
-    // Fetch username for the allowlist insert
-    let username_row = sqlx::query!(
-        "SELECT username FROM users WHERE id = $1",
-        inv.user_id
-    )
-    .fetch_optional(&state.pool)
-    .await;
-
-    let username = match username_row {
-        Ok(Some(r)) => r.username,
-        _           => {
-            tracing::error!("webhook: user not found for id={}", inv.user_id);
-            return Json(json!({"ok": false, "error": "user not found"}));
-        }
-    };
+    let username = inv.buyer_username.clone();
 
     // Mark invoice paid
     let _ = sqlx::query!(
@@ -371,16 +362,8 @@ pub async fn handle_webhook(
     if provider == "xendit" {
         use crate::plugins::payment::providers::xendit::XenditPaymentPlugin;
 
-        let bank_row = sqlx::query!(
-            "SELECT bank_account FROM users WHERE id = $1",
-            inv.creator_id
-        )
-        .fetch_optional(&state.pool)
-        .await;
-
-        if let Ok(Some(row)) = bank_row {
-            if let Some(ba) = row.bank_account {
-                if !ba.is_empty() {
+        if let Some(ba) = inv.creator_bank {
+            if !ba.trim().is_empty() {
                     let xp = XenditPaymentPlugin::from_env();
                     match xp.disburse_to_creator(&ba, inv.amount, invoice_uid).await {
                         Ok(disburse_resp) => {
@@ -401,10 +384,9 @@ pub async fn handle_webhook(
                             tracing::error!("xendit: disburse failed for uid={invoice_uid}: {e}");
                         }
                     }
-                }
             }
         }
-    }
+    }  // if provider == "xendit"
 
     Json(json!({
         "ok": true,

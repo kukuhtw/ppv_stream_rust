@@ -10,13 +10,13 @@ The primary payment method is **x402 (on-chain crypto)**. Traditional payment ga
 
 ## Payment Methods
 
-| Provider | Status | Currency |
-|---|---|---|
-| **x402 (Crypto / EVM)** | ✅ Fully implemented | MEGA, MATIC, ETH, USDC (ERC-20) |
-| Stripe | 🔧 Skeleton only | USD, EUR, IDR |
-| PayPal | 🔧 Skeleton only | USD, EUR, IDR |
-| Midtrans | 🔧 Skeleton only | IDR |
-| Xendit | 🔧 Skeleton only | IDR |
+| Provider | Status | Currency | Auto-disburse |
+|---|---|---|---|
+| **x402 (Crypto / EVM)** | ✅ Fully implemented | MEGA, MATIC, ETH, USDC (ERC-20) | ✅ On-chain instant |
+| **Stripe** | ✅ Implemented | USD, EUR, IDR | ❌ Needs Stripe Connect |
+| **PayPal** | ✅ Implemented | USD, EUR, IDR | ❌ Needs Payouts API (creator PayPal email) |
+| **Midtrans** | ✅ Implemented | IDR | ❌ No payout API |
+| **Xendit** | ✅ Implemented | IDR, PHP, USD | ✅ Auto-disburse to bank (BCA, BNI, BRI, Mandiri, etc.) |
 
 The active providers are controlled by the `PAYMENT_PLUGINS` environment variable (comma-separated list). The default is controlled by `PAYMENT_DEFAULT_PROVIDER`.
 

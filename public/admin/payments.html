@@ -1,0 +1,350 @@
+<!-- public/admin/payments.html -->
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>Admin — Monitoring Pembayaran</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    .badge-provider { font-size: .7rem; letter-spacing: .03em; }
+    .amount-cell    { white-space: nowrap; font-family: monospace; }
+    .ts             { font-size: .78rem; color: #666; white-space: nowrap; }
+    .truncate       { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .btn-disburse   { min-width: 90px; }
+  </style>
+</head>
+<body class="bg-light">
+
+<nav class="navbar navbar-expand-md navbar-dark bg-danger shadow-sm">
+  <div class="container-fluid">
+    <a class="navbar-brand fw-bold" href="/public/admin/dashboard.html">Admin Panel</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navMenu">
+      <ul class="navbar-nav ms-auto">
+        <li class="nav-item"><a class="nav-link text-white" href="/public/admin/dashboard.html">Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link text-white active" href="/public/admin/payments.html">Pembayaran</a></li>
+        <li class="nav-item"><a class="nav-link text-white" href="/admin/data">Raw Data</a></li>
+        <li class="nav-item"><a class="nav-link text-white" href="/browse">Browse Site</a></li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<div class="container-fluid py-4">
+  <div class="d-flex align-items-center mb-3 gap-2 flex-wrap">
+    <h4 class="mb-0 me-auto">Monitoring Pembayaran Fiat</h4>
+    <button class="btn btn-sm btn-outline-secondary" onclick="loadPayments()">Refresh</button>
+  </div>
+
+  <!-- Status badges (totals) -->
+  <div class="d-flex gap-2 flex-wrap mb-3" id="totals">
+    <span class="badge rounded-pill bg-secondary fs-6">Memuat...</span>
+  </div>
+
+  <!-- Filters -->
+  <div class="card shadow-sm mb-3">
+    <div class="card-body py-2">
+      <div class="row g-2 align-items-end">
+        <div class="col-auto">
+          <label class="form-label mb-0 small fw-semibold">Provider</label>
+          <select id="fProvider" class="form-select form-select-sm" onchange="loadPayments()">
+            <option value="">Semua</option>
+            <option value="stripe">Stripe</option>
+            <option value="paypal">PayPal</option>
+            <option value="midtrans">Midtrans</option>
+            <option value="xendit">Xendit</option>
+          </select>
+        </div>
+        <div class="col-auto">
+          <label class="form-label mb-0 small fw-semibold">Status</label>
+          <select id="fStatus" class="form-select form-select-sm" onchange="loadPayments()">
+            <option value="">Semua</option>
+            <option value="pending">Pending</option>
+            <option value="paid">Paid</option>
+            <option value="failed">Failed</option>
+            <option value="expired">Expired</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+        <div class="col-auto">
+          <label class="form-label mb-0 small fw-semibold">Limit</label>
+          <select id="fLimit" class="form-select form-select-sm" onchange="loadPayments()">
+            <option value="50">50</option>
+            <option value="100" selected>100</option>
+            <option value="500">500</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alert area -->
+  <div id="alert" class="d-none"></div>
+
+  <!-- Table -->
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover table-bordered mb-0 align-middle">
+          <thead class="table-dark">
+            <tr>
+              <th>Invoice UID</th>
+              <th>Provider</th>
+              <th>Buyer</th>
+              <th>Video</th>
+              <th>Amount</th>
+              <th>Status</th>
+              <th>Dibuat</th>
+              <th>Dibayar</th>
+              <th>Disburse</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="tBody">
+            <tr><td colspan="10" class="text-center text-muted py-4">Memuat data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <p class="text-muted small mt-2" id="rowCount"></p>
+</div>
+
+<!-- Disburse confirm modal -->
+<div class="modal fade" id="disburseModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Konfirmasi Disburse</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="modalBody">
+        <p>Apakah Anda yakin ingin menandai invoice ini sebagai sudah dibayarkan ke creator?</p>
+        <div id="modalDetails"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+        <button class="btn btn-success" id="btnConfirmDisburse">Konfirmasi Disburse</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const PROVIDER_COLORS = {
+  stripe:   'primary',
+  paypal:   'info',
+  midtrans: 'warning',
+  xendit:   'success',
+};
+const STATUS_COLORS = {
+  paid:      'success',
+  pending:   'warning text-dark',
+  failed:    'danger',
+  expired:   'secondary',
+  cancelled: 'secondary',
+};
+
+function fmtAmount(amount, currency) {
+  const cur = (currency || 'IDR').toUpperCase();
+  if (cur === 'IDR') return 'Rp ' + amount.toLocaleString('id-ID');
+  return (amount / 100).toLocaleString('en-US', {style: 'currency', currency: cur});
+}
+
+function fmtDate(s) {
+  if (!s) return '-';
+  const d = new Date(s);
+  return d.toLocaleDateString('id-ID', {day:'2-digit',month:'short',year:'numeric'}) + ' ' +
+         d.toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'});
+}
+
+function shortUid(uid) {
+  return uid ? uid.slice(0, 8) + '...' : '-';
+}
+
+let pendingDisburseUid = null;
+const disburseModal = new bootstrap.Modal(document.getElementById('disburseModal'));
+
+function openDisburseModal(uid, provider, buyerUsername, videoTitle, amount, currency, creatorBank) {
+  pendingDisburseUid = uid;
+  const isXendit = provider === 'xendit';
+  let details = `
+    <dl class="row mb-0 small">
+      <dt class="col-4">Invoice</dt><dd class="col-8 font-monospace">${shortUid(uid)}</dd>
+      <dt class="col-4">Provider</dt><dd class="col-8">${provider}</dd>
+      <dt class="col-4">Buyer</dt><dd class="col-8">${buyerUsername}</dd>
+      <dt class="col-4">Video</dt><dd class="col-8">${videoTitle || '-'}</dd>
+      <dt class="col-4">Amount</dt><dd class="col-8">${fmtAmount(amount, currency)}</dd>
+    </dl>`;
+
+  if (isXendit && creatorBank) {
+    details += `<div class="alert alert-info mt-2 small mb-0">
+      <strong>Xendit auto-disburse:</strong> 90% akan dikirim ke rekening creator via Xendit API.<br>
+      <span class="font-monospace">${creatorBank}</span>
+    </div>`;
+    document.getElementById('btnConfirmDisburse').textContent = 'Disburse via Xendit API';
+    document.getElementById('btnConfirmDisburse').className = 'btn btn-primary';
+  } else if (isXendit) {
+    details += `<div class="alert alert-warning mt-2 small mb-0">
+      Creator belum mengisi bank account. Tidak bisa auto-disburse.
+    </div>`;
+    document.getElementById('btnConfirmDisburse').disabled = true;
+  } else {
+    details += `<div class="alert alert-warning mt-2 small mb-0">
+      <strong>Manual:</strong> Silakan transfer ke creator melalui dashboard ${provider} terlebih dahulu,
+      lalu klik "Konfirmasi" di sini untuk menandai sebagai selesai.
+    </div>`;
+    document.getElementById('btnConfirmDisburse').textContent = 'Tandai Sudah Disburse';
+    document.getElementById('btnConfirmDisburse').className = 'btn btn-success';
+    document.getElementById('btnConfirmDisburse').disabled = false;
+  }
+
+  document.getElementById('modalDetails').innerHTML = details;
+  disburseModal.show();
+}
+
+document.getElementById('btnConfirmDisburse').addEventListener('click', async () => {
+  if (!pendingDisburseUid) return;
+  const btn = document.getElementById('btnConfirmDisburse');
+  btn.disabled = true;
+  btn.textContent = 'Memproses...';
+
+  try {
+    const r = await fetch(`/admin/payments/${pendingDisburseUid}/disburse`, {method: 'POST'});
+    const j = await r.json();
+    disburseModal.hide();
+    if (j.ok) {
+      showAlert('success', `Disburse berhasil! Metode: ${j.method}${j.disburse_ref ? ' — ref: ' + j.disburse_ref : ''}`);
+      loadPayments();
+    } else {
+      showAlert('danger', 'Gagal: ' + (j.error || 'Unknown error'));
+    }
+  } catch (e) {
+    disburseModal.hide();
+    showAlert('danger', 'Error: ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+function showAlert(type, msg) {
+  const el = document.getElementById('alert');
+  el.className = `alert alert-${type} alert-dismissible fade show`;
+  el.innerHTML = `${msg}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+  setTimeout(() => { try { bootstrap.Alert.getOrCreateInstance(el).close(); } catch(_){} }, 8000);
+}
+
+async function loadPayments() {
+  const provider = document.getElementById('fProvider').value;
+  const status   = document.getElementById('fStatus').value;
+  const limit    = document.getElementById('fLimit').value;
+
+  const params = new URLSearchParams();
+  if (provider) params.set('provider', provider);
+  if (status)   params.set('status', status);
+  params.set('limit', limit);
+
+  const tbody = document.getElementById('tBody');
+  tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4">Memuat...</td></tr>';
+
+  try {
+    const r = await fetch('/admin/payments?' + params);
+    const j = await r.json();
+
+    // Update totals
+    const t = j.totals || {};
+    document.getElementById('totals').innerHTML = `
+      <span class="badge rounded-pill bg-secondary fs-6">Semua: ${t.all ?? 0}</span>
+      <span class="badge rounded-pill bg-success fs-6">Paid: ${t.paid ?? 0}</span>
+      <span class="badge rounded-pill bg-warning text-dark fs-6">Pending: ${t.pending ?? 0}</span>
+      <span class="badge rounded-pill bg-danger fs-6">Failed: ${t.failed ?? 0}</span>
+    `;
+
+    const items = j.items || [];
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4">Tidak ada data</td></tr>';
+      document.getElementById('rowCount').textContent = '';
+      return;
+    }
+
+    document.getElementById('rowCount').textContent = `Menampilkan ${items.length} dari ${t.all ?? items.length} transaksi`;
+
+    tbody.innerHTML = items.map(inv => {
+      const provColor  = PROVIDER_COLORS[inv.provider] || 'secondary';
+      const statColor  = STATUS_COLORS[inv.status]     || 'secondary';
+      const isPaid     = inv.status === 'paid';
+      const isDisbursed = !!inv.disbursed_at;
+      const canDisburse = isPaid && !isDisbursed;
+
+      let disburseCell;
+      if (isDisbursed) {
+        disburseCell = `<span class="badge bg-success">
+          ${inv.disburse_ref === 'manual' ? 'Manual' : 'Auto'}
+          <br><small class="ts">${fmtDate(inv.disbursed_at)}</small>
+        </span>`;
+      } else if (isPaid) {
+        disburseCell = '<span class="badge bg-warning text-dark">Belum</span>';
+      } else {
+        disburseCell = '-';
+      }
+
+      let disburseBtn;
+      if (canDisburse) {
+        const dataAttrs = [
+          `data-uid="${inv.invoice_uid}"`,
+          `data-provider="${inv.provider}"`,
+          `data-buyer="${(inv.buyer_username||'').replace(/"/g,'&quot;')}"`,
+          `data-video="${(inv.video_title||'').replace(/"/g,'&quot;')}"`,
+          `data-amount="${inv.amount}"`,
+          `data-currency="${inv.currency}"`,
+          `data-bank="${(inv.creator_bank||'').replace(/"/g,'&quot;')}"`,
+        ].join(' ');
+        disburseBtn = `<button class="btn btn-sm btn-outline-success btn-disburse" onclick="handleDisburse(this)" ${dataAttrs}>
+          Disburse
+        </button>`;
+      } else if (isDisbursed) {
+        disburseBtn = `<button class="btn btn-sm btn-outline-secondary btn-disburse" disabled>Selesai</button>`;
+      } else {
+        disburseBtn = `<button class="btn btn-sm btn-outline-secondary btn-disburse" disabled>-</button>`;
+      }
+
+      return `<tr>
+        <td class="font-monospace small" title="${inv.invoice_uid}">${shortUid(inv.invoice_uid)}</td>
+        <td><span class="badge badge-provider bg-${provColor}">${inv.provider}</span></td>
+        <td class="small">${inv.buyer_username}<br><span class="ts">${inv.buyer_email||''}</span></td>
+        <td class="small truncate" title="${inv.video_title||''}">${inv.video_title||'-'}</td>
+        <td class="amount-cell">${fmtAmount(inv.amount, inv.currency)}</td>
+        <td><span class="badge bg-${statColor}">${inv.status}</span></td>
+        <td class="ts">${fmtDate(inv.created_at)}</td>
+        <td class="ts">${fmtDate(inv.paid_at)}</td>
+        <td class="small">${disburseCell}</td>
+        <td>${disburseBtn}</td>
+      </tr>`;
+    }).join('');
+
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="10" class="text-center text-danger py-4">Error: ${e.message}</td></tr>`;
+  }
+}
+
+function handleDisburse(btn) {
+  openDisburseModal(
+    btn.dataset.uid,
+    btn.dataset.provider,
+    btn.dataset.buyer,
+    btn.dataset.video,
+    parseInt(btn.dataset.amount),
+    btn.dataset.currency,
+    btn.dataset.bank || ''
+  );
+}
+
+loadPayments();
+</script>
+</body>
+</html>
