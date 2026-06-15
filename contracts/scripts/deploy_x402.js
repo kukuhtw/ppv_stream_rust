@@ -1,18 +1,18 @@
 /**
- * Deploy X402Splitter + simpan metadata ke contracts/deployed.json
+ * Deploy X402Splitter and write deployment metadata to contracts/deployed.json.
  *
- * Jalankan:
+ * Run examples:
  *   npx hardhat run --network polygonAmoyTestnet scripts/deploy_x402.js
  *   npx hardhat run --network polygonMainnet    scripts/deploy_x402.js
  *   npx hardhat run --network megaTestnet       scripts/deploy_x402.js
  *
- * ENV penting:
- *   ADMIN_WALLET / X402_ADMIN_WALLET   -> alamat admin (constructor)
- *   CONFIRMATIONS=2                    -> (opsional) tunggu N konfirmasi
- *   GAS_LIMIT=300000                   -> (opsional) override gas limit
- *   MAX_FEE_GWEI=50                    -> (opsional) EIP-1559 maxFeePerGas
- *   MAX_PRIORITY_FEE_GWEI=2            -> (opsional) EIP-1559 priority fee
- *   AUTO_VERIFY=true                   -> (opsional) auto verify di Polygonscan
+ * Important environment variables:
+ *   ADMIN_WALLET / X402_ADMIN_WALLET   -> admin address passed to the constructor
+ *   CONFIRMATIONS=2                    -> optional number of confirmations to wait for
+ *   GAS_LIMIT=300000                   -> optional gas limit override
+ *   MAX_FEE_GWEI=50                    -> optional EIP-1559 maxFeePerGas override
+ *   MAX_PRIORITY_FEE_GWEI=2            -> optional EIP-1559 priority fee override
+ *   AUTO_VERIFY=true                   -> optional source-code verification on Polygonscan
  */
 
 const hre = require("hardhat");
@@ -30,7 +30,7 @@ function getExplorer(chainId) {
     case 137:
       return "https://polygonscan.com";
     case 6342:
-      return "https://megaexplorer.io"; // contoh/placeholder
+      return "https://megaexplorer.io"; // example placeholder
     default:
       return null;
   }
@@ -58,7 +58,7 @@ async function main() {
   const chainId = Number(net.chainId);
   const explorer = getExplorer(chainId);
 
-  // EIP-1559 overrides (opsional)
+  // Optional EIP-1559 transaction overrides.
   const overrides = {};
   if (process.env.GAS_LIMIT) overrides.gasLimit = BigInt(process.env.GAS_LIMIT);
   if (process.env.MAX_FEE_GWEI)
@@ -95,7 +95,7 @@ async function main() {
   const address = await contract.getAddress(); // ethers v6
   const receipt = await hre.ethers.provider.getTransactionReceipt(deployTx.hash);
 
-  // (Opsional) tunggu extra confirmations
+  // Optionally wait for extra confirmations before continuing.
   if (confirmations > 1) {
     console.log(`⏳ Waiting for ${confirmations} confirmations...`);
     await hre.ethers.provider.waitForTransaction(deployTx.hash, confirmations);
@@ -111,14 +111,14 @@ async function main() {
   }
 
   // =========================================================
-  // Tulis/merge ke contracts/deployed.json
+  // Write or merge deployment metadata into contracts/deployed.json.
   // =========================================================
   const outPath = path.join(__dirname, "..", "deployed.json");
   const existing = loadJson(outPath);
 
   const nowIso = new Date().toISOString();
 
-  // Simpan per chainId → per nama kontrak (X402Splitter)
+  // Store metadata per chain ID and contract name.
   existing[chainId] = existing[chainId] || {};
   existing[chainId]["X402Splitter"] = {
     address,
@@ -134,7 +134,7 @@ async function main() {
       "Simple splitter for native/ERC20. Update this note if you upgrade contract.",
   };
 
-  // Simpan juga terakhir-aktif per networkName (opsional, bantu Makefile)
+  // Also store the latest active deployment by Hardhat network name.
   existing["_latest"] = existing["_latest"] || {};
   existing["_latest"][networkName] = {
     address,
@@ -147,7 +147,7 @@ async function main() {
   console.log(`📝 Written to: ${path.relative(process.cwd(), outPath)}`);
 
   // =========================================================
-  // (Opsional) Auto-verify di Polygonscan
+  // Optional source-code verification on Polygonscan.
   // =========================================================
   if (process.env.AUTO_VERIFY === "true") {
     try {
