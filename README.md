@@ -195,115 +195,115 @@ The new version is significantly **faster** (buffered I/O, single-process multi-
 
 ---
 
-## 🔄 Proses Bisnis
+## 🔄 Business Processes
 
-Bagian ini menjelaskan alur bisnis utama platform dari sudut pandang pengguna, kreator, pembayaran, dan operasi sistem.
+This section describes the platform's primary business workflows from the perspectives of viewers, creators, payments, and system operations.
 
-### Aktor Utama
+### Primary Actors
 
-| Aktor | Tanggung jawab |
+| Actor | Responsibilities |
 |---|---|
-| **Viewer / pembeli** | Registrasi, login, memilih video, membayar akses, dan menonton video yang telah dibuka. |
-| **Creator / pemilik video** | Melengkapi profil pembayaran, mengunggah video, menentukan harga, mengelola metadata, dan memberikan akses manual. |
-| **Admin platform** | Melakukan bootstrap/login admin serta memantau pengguna, sesi, video, allowlist, pembelian, dan password reset. |
-| **Sistem backend** | Mengautentikasi sesi, menyimpan metadata, menjalankan transcode, memverifikasi pembayaran, mengatur hak akses, dan menyajikan HLS. |
-| **X402 smart contract** | Memproses pembayaran on-chain dan membagi dana antara creator dan admin sesuai basis point yang ditandatangani backend. |
+| **Viewer / buyer** | Registers, logs in, selects a video, pays for access, and watches unlocked content. |
+| **Creator / video owner** | Completes payment profile details, uploads videos, sets prices, manages metadata, and grants manual access. |
+| **Platform administrator** | Bootstraps or logs in as an administrator and monitors users, sessions, videos, allowlists, purchases, and password resets. |
+| **Backend system** | Authenticates sessions, stores metadata, runs transcoding, verifies payments, manages access rights, and serves HLS. |
+| **X402 smart contract** | Processes on-chain payments and splits funds between the creator and administrator according to basis points signed by the backend. |
 
-### 1. Registrasi, Login, dan Sesi
+### 1. Registration, Login, and Sessions
 
-1. Pengguna mendaftar melalui `POST /auth/register`.
-2. Backend memvalidasi data, meng-hash password dengan Argon2, lalu membuat data pengguna.
-3. Pengguna login melalui `POST /auth/login`; admin menggunakan `POST /admin/login`.
-4. Setelah kredensial valid, backend membuat sesi di database dan mengirim cookie `ppv_session` yang ditandatangani HMAC-SHA256.
-5. Setiap endpoint terproteksi memverifikasi signature cookie, mencari sesi, dan memastikan sesi belum kedaluwarsa.
-6. Logout menghapus sesi dari database dan cookie dari browser.
-7. Pada proses lupa password, token sekali pakai disimpan dengan batas waktu, kemudian ditandai `used` setelah password berhasil diganti.
+1. A user registers through `POST /auth/register`.
+2. The backend validates the input, hashes the password with Argon2, and creates the user record.
+3. A user logs in through `POST /auth/login`; an administrator uses `POST /admin/login`.
+4. After validating the credentials, the backend creates a database session and sends an HMAC-SHA256-signed `ppv_session` cookie.
+5. Every protected endpoint verifies the cookie signature, loads the session, and confirms that it has not expired.
+6. Logging out removes both the database session and browser cookie.
+7. During password recovery, a time-limited, single-use token is stored and later marked as `used` after the password is changed successfully.
 
-### 2. Onboarding Creator dan Pengelolaan Profil
+### 2. Creator Onboarding and Profile Management
 
-1. Semua user dapat bertindak sebagai creator; tidak ada tabel atau role creator terpisah.
-2. Creator memperbarui profil melalui `POST /api/profile_update`.
-3. Informasi seperti rekening bank, wallet blockchain, chain pilihan, WhatsApp, dan deskripsi profil disimpan pada record user.
-4. Wallet creator wajib tersedia dan valid ketika pembeli memulai pembayaran X402.
+1. Every user can act as a creator; there is no separate creator table or role.
+2. A creator updates their profile through `POST /api/profile_update`.
+3. Bank account details, blockchain wallet, preferred chain, WhatsApp number, and profile description are stored on the user record.
+4. The creator wallet must be present and valid before a buyer can start an X402 payment.
 
-### 3. Upload dan Pemrosesan Video
+### 3. Video Upload and Processing
 
-1. Creator yang sudah login mengirim multipart form ke `POST /api/upload` berisi `title`, `price_cents`, dan `file`.
-2. Backend memvalidasi ekstensi dan ukuran, menulis upload ke file sementara `*.part`, lalu melakukan atomic rename.
-3. Metadata video dibuat dengan status awal `queued`.
-4. Job dikirim ke in-memory transcoding worker.
-5. Worker mengubah status menjadi `processing`, membuat MP4 faststart, lalu menghasilkan HLS adaptive bitrate menggunakan FFmpeg.
-6. Jika berhasil, video ditandai `hls_ready = true` dan `processing_state = 'ready'`; jika gagal, status menjadi `error` dan penyebab disimpan di `last_error`.
-7. Creator dapat mengubah judul, deskripsi, serta harga melalui `POST /api/video_update`.
+1. An authenticated creator sends a multipart form to `POST /api/upload` containing `title`, `price_cents`, and `file`.
+2. The backend validates the extension and size, writes the upload to a temporary `*.part` file, and then performs an atomic rename.
+3. Video metadata is created with the initial `queued` status.
+4. A job is submitted to the in-memory transcoding worker.
+5. The worker changes the status to `processing`, creates a fast-start MP4, and generates adaptive-bitrate HLS with FFmpeg.
+6. On success, the video is assigned `hls_ready = true` and `processing_state = 'ready'`. On failure, its status becomes `error` and the cause is stored in `last_error`.
+7. The creator can update the title, description, and price through `POST /api/video_update`.
 
-> **Catatan operasional:** antrean transcode saat ini berada di memory process aplikasi. Job yang masih mengantre tidak persisten apabila process restart, walaupun metadata video dan status terakhir tetap tersimpan di PostgreSQL.
+> **Operational note:** the transcode queue currently resides in the application process memory. Queued jobs do not survive a process restart, although video metadata and the last recorded status remain in PostgreSQL.
 
-### 4. Discovery dan Akses Manual
+### 4. Discovery and Manual Access
 
-1. Marketplace membaca katalog melalui `GET /api/videos`.
-2. Creator melihat video miliknya melalui `GET /api/my_videos`.
-3. Creator dapat mencari user melalui `GET /api/user_lookup`.
-4. Creator memberikan akses manual melalui `POST /api/allow`.
-5. Backend memastikan pemberi akses adalah pemilik video, lalu menambahkan pasangan `(video_id, username)` ke allowlist.
+1. The marketplace loads its catalog through `GET /api/videos`.
+2. A creator retrieves their own videos through `GET /api/my_videos`.
+3. A creator can search for users through `GET /api/user_lookup`.
+4. A creator grants manual access through `POST /api/allow`.
+5. The backend confirms that the requester owns the video and then adds the `(video_id, username)` pair to the allowlist.
 
-### 5. Pembelian PPV dengan X402
+### 5. PPV Purchase with X402
 
-1. Viewer memilih video dan meminta opsi pembayaran melalui `GET /api/pay/options?video_id=...`.
-2. Backend mengambil harga video, wallet creator, serta token aktif dari database.
-3. Viewer memilih chain/token dan mengirim `POST /api/pay/x402/start`.
-4. Backend membuat invoice unik, menghitung nilai token dalam unit terkecil (`wei`), menyimpan hash invoice, menentukan masa berlaku, dan menghasilkan signature untuk payload smart contract.
-5. Wallet viewer memanggil kontrak X402 menggunakan payload tersebut. Kontrak mentransfer dan membagi dana ke creator serta admin, lalu mengeluarkan event `Paid`.
-6. Akses dapat diselesaikan melalui dua jalur:
-   * **Konfirmasi HTTP** — frontend mengirim transaction hash ke `POST /api/pay/x402/confirm`; backend membaca receipt RPC dan memvalidasi contract address, event, invoice hash, video ID, serta jumlah pembayaran.
-   * **Watcher opsional** — ketika feature `x402-watcher` dan `WATCHER_ENABLE=1` aktif, backend mendengarkan event `Paid` melalui WebSocket.
-7. Invoice diperbarui menjadi `paid` atau `underpaid`.
-8. Pembayaran penuh menghasilkan record pembelian dan menambahkan viewer ke allowlist secara idempotent.
+1. A viewer selects a video and requests payment options through `GET /api/pay/options?video_id=...`.
+2. The backend loads the video price, creator wallet, and active payment tokens from the database.
+3. The viewer selects a chain and token, then sends `POST /api/pay/x402/start`.
+4. The backend creates a unique invoice, calculates the token amount in its smallest unit (`wei`), stores the invoice hash, sets an expiration time, and signs the smart-contract payment payload.
+5. The viewer's wallet calls the X402 contract with the payload. The contract transfers and splits the funds between the creator and administrator, then emits a `Paid` event.
+6. Access can be finalized through either of two paths:
+   * **HTTP confirmation** — the frontend sends the transaction hash to `POST /api/pay/x402/confirm`; the backend reads the RPC receipt and validates the contract address, event, invoice hash, video ID, and payment amount.
+   * **Optional watcher** — when the `x402-watcher` feature and `WATCHER_ENABLE=1` are enabled, the backend listens for `Paid` events over WebSocket.
+7. The invoice is updated to `paid` or `underpaid`.
+8. A full payment creates a purchase record and adds the viewer to the allowlist idempotently.
 
-> **Sumber otorisasi playback:** keputusan boleh menonton saat ini berasal dari kepemilikan video atau keberadaan username di `allowlist`. Tabel `purchases` berfungsi sebagai ledger/audit pembelian; pembayaran yang berhasil juga menulis `allowlist` agar akses benar-benar terbuka.
+> **Playback authorization source:** viewing access currently depends on video ownership or the presence of the viewer's username in `allowlist`. The `purchases` table acts as the purchase ledger and audit trail; a successful payment also writes to `allowlist` to unlock playback.
 
-### 6. Playback dan Proteksi Konten
+### 6. Playback and Content Protection
 
-1. Viewer meminta playback melalui `GET /api/request_play?video_id=...`.
-2. Backend memvalidasi sesi dan memeriksa apakah viewer adalah pemilik video atau tercatat di allowlist.
-3. Backend mengambil file sumber, membuat direktori sesi HLS sementara, dan menghasilkan watermark berisi username serta timestamp.
-4. FFmpeg membuat stream HLS khusus sesi dengan watermark bergerak.
-5. Backend mengembalikan URL playlist `/hls/:session/master.m3u8`.
-6. Playlist dan segment dikirim secara streaming dengan `Cache-Control: no-store` serta validasi nama path/file.
+1. A viewer requests playback through `GET /api/request_play?video_id=...`.
+2. The backend validates the session and checks whether the viewer owns the video or appears in the allowlist.
+3. The backend resolves the source file, creates a temporary HLS session directory, and generates a watermark containing the username and timestamp.
+4. FFmpeg creates a session-specific HLS stream with a moving watermark.
+5. The backend returns the `/hls/:session/master.m3u8` playlist URL.
+6. Playlists and segments are streamed with `Cache-Control: no-store` and validated path and file names.
 
-### 7. Monitoring Admin
+### 7. Administrator Monitoring
 
-1. Admin login menggunakan akun dengan `is_admin`.
-2. Endpoint `GET /admin/data` memvalidasi sesi dan role admin.
-3. Dashboard menampilkan data dan agregat dari user, session, video, allowlist, purchase, dan password reset.
-4. Endpoint `/setup_admin` dapat membuat atau mempromosikan admin awal apabila bootstrap token dikonfigurasi.
+1. An administrator logs in with an account whose `is_admin` flag is enabled.
+2. The `GET /admin/data` endpoint validates both the session and administrator role.
+3. The dashboard displays records and aggregate counts for users, sessions, videos, allowlists, purchases, and password resets.
+4. The `/setup_admin` endpoint can create or promote the initial administrator when a bootstrap token is configured.
 
 ---
 
-## 🧭 Mapping Proses Bisnis ke Implementasi Flow Code
+## 🧭 Business Process-to-Code Mapping
 
-### Ringkasan Mapping
+### Mapping Summary
 
-| Proses bisnis | HTTP route / trigger | Implementasi utama | Efek utama |
+| Business process | HTTP route / trigger | Primary implementation | Primary effects |
 |---|---|---|---|
-| Registrasi user | `POST /auth/register` | `src/handlers/auth_user.rs::post_register` | Insert user dengan password hash. |
-| Login/logout user | `POST /auth/login`, `POST /auth/logout` | `src/handlers/auth_user.rs`, `src/sessions.rs` | Membuat/menghapus session dan signed cookie. |
-| Login/logout admin | `POST /admin/login`, `POST /admin/logout` | `src/handlers/auth_admin.rs`, `src/sessions.rs` | Validasi `is_admin`, lalu mengelola session. |
-| Lupa/reset password | `POST /auth/forgot`, `POST /auth/reset` | `src/handlers/password.rs`, `src/handlers/auth_user.rs` | Membuat token reset, mengganti hash password, menandai token terpakai. |
-| Profil creator | `GET /api/profile`, `POST /api/profile_update` | `src/handlers/users.rs` | Membaca/mengubah profil, kontak, rekening, dan wallet. |
-| Browse marketplace | `GET /api/videos` | `src/handlers/video.rs::list_videos` | Join video dengan profil creator. |
-| Upload video | `POST /api/upload` | `src/handlers/upload.rs::upload_video` | Menulis file, insert metadata video, enqueue job. |
-| Transcode video | Trigger internal setelah upload | `src/worker.rs`, `src/ffmpeg.rs` | Update status dan menghasilkan HLS ABR di media storage. |
-| Kelola video | `GET /api/my_videos`, `POST /api/video_update` | `src/handlers/video.rs` | Membaca video creator dan mengubah metadata/harga. |
-| Grant akses manual | `GET /api/user_lookup`, `POST /api/allow` | `src/handlers/video.rs` | Validasi owner dan insert allowlist. |
-| Ambil opsi pembayaran | `GET /api/pay/options` | `src/handlers/pay.rs::pay_options` | Membaca harga, wallet creator, dan token aktif. |
-| Membuat invoice X402 | `POST /api/pay/x402/start` | `src/handlers/pay.rs::x402_start` | Insert invoice dan membuat signature pembayaran. |
-| Konfirmasi pembayaran | `POST /api/pay/x402/confirm` | `src/handlers/pay.rs::x402_confirm` | Verifikasi receipt/event, update invoice, insert purchase dan allowlist. |
-| Event pembayaran async | Event `Paid` melalui WSS | `src/services/x402_watcher.rs` | Mencocokkan invoice hash dan membuka akses. |
-| Otorisasi playback | `GET /api/request_play` | `src/handlers/stream.rs`, `src/handlers/video.rs::user_has_view_access` | Memeriksa owner/allowlist dan membuat HLS ber-watermark. |
-| Penyajian HLS | `GET /hls/:session/:file` | `src/handlers/stream.rs::serve_hls` | Stream playlist/segment dari direktori sesi. |
-| Monitoring admin | `GET /admin/data` | `src/handlers/admin.rs::admin_data` | Membaca data operasional dan count tiap entitas. |
+| User registration | `POST /auth/register` | `src/handlers/auth_user.rs::post_register` | Inserts a user with a password hash. |
+| User login/logout | `POST /auth/login`, `POST /auth/logout` | `src/handlers/auth_user.rs`, `src/sessions.rs` | Creates or removes the session and signed cookie. |
+| Administrator login/logout | `POST /admin/login`, `POST /admin/logout` | `src/handlers/auth_admin.rs`, `src/sessions.rs` | Validates `is_admin` and manages the session. |
+| Forgot/reset password | `POST /auth/forgot`, `POST /auth/reset` | `src/handlers/password.rs`, `src/handlers/auth_user.rs` | Creates a reset token, replaces the password hash, and marks the token as used. |
+| Creator profile | `GET /api/profile`, `POST /api/profile_update` | `src/handlers/users.rs` | Reads or updates profile, contact, bank, and wallet details. |
+| Marketplace browsing | `GET /api/videos` | `src/handlers/video.rs::list_videos` | Joins video data with creator profile data. |
+| Video upload | `POST /api/upload` | `src/handlers/upload.rs::upload_video` | Writes the file, inserts video metadata, and enqueues a job. |
+| Video transcoding | Internal trigger after upload | `src/worker.rs`, `src/ffmpeg.rs` | Updates processing status and produces ABR HLS media. |
+| Video management | `GET /api/my_videos`, `POST /api/video_update` | `src/handlers/video.rs` | Reads creator-owned videos and updates metadata or price. |
+| Manual access grant | `GET /api/user_lookup`, `POST /api/allow` | `src/handlers/video.rs` | Validates ownership and inserts an allowlist entry. |
+| Payment options | `GET /api/pay/options` | `src/handlers/pay.rs::pay_options` | Reads the price, creator wallet, and active tokens. |
+| X402 invoice creation | `POST /api/pay/x402/start` | `src/handlers/pay.rs::x402_start` | Inserts an invoice and creates the payment signature. |
+| Payment confirmation | `POST /api/pay/x402/confirm` | `src/handlers/pay.rs::x402_confirm` | Verifies the receipt/event, updates the invoice, and inserts purchase and allowlist records. |
+| Asynchronous payment event | `Paid` event over WSS | `src/services/x402_watcher.rs` | Matches the invoice hash and unlocks access. |
+| Playback authorization | `GET /api/request_play` | `src/handlers/stream.rs`, `src/handlers/video.rs::user_has_view_access` | Checks ownership/allowlist access and generates watermarked HLS. |
+| HLS delivery | `GET /hls/:session/:file` | `src/handlers/stream.rs::serve_hls` | Streams a playlist or segment from the session directory. |
+| Administrator monitoring | `GET /admin/data` | `src/handlers/admin.rs::admin_data` | Reads operational records and entity counts. |
 
-### Flow Upload sampai Video Siap
+### Upload-to-Ready Flow
 
 ```mermaid
 sequenceDiagram
@@ -366,35 +366,35 @@ sequenceDiagram
 ```mermaid
 flowchart LR
     A[Viewer request_play] --> B{Session valid?}
-    B -- Tidak --> X[401 Unauthorized]
-    B -- Ya --> C{Owner atau ada di allowlist?}
-    C -- Tidak --> Y[403 Forbidden]
-    C -- Ya --> D[Resolve source video]
-    D --> E[Buat HLS session dan watermark username]
-    E --> F[FFmpeg overlay ke HLS]
+    B -- No --> X[401 Unauthorized]
+    B -- Yes --> C{Owner or included in allowlist?}
+    C -- No --> Y[403 Forbidden]
+    C -- Yes --> D[Resolve source video]
+    D --> E[Create HLS session and username watermark]
+    E --> F[FFmpeg overlays watermark onto HLS]
     F --> G[Return playlist URL]
-    G --> H[serve_hls stream playlist dan segment]
+    G --> H[serve_hls streams playlist and segments]
 ```
 
 ---
 
-## 🗄️ Mapping Proses Bisnis ke Database
+## 🗄️ Business Process-to-Database Mapping
 
-### Entitas dan Perannya
+### Entities and Responsibilities
 
-| Tabel | Peran bisnis | Ditulis oleh | Dibaca oleh / relasi penting |
+| Table | Business role | Written by | Read by / important relationships |
 |---|---|---|---|
-| `users` | Identitas user/admin sekaligus profil creator dan tujuan pembayaran. | Register, setup admin, update profil, reset password. | Auth, katalog video, pembayaran, watermark, admin dashboard. Direferensikan oleh session, video, purchase, reset, dan invoice. |
-| `sessions` | Sesi login server-side dengan TTL dan flag admin. | Login user/admin; dihapus saat logout atau kedaluwarsa. | Semua endpoint terproteksi melalui `sessions::current_user_id`. |
-| `password_resets` | Token pemulihan password sekali pakai. | Forgot password dan reset password. | Validasi token, expiry, dan status `used`. |
-| `videos` | Produk PPV: pemilik, judul, deskripsi, harga, file sumber, dan status HLS. | Upload, worker transcode, update video. | Marketplace, creator dashboard, access check, payment, playback, admin dashboard. |
-| `allowlist` | Sumber hak tonton per `(video_id, username)`. | Grant manual, konfirmasi X402, atau watcher. | Otorisasi playback dan daftar viewer pada dashboard creator. |
-| `purchases` | Ledger pembelian user terhadap video. | Konfirmasi X402 atau watcher. | Audit dan admin dashboard; bukan sumber langsung pengecekan playback. |
-| `pay_tokens` | Master token/chain yang didukung untuk pembayaran. | Migration/seed/operasi database. | Opsi pembayaran dan validasi token saat membuat invoice. |
-| `x402_invoices` | Lifecycle pembayaran on-chain dari quote sampai paid/underpaid. | Start payment, confirm payment, watcher. | Pencocokan invoice, validasi jumlah, audit transaksi, dan unlock akses. |
-| `pay_tokens_compat` | View kompatibilitas nama kolom token lama dan baru. | Dibentuk oleh migration. | Menjaga kompatibilitas query/integrasi yang masih menggunakan alias `erc20`. |
+| `users` | User/admin identity, creator profile, and payment destination. | Registration, administrator setup, profile update, password reset. | Authentication, video catalog, payments, watermarking, and administrator dashboard. Referenced by sessions, videos, purchases, resets, and invoices. |
+| `sessions` | Server-side login sessions with a TTL and administrator flag. | User/admin login; removed on logout or expiration. | Every protected endpoint through `sessions::current_user_id`. |
+| `password_resets` | Single-use password recovery tokens. | Forgot-password and reset-password flows. | Token, expiration, and `used` status validation. |
+| `videos` | PPV products containing ownership, title, description, price, source file, and HLS status. | Upload handler, transcode worker, video update handler. | Marketplace, creator dashboard, access checks, payments, playback, and administrator dashboard. |
+| `allowlist` | Playback permission source for each `(video_id, username)` pair. | Manual grants, X402 confirmation, or watcher. | Playback authorization and creator dashboard viewer lists. |
+| `purchases` | Ledger of user purchases for videos. | X402 confirmation or watcher. | Auditing and administrator dashboard; not read directly for playback authorization. |
+| `pay_tokens` | Master data for supported payment tokens and chains. | Migrations, seed data, or database operations. | Payment options and token validation during invoice creation. |
+| `x402_invoices` | On-chain payment lifecycle from quote to paid/underpaid. | Payment start, payment confirmation, and watcher. | Invoice matching, amount validation, transaction auditing, and access unlocking. |
+| `pay_tokens_compat` | Compatibility view for legacy and current token column names. | Created by a migration. | Preserves compatibility for queries or integrations that still use the `erc20` alias. |
 
-### Relasi Data Utama
+### Primary Data Relationships
 
 ```mermaid
 erDiagram
@@ -453,44 +453,44 @@ erDiagram
     }
 ```
 
-### Mapping Status dan Transisi
+### Status and Transition Mapping
 
-| Entitas | Status | Arti dan transisi |
+| Entity | Status | Meaning and transition |
 |---|---|---|
-| `videos.processing_state` | `queued` | Metadata dan file upload sudah tersimpan, job menunggu worker. |
-| `videos.processing_state` | `processing` | Worker sedang menjalankan faststart/transcoding. |
-| `videos.processing_state` | `ready` | HLS berhasil dibuat; `hls_ready=true` dan `hls_master` terisi. |
-| `videos.processing_state` | `error` | Upload enqueue atau transcode gagal; detail berada di `last_error`. |
-| `x402_invoices.status` | `pending` | Invoice telah dibuat dan menunggu pembayaran/konfirmasi. |
-| `x402_invoices.status` | `paid` | Event valid dan nominal memenuhi kewajiban; purchase serta allowlist dibuat. |
-| `x402_invoices.status` | `underpaid` | Event valid tetapi nilai di bawah `required_amount_wei`; akses belum dibuka. |
-| `x402_invoices.status` | `expired` / `cancelled` | Status lifecycle yang didukung schema untuk invoice kedaluwarsa atau dibatalkan. |
+| `videos.processing_state` | `queued` | The upload and metadata are stored, and the job is waiting for a worker. |
+| `videos.processing_state` | `processing` | The worker is running fast-start processing and transcoding. |
+| `videos.processing_state` | `ready` | HLS generation succeeded; `hls_ready=true` and `hls_master` are set. |
+| `videos.processing_state` | `error` | Job enqueueing or transcoding failed; details are stored in `last_error`. |
+| `x402_invoices.status` | `pending` | The invoice exists and is waiting for payment or confirmation. |
+| `x402_invoices.status` | `paid` | A valid event satisfies the required amount; purchase and allowlist records are created. |
+| `x402_invoices.status` | `underpaid` | A valid event paid less than `required_amount_wei`; access remains locked. |
+| `x402_invoices.status` | `expired` / `cancelled` | Schema-supported lifecycle states for expired or cancelled invoices. |
 
-### Source of Truth per Kebutuhan
+### Source of Truth by Requirement
 
-| Kebutuhan | Source of truth |
+| Requirement | Source of truth |
 |---|---|
-| Identitas dan profil creator | `users` |
-| Status login | `sessions` + signed cookie `ppv_session` |
-| Harga dan kepemilikan konten | `videos` |
-| Status kesiapan hasil transcode | `videos.hls_ready`, `videos.processing_state`, `videos.hls_master` |
-| Hak tonton | Owner pada `videos.owner_id` **atau** pasangan pada `allowlist` |
-| Riwayat pembelian | `purchases` |
-| Status dan bukti pembayaran crypto | `x402_invoices` |
-| Token pembayaran yang tersedia | `pay_tokens` |
-| File video asli | Direktori upload/storage yang dikonfigurasi |
-| HLS hasil worker | `media_dir/<video_id>/` |
-| HLS ber-watermark per viewer | `hls_root/<session>/` |
+| Creator identity and profile | `users` |
+| Login status | `sessions` plus the signed `ppv_session` cookie |
+| Content price and ownership | `videos` |
+| Transcode readiness | `videos.hls_ready`, `videos.processing_state`, `videos.hls_master` |
+| Playback permission | Ownership through `videos.owner_id` **or** a matching entry in `allowlist` |
+| Purchase history | `purchases` |
+| Crypto payment status and proof | `x402_invoices` |
+| Available payment tokens | `pay_tokens` |
+| Original video file | Configured upload/storage directory |
+| Worker-generated HLS | `media_dir/<video_id>/` |
+| Per-viewer watermarked HLS | `hls_root/<session>/` |
 
-### Urutan Migration
+### Migration Order
 
-Database inti berada di `sql/001_*.sql` sampai `sql/012_*.sql`, sedangkan penambahan X402 berada di `migrations/013_*.sql` dan seterusnya. Jalankan:
+The core database migrations are stored in `sql/001_*.sql` through `sql/012_*.sql`, while X402 additions are stored in `migrations/013_*.sql` and later files. Run:
 
 ```bash
 make migrate
 ```
 
-Target tersebut menerapkan seluruh file pada `sql/` lalu `migrations/` berdasarkan urutan versi. Aplikasi juga menjalankan SQLx migration dari direktori `sql/` saat startup, tetapi deployment yang menggunakan fitur X402 tetap harus menjalankan `make migrate` agar schema `pay_tokens` dan `x402_invoices` tersedia.
+This target applies every file in `sql/` and then `migrations/` in version order. The application also runs SQLx migrations from `sql/` during startup, but deployments that use X402 must still run `make migrate` so the `pay_tokens` and `x402_invoices` schemas are available.
 
 ---
 
@@ -638,7 +638,7 @@ The service will start on **http://localhost:8080**
 
 ## 🗃️ Database Schema
 
-Schema database mencakup tabel inti `users`, `sessions`, `password_resets`, `videos`, `allowlist`, dan `purchases`, serta tabel pembayaran crypto `pay_tokens` dan `x402_invoices`. Penjelasan fungsi, relasi, status, dan source of truth setiap tabel tersedia pada bagian **Mapping Proses Bisnis ke Database** di atas.
+The database schema includes the core `users`, `sessions`, `password_resets`, `videos`, `allowlist`, and `purchases` tables, as well as the `pay_tokens` and `x402_invoices` crypto-payment tables. See **Business Process-to-Database Mapping** above for each table's responsibilities, relationships, statuses, and source-of-truth rules.
 
 ---
 
