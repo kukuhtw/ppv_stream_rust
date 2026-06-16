@@ -2,7 +2,7 @@
 <html lang="en" data-bs-theme="dark">
 <head>
   <meta charset="utf-8">
-  <title>Admin Wallets — PPV Stream</title>
+  <title>Admin Wallets - PPV Stream</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="/public/styles.css">
@@ -12,7 +12,7 @@
 
 <nav class="navbar navbar-expand-md bg-danger shadow-sm">
   <div class="container">
-    <a class="navbar-brand fw-bold text-white" href="/public/admin/dashboard.html" data-platform="brand">🎬 PPV Stream</a>
+    <a class="navbar-brand fw-bold text-white" href="/public/admin/dashboard.html" data-platform="brand">PPV Stream</a>
     <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#adminNav">
       <span class="navbar-toggler-icon"></span>
     </button>
@@ -25,7 +25,7 @@
       </ul>
       <div class="d-flex align-items-center gap-2 mt-2 mt-md-0">
         <span class="badge bg-light text-danger fw-semibold">ADMIN</span>
-        <button class="btn btn-sm btn-outline-light" onclick="toggleTheme()" id="themeToggle">☀️</button>
+        <button class="btn btn-sm btn-outline-light" onclick="toggleTheme()" id="themeToggle">Theme</button>
         <button id="logoutBtn" class="btn btn-sm btn-outline-light">Logout</button>
       </div>
     </div>
@@ -34,25 +34,22 @@
 
 <div class="container py-4 pb-5">
   <h1 class="mb-1 fs-4 fw-bold">Wallet Management</h1>
-  <p class="text-body-secondary small mb-4">Review and process user deposit and withdrawal requests.</p>
+  <p class="text-body-secondary small mb-4">Approve deposits, complete withdrawals, and keep the wallet ledger clean.</p>
 
-  <!-- Tabs -->
   <ul class="nav nav-tabs mb-3" id="adminWalletTabs">
-    <li class="nav-item"><button class="nav-link active" data-tab="withdrawals" onclick="showTab('withdrawals')">Withdrawal Requests</button></li>
-    <li class="nav-item"><button class="nav-link" data-tab="deposits" onclick="showTab('deposits')">Deposit History</button></li>
-    <li class="nav-item"><button class="nav-link" data-tab="balances" onclick="showTab('balances')">User Balances</button></li>
+    <li class="nav-item"><button class="nav-link active" data-tab="withdrawals" onclick="showTab('withdrawals')">Withdrawals</button></li>
+    <li class="nav-item"><button class="nav-link" data-tab="deposits" onclick="showTab('deposits')">Deposits</button></li>
   </ul>
 
-  <!-- Withdrawals -->
   <div id="tab-withdrawals" class="tab-pane-custom">
     <div class="d-flex gap-2 mb-3">
-      <select id="wdFilter" class="form-select" style="max-width:180px" onchange="loadWithdrawals()">
+      <select id="wdFilter" class="form-select" style="max-width:200px" onchange="loadWithdrawals()">
         <option value="">All statuses</option>
         <option value="pending" selected>Pending</option>
         <option value="completed">Completed</option>
         <option value="rejected">Rejected</option>
       </select>
-      <button class="btn btn-outline-secondary" onclick="loadWithdrawals()">↻ Refresh</button>
+      <button class="btn btn-outline-secondary" onclick="loadWithdrawals()">Refresh</button>
     </div>
     <div class="card shadow-sm">
       <div class="card-body p-0">
@@ -62,15 +59,16 @@
               <tr>
                 <th>Date</th>
                 <th>User</th>
+                <th>Email</th>
                 <th>Amount</th>
-                <th>Method</th>
-                <th>Destination</th>
+                <th>Note</th>
+                <th>Admin Note</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody id="wdBody">
-              <tr><td colspan="7" class="text-body-secondary">Loading…</td></tr>
+              <tr><td colspan="8" class="text-body-secondary">Loading...</td></tr>
             </tbody>
           </table>
         </div>
@@ -78,10 +76,15 @@
     </div>
   </div>
 
-  <!-- Deposits -->
   <div id="tab-deposits" class="tab-pane-custom d-none">
     <div class="d-flex gap-2 mb-3">
-      <button class="btn btn-outline-secondary" onclick="loadDeposits()">↻ Refresh</button>
+      <select id="depFilter" class="form-select" style="max-width:200px" onchange="loadDeposits()">
+        <option value="">All statuses</option>
+        <option value="pending" selected>Pending</option>
+        <option value="approved">Approved</option>
+        <option value="rejected">Rejected</option>
+      </select>
+      <button class="btn btn-outline-secondary" onclick="loadDeposits()">Refresh</button>
     </div>
     <div class="card shadow-sm">
       <div class="card-body p-0">
@@ -91,41 +94,16 @@
               <tr>
                 <th>Date</th>
                 <th>User</th>
+                <th>Email</th>
                 <th>Amount</th>
-                <th>Method</th>
-                <th>Invoice</th>
+                <th>Note</th>
+                <th>Admin Note</th>
                 <th>Status</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody id="depBody">
-              <tr><td colspan="6" class="text-body-secondary">Loading…</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Balances -->
-  <div id="tab-balances" class="tab-pane-custom d-none">
-    <div class="d-flex gap-2 mb-3">
-      <input id="balQ" class="form-control" style="max-width:280px" placeholder="Search username…">
-      <button class="btn btn-outline-secondary" onclick="loadBalances()">↻ Refresh</button>
-    </div>
-    <div class="card shadow-sm">
-      <div class="card-body p-0">
-        <div class="table-responsive">
-          <table class="table table-hover tbl-compact mb-0">
-            <thead class="table-light">
-              <tr>
-                <th>User</th>
-                <th>Balance</th>
-                <th>Total Deposited</th>
-                <th>Total Withdrawn</th>
-              </tr>
-            </thead>
-            <tbody id="balBody">
-              <tr><td colspan="4" class="text-body-secondary">Click ↻ Refresh to load.</td></tr>
+              <tr><td colspan="8" class="text-body-secondary">Loading...</td></tr>
             </tbody>
           </table>
         </div>
@@ -134,43 +112,48 @@
   </div>
 </div>
 
-<!-- Process Modal -->
-<div class="modal fade" id="processModal" tabindex="-1">
+<div class="modal fade" id="walletActionModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">Process Withdrawal</h5>
+        <h5 class="modal-title">Process Wallet Transaction</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <div id="modalWdInfo" class="mb-3 small text-body-secondary"></div>
+        <div id="walletActionInfo" class="small text-body-secondary mb-3"></div>
         <div class="mb-3">
-          <label for="modalWdNote" class="form-label">Note <span class="text-body-secondary small">(optional)</span></label>
-          <input id="modalWdNote" class="form-control" placeholder="e.g. Transferred via BCA ref #…">
+          <label for="walletActionNote" class="form-label">Admin Note</label>
+          <input id="walletActionNote" class="form-control" placeholder="Optional note for audit trail">
         </div>
-        <input type="hidden" id="modalWdId">
+        <input type="hidden" id="walletActionId">
+        <input type="hidden" id="walletActionType">
       </div>
-      <div class="modal-footer gap-2">
-        <button class="btn btn-success" onclick="processWd('completed')">✓ Complete</button>
-        <button class="btn btn-danger"  onclick="processWd('rejected')">✗ Reject</button>
-        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-      </div>
+      <div class="modal-footer gap-2" id="walletActionButtons"></div>
     </div>
   </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-let processModal;
+let walletActionModal;
 document.addEventListener('DOMContentLoaded', () => {
-  processModal = new bootstrap.Modal(document.getElementById('processModal'));
+  walletActionModal = new bootstrap.Modal(document.getElementById('walletActionModal'));
   loadWithdrawals();
 });
 
 document.getElementById('logoutBtn').addEventListener('click', async () => {
-  await fetch('/auth/logout', { method:'POST' }).catch(()=>{});
-  location.href = '/public/auth/login.html';
+  await fetch('/admin/logout', { method:'POST' }).catch(() => {});
+  location.href = '/public/admin/login.html';
 });
+
+function esc(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
 
 function showTab(name) {
   document.querySelectorAll('.tab-pane-custom').forEach(el => el.classList.add('d-none'));
@@ -178,116 +161,124 @@ function showTab(name) {
   document.getElementById('tab-' + name).classList.remove('d-none');
   document.querySelector(`#adminWalletTabs [data-tab="${name}"]`).classList.add('active');
   if (name === 'withdrawals') loadWithdrawals();
-  if (name === 'deposits')    loadDeposits();
-  if (name === 'balances')    loadBalances();
+  if (name === 'deposits') loadDeposits();
+}
+
+function statusBadge(status) {
+  const map = { pending:'warning', approved:'info', completed:'success', rejected:'danger' };
+  return `<span class="badge bg-${map[status] || 'secondary'}">${esc(status)}</span>`;
+}
+
+function openWalletAction(row, kind) {
+  document.getElementById('walletActionId').value = row.id;
+  document.getElementById('walletActionType').value = kind;
+  document.getElementById('walletActionNote').value = '';
+  document.getElementById('walletActionInfo').innerHTML = `
+    <div><strong>User:</strong> ${esc(row.username || '-')}</div>
+    <div><strong>Email:</strong> ${esc(row.email || '-')}</div>
+    <div><strong>Amount:</strong> $${(Math.abs(row.amount_cents || 0) / 100).toFixed(2)}</div>
+    <div><strong>Transaction Type:</strong> ${esc(row.txn_type || '-')}</div>
+    <div><strong>Note:</strong> ${esc(row.note || '-')}</div>
+  `;
+  const buttons = document.getElementById('walletActionButtons');
+  if (kind === 'deposit') {
+    buttons.innerHTML = `
+      <button class="btn btn-success" onclick="submitWalletAction('approve')">Approve Deposit</button>
+      <button class="btn btn-danger" onclick="submitWalletAction('reject')">Reject</button>
+      <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+    `;
+  } else {
+    buttons.innerHTML = `
+      <button class="btn btn-success" onclick="submitWalletAction('complete')">Mark Completed</button>
+      <button class="btn btn-danger" onclick="submitWalletAction('reject')">Reject and Refund</button>
+      <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+    `;
+  }
+  walletActionModal.show();
 }
 
 async function loadWithdrawals() {
-  const tbody  = document.getElementById('wdBody');
-  const status = document.getElementById('wdFilter').value;
-  tbody.innerHTML = '<tr><td colspan="7" class="text-body-secondary">Loading…</td></tr>';
+  const tbody = document.getElementById('wdBody');
+  tbody.innerHTML = '<tr><td colspan="8" class="text-body-secondary">Loading...</td></tr>';
   try {
-    const params = new URLSearchParams({ type: 'withdrawal' });
+    const params = new URLSearchParams({ txn_type: 'withdrawal' });
+    const status = document.getElementById('wdFilter').value;
     if (status) params.set('status', status);
-    const j = await fetch('/api/admin/wallet_transactions?' + params).then(r=>r.json());
-    if (!j.ok || !Array.isArray(j.transactions) || !j.transactions.length) {
-      tbody.innerHTML = '<tr><td colspan="7" class="text-body-secondary">No withdrawal requests found.</td></tr>';
+    const j = await fetch('/admin/wallet/transactions?' + params).then(r => r.json());
+    const items = Array.isArray(j.items) ? j.items : [];
+    if (!j.ok || !items.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-body-secondary">No withdrawals found.</td></tr>';
       return;
     }
-    const statusBadge = s => {
-      const map = { pending:'warning', completed:'success', rejected:'danger' };
-      return `<span class="badge bg-${map[s]||'secondary'}">${esc(s)}</span>`;
-    };
-    tbody.innerHTML = j.transactions.map(t => `
-      <tr>
-        <td class="small text-nowrap">${esc((t.created_at||'').slice(0,16))}</td>
-        <td class="small">${esc(t.username||t.user_id||'—')}</td>
-        <td class="small fw-semibold">$${((t.amount_cents||0)/100).toFixed(2)}</td>
-        <td class="small">${esc(t.method||'—')}</td>
-        <td class="small text-body-secondary" style="max-width:160px;overflow:hidden;text-overflow:ellipsis">${esc(t.destination||'—')}</td>
-        <td class="small">${statusBadge(t.status||'—')}</td>
-        <td class="small">
-          ${t.status === 'pending'
-            ? `<button class="btn btn-sm btn-outline-primary py-0 px-2" onclick="openProcess(${JSON.stringify(t.id)}, ${JSON.stringify(t)})">Process</button>`
-            : '<span class="text-body-secondary">—</span>'}
-        </td>
-      </tr>`
-    ).join('');
-  } catch(e) { tbody.innerHTML = `<tr><td colspan="7" class="text-danger">${esc(String(e))}</td></tr>`; }
+    tbody.innerHTML = items.map(row => `<tr>
+      <td class="small text-nowrap">${esc((row.created_at || '').slice(0, 16))}</td>
+      <td class="small">${esc(row.username || '-')}</td>
+      <td class="small">${esc(row.email || '-')}</td>
+      <td class="small fw-semibold">$${(Math.abs(row.amount_cents || 0) / 100).toFixed(2)}</td>
+      <td class="small text-body-secondary">${esc(row.note || '-')}</td>
+      <td class="small text-body-secondary">${esc(row.admin_note || '-')}</td>
+      <td class="small">${statusBadge(row.status || '-')}</td>
+      <td class="small">${row.status === 'pending' ? `<button class="btn btn-sm btn-outline-primary py-0 px-2" onclick='openWalletAction(${JSON.stringify(JSON.stringify(row))}, "withdrawal")'>Process</button>` : '<span class="text-body-secondary">-</span>'}</td>
+    </tr>`).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="8" class="text-danger">${esc(String(err))}</td></tr>`;
+  }
 }
 
 async function loadDeposits() {
   const tbody = document.getElementById('depBody');
-  tbody.innerHTML = '<tr><td colspan="6" class="text-body-secondary">Loading…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="8" class="text-body-secondary">Loading...</td></tr>';
   try {
-    const j = await fetch('/api/admin/wallet_transactions?' + new URLSearchParams({ type: 'deposit' })).then(r=>r.json());
-    if (!j.ok || !Array.isArray(j.transactions) || !j.transactions.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="text-body-secondary">No deposits found.</td></tr>';
+    const params = new URLSearchParams({ txn_type: 'deposit' });
+    const status = document.getElementById('depFilter').value;
+    if (status) params.set('status', status);
+    const j = await fetch('/admin/wallet/transactions?' + params).then(r => r.json());
+    const items = Array.isArray(j.items) ? j.items : [];
+    if (!j.ok || !items.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-body-secondary">No deposits found.</td></tr>';
       return;
     }
-    const statusBadge = s => {
-      const map = { pending:'warning', completed:'success', rejected:'danger', processing:'info' };
-      return `<span class="badge bg-${map[s]||'secondary'}">${esc(s)}</span>`;
-    };
-    tbody.innerHTML = j.transactions.map(t => `
-      <tr>
-        <td class="small text-nowrap">${esc((t.created_at||'').slice(0,16))}</td>
-        <td class="small">${esc(t.username||t.user_id||'—')}</td>
-        <td class="small fw-semibold">$${((t.amount_cents||0)/100).toFixed(2)}</td>
-        <td class="small">${esc(t.method||'—')}</td>
-        <td class="small font-monospace" style="max-width:120px;overflow:hidden;text-overflow:ellipsis">${esc((t.invoice_uid||'—').slice(0,14))}…</td>
-        <td class="small">${statusBadge(t.status||'—')}</td>
-      </tr>`
-    ).join('');
-  } catch(e) { tbody.innerHTML = `<tr><td colspan="6" class="text-danger">${esc(String(e))}</td></tr>`; }
+    tbody.innerHTML = items.map(row => `<tr>
+      <td class="small text-nowrap">${esc((row.created_at || '').slice(0, 16))}</td>
+      <td class="small">${esc(row.username || '-')}</td>
+      <td class="small">${esc(row.email || '-')}</td>
+      <td class="small fw-semibold">$${(Math.abs(row.amount_cents || 0) / 100).toFixed(2)}</td>
+      <td class="small text-body-secondary">${esc(row.note || '-')}</td>
+      <td class="small text-body-secondary">${esc(row.admin_note || '-')}</td>
+      <td class="small">${statusBadge(row.status || '-')}</td>
+      <td class="small">${row.status === 'pending' ? `<button class="btn btn-sm btn-outline-primary py-0 px-2" onclick='openWalletAction(${JSON.stringify(JSON.stringify(row))}, "deposit")'>Process</button>` : '<span class="text-body-secondary">-</span>'}</td>
+    </tr>`).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="8" class="text-danger">${esc(String(err))}</td></tr>`;
+  }
 }
 
-let balTimer;
-document.getElementById('balQ').addEventListener('input', () => {
-  clearTimeout(balTimer);
-  balTimer = setTimeout(loadBalances, 300);
-});
-
-async function loadBalances() {
-  const tbody = document.getElementById('balBody');
-  const q = document.getElementById('balQ').value.trim();
-  tbody.innerHTML = '<tr><td colspan="4" class="text-body-secondary">Loading…</td></tr>';
+async function submitWalletAction(action) {
+  const txnId = document.getElementById('walletActionId').value;
+  const kind = document.getElementById('walletActionType').value;
+  const admin_note = document.getElementById('walletActionNote').value.trim() || null;
+  let url = '';
+  if (kind === 'deposit' && action === 'approve') url = `/admin/wallet/transactions/${encodeURIComponent(txnId)}/approve`;
+  if (kind === 'deposit' && action === 'reject') url = `/admin/wallet/transactions/${encodeURIComponent(txnId)}/reject`;
+  if (kind === 'withdrawal' && action === 'complete') url = `/admin/wallet/transactions/${encodeURIComponent(txnId)}/complete`;
+  if (kind === 'withdrawal' && action === 'reject') url = `/admin/wallet/transactions/${encodeURIComponent(txnId)}/reject`;
+  if (!url) return;
   try {
-    const params = new URLSearchParams();
-    if (q) params.set('q', q);
-    const j = await fetch('/api/admin/balances?' + params).then(r=>r.json());
-    if (!j.ok || !Array.isArray(j.balances) || !j.balances.length) {
-      tbody.innerHTML = '<tr><td colspan="4" class="text-body-secondary">No users found.</td></tr>';
+    const j = await fetch(url, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ admin_note })
+    }).then(r => r.json());
+    if (!j.ok) {
+      alert('Failed: ' + (j.error || 'unknown'));
       return;
     }
-    tbody.innerHTML = j.balances.map(b => `
-      <tr>
-        <td class="small fw-semibold">${esc(b.username||b.user_id||'—')}</td>
-        <td class="small fw-bold">$${((b.balance_cents||0)/100).toFixed(2)}</td>
-        <td class="small text-success">$${((b.total_deposited_cents||0)/100).toFixed(2)}</td>
-        <td class="small text-warning">$${((b.total_withdrawn_cents||0)/100).toFixed(2)}</td>
-      </tr>`
-    ).join('');
-  } catch(e) { tbody.innerHTML = `<tr><td colspan="4" class="text-danger">${esc(String(e))}</td></tr>`; }
-}
-
-function openProcess(id, t) {
-  document.getElementById('modalWdId').value = id;
-  document.getElementById('modalWdNote').value = '';
-  document.getElementById('modalWdInfo').innerHTML =
-    `User: <strong>${esc(t.username||t.user_id||'—')}</strong><br>Amount: <strong>$${((t.amount_cents||0)/100).toFixed(2)}</strong><br>Method: ${esc(t.method||'—')}<br>Destination: <code>${esc(t.destination||'—')}</code>`;
-  processModal.show();
-}
-
-async function processWd(action) {
-  const id   = document.getElementById('modalWdId').value;
-  const note = document.getElementById('modalWdNote').value.trim();
-  try {
-    const j = await fetch('/api/admin/wallet_action', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams({ transaction_id: id, action, note }) }).then(r=>r.json());
-    processModal.hide();
-    if (j.ok) loadWithdrawals();
-    else alert('Failed: ' + (j.error||'unknown'));
-  } catch(e) { alert('Error: ' + e.message); }
+    walletActionModal.hide();
+    if (kind === 'deposit') loadDeposits();
+    else loadWithdrawals();
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
 }
 </script>
 </body>

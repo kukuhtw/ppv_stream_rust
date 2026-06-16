@@ -2,7 +2,7 @@
 <html lang="en" data-bs-theme="dark">
 <head>
   <meta charset="utf-8">
-  <title>Admin Settings — PPV Stream</title>
+  <title>Admin Settings - PPV Stream</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="/public/styles.css">
@@ -12,7 +12,7 @@
 
 <nav class="navbar navbar-expand-md bg-danger shadow-sm">
   <div class="container">
-    <a class="navbar-brand fw-bold text-white" href="/public/admin/dashboard.html" data-platform="brand">🎬 PPV Stream</a>
+    <a class="navbar-brand fw-bold text-white" href="/public/admin/dashboard.html" data-platform="brand">PPV Stream</a>
     <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#adminNav">
       <span class="navbar-toggler-icon"></span>
     </button>
@@ -25,7 +25,7 @@
       </ul>
       <div class="d-flex align-items-center gap-2 mt-2 mt-md-0">
         <span class="badge bg-light text-danger fw-semibold">ADMIN</span>
-        <button class="btn btn-sm btn-outline-light" onclick="toggleTheme()" id="themeToggle">☀️</button>
+        <button class="btn btn-sm btn-outline-light" onclick="toggleTheme()" id="themeToggle">Theme</button>
         <button id="logoutBtn" class="btn btn-sm btn-outline-light">Logout</button>
       </div>
     </div>
@@ -34,46 +34,35 @@
 
 <div class="container py-4 pb-5">
   <h1 class="mb-1 fs-4 fw-bold">Settings</h1>
-  <p class="text-body-secondary small mb-4">Configure platform appearance, payment methods, SMTP, and admin credentials.</p>
+  <p class="text-body-secondary small mb-4">Configure branding, payment methods, SMTP, and the admin password.</p>
 
-  <!-- Platform branding (localStorage) -->
   <div class="card shadow-sm mb-4">
-    <div class="card-header fw-semibold">Platform Name &amp; Tagline</div>
+    <div class="card-header fw-semibold">Platform Name and Tagline</div>
     <div class="card-body">
-      <p class="text-body-secondary small mb-3">
-        These settings are saved locally in this browser and applied to all pages via <code>theme.js</code>.
-        They are not stored in the database — each admin browser must save them.
-      </p>
+      <p class="text-body-secondary small mb-3">These values are stored in this browser and applied through <code>theme.js</code>.</p>
       <div id="brandAlert" class="d-none mb-3"></div>
       <form id="brandForm">
         <div class="row g-3">
           <div class="col-md-6">
             <label for="brandName" class="form-label">Platform Name</label>
-            <input id="brandName" name="name" class="form-control" required maxlength="60" placeholder="PPV Stream">
+            <input id="brandName" class="form-control" required maxlength="60" placeholder="PPV Stream">
           </div>
           <div class="col-md-6">
             <label for="brandTagline" class="form-label">Tagline</label>
-            <input id="brandTagline" name="tagline" class="form-control" maxlength="120" placeholder="Pay-Per-View Streaming Platform">
+            <input id="brandTagline" class="form-control" maxlength="120" placeholder="Pay-Per-View Streaming Platform">
           </div>
           <div class="col-12">
             <button class="btn btn-primary" type="submit">Save Branding</button>
-            <button class="btn btn-outline-secondary ms-2" type="button" onclick="resetBranding()">Reset to Default</button>
+            <button class="btn btn-outline-secondary ms-2" type="button" onclick="resetBranding()">Reset</button>
           </div>
         </div>
       </form>
-      <div class="mt-3 p-3 rounded border small">
-        Preview: <strong data-platform="brand">🎬 PPV Stream</strong> — <span data-platform="tagline">Pay-Per-View Streaming Platform</span>
-      </div>
     </div>
   </div>
 
-  <!-- Payment methods -->
   <div class="card shadow-sm mb-4">
     <div class="card-header fw-semibold">Payment Methods</div>
     <div class="card-body">
-      <p class="text-body-secondary small mb-3">
-        Enable or disable checkout methods from the admin dashboard. Secret keys still stay in the server <code>.env</code> file.
-      </p>
       <div id="paymentAlert" class="d-none mb-3"></div>
       <form id="paymentSettingsForm">
         <div class="row g-3">
@@ -92,8 +81,8 @@
           </div>
           <div class="col-md-6">
             <div class="border rounded p-3 h-100">
-              <div class="fw-semibold mb-2">Default Fiat/Crypto Checkout</div>
-              <label for="defaultProvider" class="form-label small text-body-secondary">Default provider used by generic payment endpoints</label>
+              <div class="fw-semibold mb-2">Default Checkout Provider</div>
+              <label for="defaultProvider" class="form-label small text-body-secondary">Used by generic fiat/crypto invoice endpoints</label>
               <select id="defaultProvider" class="form-select">
                 <option value="">No default provider</option>
                 <option value="paypal">PayPal</option>
@@ -130,70 +119,70 @@
     </div>
   </div>
 
-  <!-- SMTP -->
   <div class="card shadow-sm mb-4">
-    <div class="card-header fw-semibold">SMTP / Email Settings</div>
+    <div class="card-header fw-semibold">SMTP Settings</div>
     <div class="card-body">
-      <p class="text-body-secondary small mb-3">
-        SMTP settings are configured in the server's <code>.env</code> file and require a server restart to take effect.
-        The form below sends a test email to verify the current configuration.
-      </p>
       <div id="smtpAlert" class="d-none mb-3"></div>
       <form id="smtpForm">
         <div class="row g-3">
           <div class="col-md-6">
             <label for="smtpHost" class="form-label">SMTP Host</label>
-            <input id="smtpHost" name="smtp_host" class="form-control" placeholder="smtp.gmail.com" readonly disabled>
-            <div class="form-text">Read from server .env (SMTP_HOST)</div>
+            <input id="smtpHost" class="form-control" required>
           </div>
           <div class="col-md-3">
             <label for="smtpPort" class="form-label">Port</label>
-            <input id="smtpPort" name="smtp_port" type="number" class="form-control" placeholder="587" readonly disabled>
+            <input id="smtpPort" type="number" class="form-control" required>
           </div>
           <div class="col-md-3">
-            <label for="smtpSec" class="form-label">Security</label>
-            <input id="smtpSec" name="smtp_security" class="form-control" placeholder="STARTTLS" readonly disabled>
+            <label for="smtpTls" class="form-label">TLS</label>
+            <select id="smtpTls" class="form-select">
+              <option value="true">Enabled</option>
+              <option value="false">Disabled</option>
+            </select>
           </div>
           <div class="col-md-6">
             <label for="smtpUser" class="form-label">Username</label>
-            <input id="smtpUser" name="smtp_user" class="form-control" placeholder="your@email.com" readonly disabled>
+            <input id="smtpUser" class="form-control">
           </div>
           <div class="col-md-6">
-            <label for="smtpFrom" class="form-label">From Address</label>
-            <input id="smtpFrom" name="smtp_from" class="form-control" placeholder="noreply@yourplatform.com" readonly disabled>
+            <label for="smtpPass" class="form-label">Password</label>
+            <input id="smtpPass" type="password" class="form-control">
+          </div>
+          <div class="col-md-6">
+            <label for="smtpFromEmail" class="form-label">From Email</label>
+            <input id="smtpFromEmail" type="email" class="form-control" required>
+          </div>
+          <div class="col-md-6">
+            <label for="smtpFromName" class="form-label">From Name</label>
+            <input id="smtpFromName" class="form-control" required>
+          </div>
+          <div class="col-md-6">
+            <label for="smtpEnabled" class="form-label">SMTP Enabled</label>
+            <select id="smtpEnabled" class="form-select">
+              <option value="true">Enabled</option>
+              <option value="false">Disabled</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label for="testEmail" class="form-label">Optional Test Email</label>
+            <input id="testEmail" type="email" class="form-control" placeholder="admin@example.com">
           </div>
           <div class="col-12">
-            <label for="testEmail" class="form-label">Send Test Email To</label>
-            <div class="input-group" style="max-width:400px">
-              <input id="testEmail" type="email" class="form-control" placeholder="admin@example.com">
-              <button class="btn btn-outline-secondary" type="button" onclick="sendTestEmail()">Send Test</button>
-            </div>
+            <button class="btn btn-primary" type="submit">Save SMTP Settings</button>
           </div>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- Exchange rate -->
   <div class="card shadow-sm mb-4">
-    <div class="card-header fw-semibold">USD → IDR Exchange Rate</div>
+    <div class="card-header fw-semibold">USD to IDR Exchange Rate</div>
     <div class="card-body">
-      <div id="kursAlert" class="d-none mb-3"></div>
-      <form id="kursForm">
-        <div class="row g-3">
-          <div class="col-md-4">
-            <label for="kursRate" class="form-label">Rate (1 USD = ? IDR)</label>
-            <input id="kursRate" name="usd_to_idr" type="number" min="1" step="1" class="form-control" required placeholder="e.g. 17000">
-          </div>
-          <div class="col-12">
-            <button class="btn btn-primary" type="submit">Update Rate</button>
-          </div>
-        </div>
-      </form>
+      <p class="text-body-secondary small mb-3">This build only exposes a read endpoint for the current rate. If you need to change it, update the server-side source that feeds <code>/api/kurs</code>.</p>
+      <div id="kursValue" class="fw-semibold">Loading...</div>
     </div>
   </div>
 
-  <!-- Admin password -->
   <div class="card shadow-sm mb-4">
     <div class="card-header fw-semibold">Change Admin Password</div>
     <div class="card-body">
@@ -202,17 +191,11 @@
         <div class="row g-3">
           <div class="col-md-4">
             <label for="apCurrent" class="form-label">Current Password</label>
-            <div class="input-group">
-              <input id="apCurrent" name="current_password" type="password" class="form-control" required>
-              <button class="btn btn-outline-secondary" type="button" data-toggle-pass="apCurrent">Show</button>
-            </div>
+            <input id="apCurrent" type="password" class="form-control" required>
           </div>
           <div class="col-md-4">
             <label for="apNew" class="form-label">New Password</label>
-            <div class="input-group">
-              <input id="apNew" name="new_password" type="password" class="form-control" required minlength="8">
-              <button class="btn btn-outline-secondary" type="button" data-toggle-pass="apNew">Show</button>
-            </div>
+            <input id="apNew" type="password" class="form-control" required minlength="8">
           </div>
           <div class="col-md-4">
             <label for="apConfirm" class="form-label">Confirm New Password</label>
@@ -225,31 +208,54 @@
       </form>
     </div>
   </div>
-
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 document.getElementById('logoutBtn').addEventListener('click', async () => {
-  await fetch('/admin/logout', { method:'POST' }).catch(()=>{});
+  await fetch('/admin/logout', { method:'POST' }).catch(() => {});
   location.href = '/public/admin/login.html';
 });
 
-// ── password show/hide ──
-document.querySelectorAll('[data-toggle-pass]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const inp = document.getElementById(btn.dataset.togglePass);
-    inp.type = inp.type === 'password' ? 'text' : 'password';
-    btn.textContent = inp.type === 'password' ? 'Show' : 'Hide';
-  });
-});
+function esc(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
 
-// ── platform branding (localStorage) ──
+function showAlert(id, type, msg) {
+  const el = document.getElementById(id);
+  el.className = `alert alert-${type}`;
+  el.textContent = msg;
+  el.classList.remove('d-none');
+}
+
 (function initBrand(){
   const cfg = getPlatformConfig();
-  document.getElementById('brandName').value    = cfg.name    || 'PPV Stream';
+  document.getElementById('brandName').value = cfg.name || 'PPV Stream';
   document.getElementById('brandTagline').value = cfg.tagline || 'Pay-Per-View Streaming Platform';
 })();
+
+document.getElementById('brandForm').addEventListener('submit', e => {
+  e.preventDefault();
+  savePlatformConfig({
+    name: document.getElementById('brandName').value.trim(),
+    tagline: document.getElementById('brandTagline').value.trim()
+  });
+  applyPlatformConfig();
+  showAlert('brandAlert', 'success', 'Branding saved.');
+});
+
+function resetBranding() {
+  savePlatformConfig({ name: 'PPV Stream', tagline: 'Pay-Per-View Streaming Platform' });
+  document.getElementById('brandName').value = 'PPV Stream';
+  document.getElementById('brandTagline').value = 'Pay-Per-View Streaming Platform';
+  applyPlatformConfig();
+  showAlert('brandAlert', 'info', 'Branding reset.');
+}
 
 const PAYMENT_PROVIDER_LABELS = {
   paypal: 'PayPal',
@@ -293,8 +299,8 @@ async function loadPaymentSettings() {
         <td class="small">${missing}</td>
       </tr>`;
     }).join('');
-  } catch (e) {
-    showAlert('paymentAlert', 'danger', 'Error: ' + e.message);
+  } catch (err) {
+    showAlert('paymentAlert', 'danger', 'Error: ' + err.message);
   }
 }
 
@@ -310,13 +316,12 @@ document.getElementById('paymentSettingsForm').addEventListener('submit', async 
     x402_enabled: !!document.querySelector('[data-provider="x402"]')?.checked,
     default_provider: document.getElementById('defaultProvider').value || null
   };
-
   try {
     const j = await fetch('/admin/payment_settings', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify(payload)
-    }).then(r=>r.json());
+    }).then(r => r.json());
     showAlert('paymentAlert', j.ok ? 'success' : 'danger', j.ok ? (j.message || 'Payment settings saved.') : ('Failed: ' + (j.error || 'unknown')));
     if (j.ok) await loadPaymentSettings();
   } catch (err) {
@@ -324,97 +329,94 @@ document.getElementById('paymentSettingsForm').addEventListener('submit', async 
   }
 });
 
-document.getElementById('brandForm').addEventListener('submit', e => {
-  e.preventDefault();
-  const name    = document.getElementById('brandName').value.trim();
-  const tagline = document.getElementById('brandTagline').value.trim();
-  savePlatformConfig({ name, tagline });
-  applyPlatformConfig();
-  showAlert('brandAlert', 'success', 'Branding saved! All pages will now use these values.');
-});
-
-function resetBranding() {
-  savePlatformConfig({ name: 'PPV Stream', tagline: 'Pay-Per-View Streaming Platform' });
-  document.getElementById('brandName').value    = 'PPV Stream';
-  document.getElementById('brandTagline').value = 'Pay-Per-View Streaming Platform';
-  applyPlatformConfig();
-  showAlert('brandAlert', 'info', 'Branding reset to defaults.');
-}
-
-// ── SMTP status ──
-(async function initSmtp(){
+async function loadSmtpSettings() {
   try {
-    const j = await fetch('/api/admin/smtp_status').then(r=>r.json());
-    if (j.ok) {
-      document.getElementById('smtpHost').value = j.host || '';
-      document.getElementById('smtpPort').value = j.port || '';
-      document.getElementById('smtpSec').value  = j.security || '';
-      document.getElementById('smtpUser').value = j.user || '';
-      document.getElementById('smtpFrom').value = j.from || '';
+    const j = await fetch('/admin/smtp').then(r => r.json());
+    if (!j.ok || !j.smtp) {
+      showAlert('smtpAlert', 'warning', j.error || 'SMTP settings not found yet.');
+      return;
     }
-  } catch {}
-})();
-
-async function sendTestEmail() {
-  const to = document.getElementById('testEmail').value.trim();
-  if (!to) return alert('Enter a recipient email.');
-  try {
-    const j = await fetch('/api/admin/test_email', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams({ to }) }).then(r=>r.json());
-    showAlert('smtpAlert', j.ok ? 'success' : 'danger', j.ok ? `Test email sent to ${to}` : 'Failed: ' + (j.error||'unknown'));
-  } catch(e) { showAlert('smtpAlert', 'danger', 'Error: ' + e.message); }
+    document.getElementById('smtpHost').value = j.smtp.host || '';
+    document.getElementById('smtpPort').value = j.smtp.port || 587;
+    document.getElementById('smtpTls').value = String(!!j.smtp.use_tls);
+    document.getElementById('smtpUser').value = j.smtp.username || '';
+    document.getElementById('smtpPass').value = j.smtp.password || '';
+    document.getElementById('smtpFromEmail').value = j.smtp.from_email || '';
+    document.getElementById('smtpFromName').value = j.smtp.from_name || 'PPV Stream';
+    document.getElementById('smtpEnabled').value = String(!!j.smtp.enabled);
+  } catch (err) {
+    showAlert('smtpAlert', 'danger', 'Error: ' + err.message);
+  }
 }
 
-// ── exchange rate ──
-(async function initKurs(){
-  try {
-    const j = await fetch('/api/kurs').then(r=>r.json());
-    if (j.usd_to_idr) document.getElementById('kursRate').value = j.usd_to_idr;
-  } catch {}
-})();
-
-document.getElementById('kursForm').addEventListener('submit', async e => {
+document.getElementById('smtpForm').addEventListener('submit', async e => {
   e.preventDefault();
-  const rate = parseInt(document.getElementById('kursRate').value, 10);
+  const payload = {
+    host: document.getElementById('smtpHost').value.trim(),
+    port: parseInt(document.getElementById('smtpPort').value, 10),
+    username: document.getElementById('smtpUser').value.trim(),
+    password: document.getElementById('smtpPass').value,
+    from_email: document.getElementById('smtpFromEmail').value.trim(),
+    from_name: document.getElementById('smtpFromName').value.trim(),
+    use_tls: document.getElementById('smtpTls').value === 'true',
+    enabled: document.getElementById('smtpEnabled').value === 'true',
+    test_email: document.getElementById('testEmail').value.trim() || null
+  };
   try {
-    const j = await fetch('/api/admin/kurs', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams({ usd_to_idr: rate }) }).then(r=>r.json());
-    showAlert('kursAlert', j.ok ? 'success' : 'danger', j.ok ? 'Exchange rate updated!' : 'Failed: ' + (j.error||'unknown'));
-  } catch(e) { showAlert('kursAlert', 'danger', 'Error: ' + e.message); }
+    const j = await fetch('/admin/smtp', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    }).then(r => r.json());
+    if (!j.ok) {
+      showAlert('smtpAlert', 'danger', 'Failed: ' + (j.error || 'unknown'));
+      return;
+    }
+    if (j.test_error) {
+      showAlert('smtpAlert', 'warning', 'SMTP saved, but test email failed: ' + j.test_error);
+    } else if (j.test_sent) {
+      showAlert('smtpAlert', 'success', 'SMTP settings saved and test email sent.');
+    } else {
+      showAlert('smtpAlert', 'success', 'SMTP settings saved.');
+    }
+  } catch (err) {
+    showAlert('smtpAlert', 'danger', 'Error: ' + err.message);
+  }
 });
 
-// ── admin password ──
+(async function loadKurs() {
+  try {
+    const j = await fetch('/api/kurs').then(r => r.json());
+    document.getElementById('kursValue').textContent = j.usd_to_idr ? `1 USD = ${j.usd_to_idr} IDR` : 'Rate unavailable';
+  } catch {
+    document.getElementById('kursValue').textContent = 'Rate unavailable';
+  }
+})();
+
 document.getElementById('adminPwForm').addEventListener('submit', async e => {
   e.preventDefault();
-  const cur  = document.getElementById('apCurrent').value;
-  const nw   = document.getElementById('apNew').value;
-  const conf = document.getElementById('apConfirm').value;
-  if (nw !== conf) return showAlert('adminPwAlert', 'danger', 'Passwords do not match.');
-  if (nw.length < 8) return showAlert('adminPwAlert', 'danger', 'New password must be at least 8 characters.');
-  const btn = e.submitter; btn.disabled=true;
+  const current = document.getElementById('apCurrent').value;
+  const next = document.getElementById('apNew').value;
+  const confirm = document.getElementById('apConfirm').value;
+  if (next !== confirm) {
+    showAlert('adminPwAlert', 'danger', 'Passwords do not match.');
+    return;
+  }
   try {
-    const j = await fetch('/api/change_password', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ current_password: cur, new_password: nw }) }).then(r=>r.json());
-    showAlert('adminPwAlert', j.ok ? 'success' : 'danger', j.ok ? 'Admin password updated!' : 'Failed: ' + (j.error||'unknown'));
+    const j = await fetch('/admin/change_password', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ current_password: current, new_password: next })
+    }).then(r => r.json());
+    showAlert('adminPwAlert', j.ok ? 'success' : 'danger', j.ok ? 'Admin password updated.' : ('Failed: ' + (j.error || 'unknown')));
     if (j.ok) e.target.reset();
-  } catch(e2) { showAlert('adminPwAlert', 'danger', 'Error: ' + e2.message); }
-  finally { btn.disabled=false; }
+  } catch (err) {
+    showAlert('adminPwAlert', 'danger', 'Error: ' + err.message);
+  }
 });
 
-function showAlert(id, type, msg) {
-  const el = document.getElementById(id);
-  el.className = `alert alert-${type}`;
-  el.textContent = msg;
-  el.classList.remove('d-none');
-}
-
-function esc(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-}
-
 loadPaymentSettings();
+loadSmtpSettings();
 </script>
 </body>
 </html>

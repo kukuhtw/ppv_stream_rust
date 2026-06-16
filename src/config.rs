@@ -7,6 +7,8 @@ pub struct Config {
     // ===== Koneksi & server =====
     pub database_url: String,
     pub bind: String,
+    pub base_url: String,
+    pub trust_proxy_headers: bool,
 
     // ===== Direktori =====
     pub upload_dir: String, // lokasi file asli hasil upload
@@ -55,6 +57,16 @@ impl Config {
         let database_url = env::var("DATABASE_URL")
             .unwrap_or_else(|_| "postgres://ppv:secret@localhost:5432/ppv_stream".into());
         let bind = env::var("BIND").unwrap_or_else(|_| "0.0.0.0:8080".into());
+        let base_url = env::var("BASE_URL").unwrap_or_else(|_| "http://localhost:8080".into());
+        let trust_proxy_headers = env::var("TRUST_PROXY_HEADERS")
+            .ok()
+            .map(|value| {
+                matches!(
+                    value.trim().to_ascii_lowercase().as_str(),
+                    "1" | "true" | "yes"
+                )
+            })
+            .unwrap_or(false);
 
         // Direktori
         let storage_dir = env::var("STORAGE_DIR").unwrap_or_else(|_| "storage".into());
@@ -146,6 +158,8 @@ impl Config {
         let cfg = Self {
             database_url,
             bind,
+            base_url,
+            trust_proxy_headers,
             upload_dir,
             media_dir,
             tmp_dir,
@@ -171,11 +185,13 @@ impl Config {
         cfg.ensure_dirs();
 
         println!(
-            "[config] bind={}, db_url={}, upload_dir={}, media_dir={}, tmp_dir={}, public_dir={}, \
+            "[config] bind={}, base_url={}, trust_proxy_headers={}, db_url={}, upload_dir={}, media_dir={}, tmp_dir={}, public_dir={}, \
              hls_segment={}s, hwaccel={}, kurs_usd_to_idr={}, max_upload={}MB, \
              creator_split={}bp ({}%), x402_deadline={}s, \
              x402_contract={}, x402_chain_id={}, watcher_wss={}",
             cfg.bind,
+            cfg.base_url,
+            cfg.trust_proxy_headers,
             redacted(&cfg.database_url),
             cfg.upload_dir,
             cfg.media_dir,

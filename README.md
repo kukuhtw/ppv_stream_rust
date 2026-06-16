@@ -17,6 +17,8 @@
 |----------|-------------|
 | **README.md** *(this file)* | Platform overview, quick start, architecture, feature list |
 | [SETUP.md](SETUP.md) | Complete step-by-step setup and run guide in English for Docker and non-Docker environments |
+| [DEPLOYMENT.md](DEPLOYMENT.md) | Detailed cloud deployment guide for Docker and non-Docker setups on DigitalOcean, Google Cloud, Azure, plus Cloudflare and Vercel guidance |
+| [SECURITY.md](SECURITY.md) | Security model, hardening notes, production security recommendations, and remaining security work |
 | [GLOSSARY.md](GLOSSARY.md) | Comprehensive English glossary of business, payment, streaming, security, and technical terms used across the repo |
 | [VISION.md](VISION.md) | Inspiration — the problems we solve and the creator economy we're building |
 | [WALLET.md](WALLET.md) | Internal fiat wallet — business flows, DB design, API reference |

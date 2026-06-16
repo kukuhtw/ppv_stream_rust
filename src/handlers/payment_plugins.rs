@@ -10,6 +10,7 @@ use axum::{
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use serde::Deserialize;
 use serde_json::json;
+use tower_cookies::Cookies;
 use uuid::Uuid;
 
 use crate::commission;
@@ -19,6 +20,7 @@ use crate::plugins::payment::{
     models::{ConfirmPaymentRequest, CreateInvoiceRequest, PaymentStatus},
     PaymentPluginRegistry,
 };
+use crate::sessions;
 
 #[derive(Clone)]
 pub struct PaymentPluginState {
@@ -100,22 +102,24 @@ pub async fn list_payment_plugins(State(state): State<PaymentPluginState>) -> im
 
 pub async fn create_default_payment_invoice(
     State(state): State<PaymentPluginState>,
+    cookies: Cookies,
     Json(payload): Json<CreateInvoicePayload>,
 ) -> impl IntoResponse {
     let registry = runtime_registry(&state).await;
     let Some(provider) = registry.default_provider_name() else {
         return Json(json!({"ok": false, "error": "default payment provider is not configured"}));
     };
-    create_invoice_with_provider(state, registry, provider, payload).await
+    create_invoice_with_provider(state, registry, provider, payload, cookies).await
 }
 
 pub async fn create_payment_invoice(
     State(state): State<PaymentPluginState>,
+    cookies: Cookies,
     Path(provider): Path<String>,
     Json(payload): Json<CreateInvoicePayload>,
 ) -> impl IntoResponse {
     let registry = runtime_registry(&state).await;
-    create_invoice_with_provider(state, registry, provider, payload).await
+    create_invoice_with_provider(state, registry, provider, payload, cookies).await
 }
 
 async fn create_invoice_with_provider(
@@ -123,6 +127,7 @@ async fn create_invoice_with_provider(
     registry: PaymentPluginRegistry,
     provider: String,
     payload: CreateInvoicePayload,
+    cookies: Cookies,
 ) -> Json<serde_json::Value> {
     let Some(plugin) = registry.get(&provider) else {
         return Json(
@@ -130,18 +135,42 @@ async fn create_invoice_with_provider(
         );
     };
 
+    let Some((buyer_id, _)) = sessions::current_user_id(&state.pool, &state.cfg, &cookies).await
+    else {
+        return Json(json!({"ok": false, "error": "not logged in"}));
+    };
+
     let video_row = sqlx::query!(
-        "SELECT title, owner_id AS creator_id FROM videos WHERE id = $1",
+        "SELECT title, owner_id AS creator_id, price_cents FROM videos WHERE id = $1",
         payload.video_id
     )
     .fetch_optional(&state.pool)
     .await;
 
-    let (video_title, creator_id) = match video_row {
-        Ok(Some(r)) => (r.title.unwrap_or_else(|| "Video".into()), r.creator_id),
+    let (video_title, creator_id, video_price_cents) = match video_row {
+        Ok(Some(r)) => (
+            r.title.unwrap_or_else(|| "Video".into()),
+            r.creator_id,
+            r.price_cents.unwrap_or(0),
+        ),
         Ok(None) => return Json(json!({"ok": false, "error": "video not found"})),
         Err(e) => return Json(json!({"ok": false, "error": format!("db error: {e}")})),
     };
+
+    if creator_id == buyer_id {
+        return Json(json!({"ok": false, "error": "owners cannot buy their own video"}));
+    }
+    if video_price_cents < 0 {
+        return Json(json!({"ok": false, "error": "invalid video price"}));
+    }
+
+    let buyer_email_from_db: Option<String> =
+        sqlx::query_scalar("SELECT email FROM users WHERE id = $1 LIMIT 1")
+            .bind(&buyer_id)
+            .fetch_optional(&state.pool)
+            .await
+            .ok()
+            .flatten();
 
     let invoice_uid = Uuid::new_v4().to_string();
 
@@ -151,12 +180,12 @@ async fn create_invoice_with_provider(
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#,
         invoice_uid,
         provider,
-        payload.user_id,
+        buyer_id,
         payload.video_id,
         creator_id,
-        payload.amount_cents,
+        video_price_cents,
         payload.currency,
-        payload.buyer_email.as_deref().unwrap_or(""),
+        buyer_email_from_db.as_deref().unwrap_or(""),
     )
     .execute(&state.pool)
     .await;
@@ -178,11 +207,11 @@ async fn create_invoice_with_provider(
     metadata.insert("video_title".into(), video_title);
 
     let request = CreateInvoiceRequest {
-        user_id: payload.user_id,
+        user_id: buyer_id,
         video_id: payload.video_id,
-        amount_cents: payload.amount_cents,
+        amount_cents: video_price_cents,
         currency: payload.currency,
-        buyer_email: payload.buyer_email,
+        buyer_email: buyer_email_from_db.or(payload.buyer_email),
         buyer_name: payload.buyer_name,
         success_url: payload.success_url,
         cancel_url: payload.cancel_url,
@@ -327,6 +356,7 @@ pub async fn handle_webhook(
 
     let inv = sqlx::query!(
         r#"SELECT fi.user_id, fi.video_id, fi.creator_id, fi.amount, fi.currency,
+                  fi.status, fi.paid_at, fi.disbursed_at,
                   buyer.username  AS buyer_username,
                   creator.bank_account AS creator_bank
            FROM fiat_invoices fi
@@ -349,6 +379,19 @@ pub async fn handle_webhook(
             return Json(json!({"ok": false, "error": "db error"}));
         }
     };
+
+    if inv.status == "paid" && inv.paid_at.is_some() {
+        tracing::info!(
+            "fiat webhook replay ignored: provider={provider} uid={invoice_uid} already paid"
+        );
+        return Json(json!({
+            "ok": true,
+            "status": "paid",
+            "invoice_id": invoice_uid,
+            "video_id": inv.video_id,
+            "replayed": true
+        }));
+    }
 
     let username = inv.buyer_username.clone();
 
@@ -420,7 +463,7 @@ pub async fn handle_webhook(
         }
     }
 
-    if provider == "xendit" {
+    if provider == "xendit" && inv.disbursed_at.is_none() {
         use crate::plugins::payment::providers::xendit::XenditPaymentPlugin;
 
         if let Some(ba) = inv.creator_bank {

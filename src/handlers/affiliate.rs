@@ -344,8 +344,15 @@ pub async fn affiliate_program_info(
 
 pub async fn admin_affiliate_commissions(
     State(st): State<AffiliateState>,
+    cookies: Cookies,
     Query(q): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
+    match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await {
+        Some((_uid, true)) => {}
+        Some(_) => return Json(json!({"ok": false, "error": "admin only"})),
+        None => return Json(json!({"ok": false, "error": "not logged in"})),
+    }
+
     let limit: i64 = q
         .get("limit")
         .and_then(|s| s.parse().ok())

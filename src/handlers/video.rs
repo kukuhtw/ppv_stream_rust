@@ -23,10 +23,6 @@ pub struct VideoItem {
     pub id: String,
     pub owner_id: String,
     pub owner_name: String,
-    pub owner_email: String,
-    pub owner_whatsapp: Option<String>,
-    pub owner_wallet: Option<String>,
-    pub owner_bank: Option<String>,
     pub owner_profile_desc: String,
     pub title: String,
     pub description: String,
@@ -42,10 +38,6 @@ pub async fn list_videos(State(st): State<VideoState>) -> impl IntoResponse {
           v.id,
           v.owner_id,
           COALESCE(u.username, '(tidak diketahui)') AS owner_name,
-          u.email                      AS owner_email,
-          u.whatsapp                   AS owner_whatsapp,
-          u.wallet_account             AS owner_wallet,
-          u.bank_account               AS owner_bank,
           COALESCE(u.profile_desc,'')  AS owner_profile_desc,
           v.title,
           COALESCE(v.description, '')  AS description,
@@ -72,19 +64,6 @@ pub async fn list_videos(State(st): State<VideoState>) -> impl IntoResponse {
             owner_name: r
                 .try_get::<String, _>("owner_name")
                 .unwrap_or_else(|_| "(tidak diketahui)".to_string()),
-            owner_email: r
-                .try_get::<Option<String>, _>("owner_email")
-                .unwrap_or(None)
-                .unwrap_or_default(),
-            owner_whatsapp: r
-                .try_get::<Option<String>, _>("owner_whatsapp")
-                .ok()
-                .flatten(),
-            owner_wallet: r
-                .try_get::<Option<String>, _>("owner_wallet")
-                .ok()
-                .flatten(),
-            owner_bank: r.try_get::<Option<String>, _>("owner_bank").ok().flatten(),
             owner_profile_desc: r
                 .try_get::<Option<String>, _>("owner_profile_desc")
                 .ok()
@@ -173,26 +152,32 @@ pub struct UserLookupQs {
 
 pub async fn user_lookup(
     State(st): State<VideoState>,
+    cookies: Cookies,
     Query(qs): Query<UserLookupQs>,
 ) -> impl IntoResponse {
+    if sessions::current_user_id(&st.pool, &st.cfg, &cookies)
+        .await
+        .is_none()
+    {
+        return Json(serde_json::json!({"ok": false, "error": "not logged in"}));
+    }
+
     if let Some(u) = qs.username.as_deref().filter(|s| !s.is_empty()) {
-        let row =
-            sqlx::query(r#"SELECT id, username, email FROM users WHERE username = $1 LIMIT 1"#)
-                .bind(u)
-                .fetch_optional(&st.pool)
-                .await
-                .unwrap_or(None);
+        let row = sqlx::query(r#"SELECT id, username FROM users WHERE username = $1 LIMIT 1"#)
+            .bind(u)
+            .fetch_optional(&st.pool)
+            .await
+            .unwrap_or(None);
         return match row {
             Some(r) => Json(serde_json::json!({"ok": true, "user": {
                 "id": r.try_get::<String,_>("id").unwrap_or_default(),
                 "username": r.try_get::<String,_>("username").unwrap_or_default(),
-                "email": r.try_get::<String,_>("email").unwrap_or_default(),
             }})),
             None => Json(serde_json::json!({"ok": true, "user": null})),
         };
     }
     if let Some(e) = qs.email.as_deref().filter(|s| !s.is_empty()) {
-        let row = sqlx::query(r#"SELECT id, username, email FROM users WHERE email = $1 LIMIT 1"#)
+        let row = sqlx::query(r#"SELECT id, username FROM users WHERE email = $1 LIMIT 1"#)
             .bind(e)
             .fetch_optional(&st.pool)
             .await
@@ -201,7 +186,6 @@ pub async fn user_lookup(
             Some(r) => Json(serde_json::json!({"ok": true, "user": {
                 "id": r.try_get::<String,_>("id").unwrap_or_default(),
                 "username": r.try_get::<String,_>("username").unwrap_or_default(),
-                "email": r.try_get::<String,_>("email").unwrap_or_default(),
             }})),
             None => Json(serde_json::json!({"ok": true, "user": null})),
         };
@@ -210,7 +194,7 @@ pub async fn user_lookup(
         let pattern = format!("%{}%", q);
         let rows = sqlx::query(
             r#"
-            SELECT id, username, email
+            SELECT id, username
             FROM users
             WHERE username ILIKE $1 OR email ILIKE $1
             ORDER BY username
@@ -228,7 +212,6 @@ pub async fn user_lookup(
                 serde_json::json!({
                     "id": r.try_get::<String,_>("id").unwrap_or_default(),
                     "username": r.try_get::<String,_>("username").unwrap_or_default(),
-                    "email": r.try_get::<String,_>("email").unwrap_or_default(),
                 })
             })
             .collect();

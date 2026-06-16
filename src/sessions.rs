@@ -85,7 +85,20 @@ pub async fn create_session(
     c.set_path("/");
     // Default aman untuk web apps
     c.set_same_site(tower_cookies::cookie::SameSite::Lax);
-    // Jika ingin, aktifkan secure lewat reverse proxy/ENV (tidak dipaksa di sini)
+    let secure_cookie = std::env::var("SESSION_COOKIE_SECURE")
+        .ok()
+        .map(|value| {
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes"
+            )
+        })
+        .unwrap_or_else(|| {
+            std::env::var("BASE_URL")
+                .map(|url| url.trim().to_ascii_lowercase().starts_with("https://"))
+                .unwrap_or(false)
+        });
+    c.set_secure(secure_cookie);
     cookies.add(c);
     Ok(())
 }

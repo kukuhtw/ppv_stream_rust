@@ -2,7 +2,7 @@
 <html lang="en" data-bs-theme="dark">
 <head>
   <meta charset="utf-8">
-  <title>Wallet — PPV Stream</title>
+  <title>Wallet - PPV Stream</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="/public/styles.css">
@@ -12,7 +12,7 @@
 
 <nav class="navbar navbar-expand-md bg-body-tertiary shadow-sm border-bottom">
   <div class="container">
-    <a class="navbar-brand fw-bold" href="/public/browse.html" data-platform="brand">🎬 PPV Stream</a>
+    <a class="navbar-brand fw-bold" href="/public/browse.html" data-platform="brand">PPV Stream</a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
       <span class="navbar-toggler-icon"></span>
     </button>
@@ -24,8 +24,8 @@
         <li class="nav-item"><a class="nav-link" href="/public/affiliate.html">Affiliate</a></li>
       </ul>
       <div class="d-flex align-items-center gap-2 mt-2 mt-md-0">
-        <span id="userbar" class="badge bg-secondary">Loading…</span>
-        <button class="btn btn-sm btn-outline-secondary" onclick="toggleTheme()" id="themeToggle">☀️</button>
+        <span id="userbar" class="badge bg-secondary">Loading...</span>
+        <button class="btn btn-sm btn-outline-secondary" onclick="toggleTheme()" id="themeToggle">Theme</button>
         <button id="logoutBtn" class="btn btn-sm btn-outline-danger">Logout</button>
       </div>
     </div>
@@ -34,74 +34,54 @@
 
 <div class="container py-4 pb-5">
   <h1 class="mb-1 fs-4 fw-bold">Wallet</h1>
-  <p class="text-body-secondary small mb-4">Manage your balance, top-ups, and withdrawals.</p>
+  <p class="text-body-secondary small mb-4">Manage your balance, transfers, top-ups, and withdrawals.</p>
 
-  <!-- Balance card -->
   <div class="card shadow-sm mb-4">
     <div class="card-body d-flex flex-column flex-md-row align-items-md-center gap-3">
       <div class="me-auto">
         <div class="text-body-secondary small mb-1">Available Balance</div>
-        <div class="fs-2 fw-bold" id="balanceDisplay">—</div>
+        <div class="fs-2 fw-bold" id="balanceDisplay">-</div>
         <div class="text-body-secondary small" id="balanceIdr"></div>
       </div>
       <div class="d-flex gap-2">
         <button class="btn btn-primary" onclick="showTab('deposit')">Top Up</button>
         <button class="btn btn-outline-secondary" onclick="showTab('withdraw')">Withdraw</button>
-        <button class="btn btn-outline-secondary" onclick="loadBalance()">↻ Refresh</button>
+        <button class="btn btn-outline-secondary" onclick="loadBalance()">Refresh</button>
       </div>
     </div>
   </div>
 
-  <!-- Action tabs -->
   <ul class="nav nav-tabs mb-3" id="walletTabs">
-    <li class="nav-item"><button class="nav-link active" data-tab="deposit" onclick="showTab('deposit')">Deposit / Top Up</button></li>
+    <li class="nav-item"><button class="nav-link active" data-tab="deposit" onclick="showTab('deposit')">Deposit</button></li>
     <li class="nav-item"><button class="nav-link" data-tab="withdraw" onclick="showTab('withdraw')">Withdraw</button></li>
     <li class="nav-item"><button class="nav-link" data-tab="transfer" onclick="showTab('transfer')">Transfer</button></li>
     <li class="nav-item"><button class="nav-link" data-tab="history" onclick="showTab('history')">History</button></li>
   </ul>
 
-  <!-- Deposit -->
   <div id="tab-deposit" class="tab-pane-custom">
     <div class="card shadow-sm">
-      <div class="card-header fw-semibold">Top Up Balance</div>
+      <div class="card-header fw-semibold">Request Wallet Top-Up</div>
       <div class="card-body">
         <div id="depositAlert" class="d-none mb-3"></div>
         <form id="depositForm">
           <div class="row g-3">
             <div class="col-md-4">
               <label for="depositAmt" class="form-label">Amount (USD cents)</label>
-              <input id="depositAmt" name="amount_cents" type="number" min="100" step="100" value="1000" class="form-control" required>
+              <input id="depositAmt" type="number" min="1000" step="100" value="1000" class="form-control" required>
               <div class="form-text">$10.00 minimum</div>
             </div>
-            <div class="col-md-4">
-              <label for="depositMethod" class="form-label">Payment Method</label>
-              <select id="depositMethod" name="method" class="form-select" onchange="onMethodChange()">
-                <option value="x402">x402 (EVM / Crypto)</option>
-                <option value="transfer">Bank Transfer (IDR)</option>
-                <option value="qris">QRIS</option>
-              </select>
-            </div>
             <div class="col-12">
-              <button class="btn btn-primary" type="submit">Request Top Up</button>
+              <button class="btn btn-primary" type="submit">Submit Top-Up Request</button>
             </div>
           </div>
         </form>
-        <div id="depositInstructions" class="mt-4 d-none">
-          <div id="depositX402" class="d-none">
-            <h6 class="fw-semibold">Pay via Crypto (x402)</h6>
-            <p class="small text-body-secondary">Send the exact amount in USDC to the address below on the selected chain. Confirmation is automatic.</p>
-            <div class="p-3 rounded border font-monospace small" id="x402Details">—</div>
-          </div>
-          <div id="depositFiat" class="d-none">
-            <h6 class="fw-semibold">Bank Transfer / QRIS Instructions</h6>
-            <div id="fiatDetails" class="small"></div>
-          </div>
+        <div class="alert alert-info small mt-4 mb-0">
+          Top-ups create a pending ledger entry. An admin must approve it before the balance is credited.
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Withdraw -->
   <div id="tab-withdraw" class="tab-pane-custom d-none">
     <div class="card shadow-sm">
       <div class="card-header fw-semibold">Withdraw Funds</div>
@@ -111,17 +91,17 @@
           <div class="row g-3">
             <div class="col-md-4">
               <label for="wdAmt" class="form-label">Amount (USD cents)</label>
-              <input id="wdAmt" name="amount_cents" type="number" min="100" step="100" class="form-control" required placeholder="e.g. 5000 = $50">
+              <input id="wdAmt" type="number" min="5000" step="100" class="form-control" required placeholder="e.g. 5000 = $50">
             </div>
             <div class="col-md-4">
               <label for="wdMethod" class="form-label">Withdrawal Method</label>
-              <select id="wdMethod" name="method" class="form-select">
+              <select id="wdMethod" class="form-select">
                 <option value="bank">Bank Transfer</option>
                 <option value="crypto">Crypto (EVM)</option>
               </select>
             </div>
             <div class="col-12">
-              <div class="alert alert-info small py-2 mb-2">Your payout destination is taken from your <a href="/public/dashboard.html">Profile</a>. Make sure it is up-to-date.</div>
+              <div class="alert alert-info small py-2 mb-2">Your payout destination is taken from your <a href="/public/dashboard.html">Profile</a>.</div>
               <button class="btn btn-primary" type="submit">Request Withdrawal</button>
             </div>
           </div>
@@ -130,7 +110,6 @@
     </div>
   </div>
 
-  <!-- Transfer -->
   <div id="tab-transfer" class="tab-pane-custom d-none">
     <div class="card shadow-sm">
       <div class="card-header fw-semibold">Transfer to User</div>
@@ -140,16 +119,16 @@
           <div class="row g-3">
             <div class="col-md-4">
               <label for="trTarget" class="form-label">Recipient Username</label>
-              <input id="trTarget" name="to_username" class="form-control" required placeholder="username">
+              <input id="trTarget" class="form-control" required placeholder="username">
               <div id="trLookup" class="small text-body-secondary mt-1"></div>
             </div>
             <div class="col-md-4">
               <label for="trAmt" class="form-label">Amount (USD cents)</label>
-              <input id="trAmt" name="amount_cents" type="number" min="1" class="form-control" required placeholder="e.g. 500 = $5">
+              <input id="trAmt" type="number" min="100" class="form-control" required placeholder="e.g. 500 = $5">
             </div>
             <div class="col-md-4">
-              <label for="trNote" class="form-label">Note <span class="text-body-secondary small">(optional)</span></label>
-              <input id="trNote" name="note" class="form-control" maxlength="120" placeholder="What's this for?">
+              <label for="trNote" class="form-label">Note</label>
+              <input id="trNote" class="form-control" maxlength="120" placeholder="Optional note">
             </div>
             <div class="col-12">
               <button class="btn btn-primary" type="submit">Send Transfer</button>
@@ -160,7 +139,6 @@
     </div>
   </div>
 
-  <!-- History -->
   <div id="tab-history" class="tab-pane-custom d-none">
     <div class="card shadow-sm">
       <div class="card-header fw-semibold">Transaction History</div>
@@ -177,14 +155,13 @@
               </tr>
             </thead>
             <tbody id="historyBody">
-              <tr><td colspan="5" class="text-body-secondary">Loading…</td></tr>
+              <tr><td colspan="5" class="text-body-secondary">Loading...</td></tr>
             </tbody>
           </table>
         </div>
       </div>
     </div>
   </div>
-
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -192,21 +169,34 @@
 let USD_TO_IDR = 17000;
 const fmtIdr = new Intl.NumberFormat('id-ID');
 
-// ── user bar + logout ──
 (async function(){
   try {
-    const j = await fetch('/api/me').then(r=>r.json());
+    const j = await fetch('/api/me').then(r => r.json());
     const el = document.getElementById('userbar');
     if (j.ok && j.user) el.innerHTML = `<b>${esc(j.user.username)}</b> &lt;${esc(j.user.email)}&gt;`;
     else location.href = '/public/auth/login.html';
   } catch {}
 })();
+
 document.getElementById('logoutBtn').addEventListener('click', async () => {
-  await fetch('/auth/logout', { method:'POST' }).catch(()=>{});
+  await fetch('/auth/logout', { method:'POST' }).catch(() => {});
   location.href = '/public/auth/login.html?status=ok';
 });
 
-// ── tabs ──
+function esc(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function showAlert(el, type, msg) {
+  el.className = `alert alert-${type}`;
+  el.textContent = msg;
+}
+
 function showTab(name) {
   document.querySelectorAll('.tab-pane-custom').forEach(el => el.classList.add('d-none'));
   document.querySelectorAll('#walletTabs .nav-link').forEach(b => b.classList.remove('active'));
@@ -215,71 +205,89 @@ function showTab(name) {
   if (name === 'history') loadHistory();
 }
 
-// ── balance ──
 async function loadBalance() {
   try {
-    const j = await fetch('/api/wallet/balance').then(r=>r.json());
+    const j = await fetch('/api/wallet/balance').then(r => r.json());
     if (j.ok) {
       const cents = j.balance_cents || 0;
-      document.getElementById('balanceDisplay').textContent = '$' + (cents/100).toFixed(2);
-      try { const k = await fetch('/api/kurs').then(r=>r.json()); if(k.usd_to_idr) USD_TO_IDR = k.usd_to_idr; } catch {}
-      document.getElementById('balanceIdr').textContent = '≈ Rp ' + fmtIdr.format(Math.round(cents/100*USD_TO_IDR));
+      document.getElementById('balanceDisplay').textContent = '$' + (cents / 100).toFixed(2);
+      try {
+        const k = await fetch('/api/kurs').then(r => r.json());
+        if (k.usd_to_idr) USD_TO_IDR = k.usd_to_idr;
+      } catch {}
+      document.getElementById('balanceIdr').textContent = 'Approx. Rp ' + fmtIdr.format(Math.round(cents / 100 * USD_TO_IDR));
     } else {
       document.getElementById('balanceDisplay').textContent = 'Error';
     }
-  } catch { document.getElementById('balanceDisplay').textContent = '—'; }
-}
-loadBalance();
-
-// ── method change ──
-function onMethodChange() {
-  document.getElementById('depositInstructions').classList.add('d-none');
-  document.getElementById('depositX402').classList.add('d-none');
-  document.getElementById('depositFiat').classList.add('d-none');
+  } catch {
+    document.getElementById('balanceDisplay').textContent = '-';
+  }
 }
 
-// ── deposit ──
 document.getElementById('depositForm').addEventListener('submit', async e => {
   e.preventDefault();
-  const fd = new FormData(e.target);
-  const method = fd.get('method');
-  const cents  = parseInt(fd.get('amount_cents'), 10);
-  const btn = e.submitter; btn.disabled=true; btn.textContent='Processing…';
+  const btn = e.submitter;
   const alert = document.getElementById('depositAlert');
+  btn.disabled = true;
+  btn.textContent = 'Submitting...';
   alert.className = 'd-none';
   try {
-    const j = await fetch('/api/wallet/deposit', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams(fd) }).then(r=>r.json());
-    if (!j.ok) { showAlert(alert, 'danger', 'Failed: ' + (j.error||'unknown')); return; }
-    const instr = document.getElementById('depositInstructions');
-    instr.classList.remove('d-none');
-    if (method === 'x402') {
-      document.getElementById('depositX402').classList.remove('d-none');
-      document.getElementById('x402Details').innerHTML =
-        `Pay <strong>$${(cents/100).toFixed(2)} USDC</strong> to:<br><code>${esc(j.address||'—')}</code><br>Chain ID: <code>${esc(String(j.chain_id||'—'))}</code><br>Invoice: <code>${esc(j.invoice_uid||'—')}</code>`;
+    const j = await fetch('/api/wallet/deposit', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        amount_cents: parseInt(document.getElementById('depositAmt').value, 10),
+        note: 'Wallet top-up requested from browser'
+      })
+    }).then(r => r.json());
+    if (j.ok) {
+      showAlert(alert, 'success', j.message || 'Top-up request submitted.');
+      e.target.reset();
+      document.getElementById('depositAmt').value = '1000';
+      loadHistory();
     } else {
-      document.getElementById('depositFiat').classList.remove('d-none');
-      document.getElementById('fiatDetails').innerHTML = j.instructions || `<p>Invoice ID: <code>${esc(j.invoice_uid||'—')}</code>. Contact support for payment details.</p>`;
+      showAlert(alert, 'danger', 'Failed: ' + (j.error || 'unknown'));
     }
-    loadBalance();
-  } catch(err) { showAlert(alert, 'danger', 'Error: ' + err.message); }
-  finally { btn.disabled=false; btn.textContent='Request Top Up'; }
+  } catch (err) {
+    showAlert(alert, 'danger', 'Error: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Submit Top-Up Request';
+  }
 });
 
-// ── withdraw ──
 document.getElementById('withdrawForm').addEventListener('submit', async e => {
   e.preventDefault();
-  const btn = e.submitter; btn.disabled=true; btn.textContent='Submitting…';
+  const btn = e.submitter;
   const alert = document.getElementById('withdrawAlert');
+  btn.disabled = true;
+  btn.textContent = 'Submitting...';
   alert.className = 'd-none';
   try {
-    const j = await fetch('/api/wallet/withdraw', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams(new FormData(e.target)) }).then(r=>r.json());
-    if (j.ok) { showAlert(alert, 'success', 'Withdrawal request submitted. Admin will process it within 1–2 business days.'); e.target.reset(); loadBalance(); }
-    else showAlert(alert, 'danger', 'Failed: ' + (j.error||'unknown'));
-  } catch(err) { showAlert(alert, 'danger', 'Error: ' + err.message); }
-  finally { btn.disabled=false; btn.textContent='Request Withdrawal'; }
+    const j = await fetch('/api/wallet/withdraw', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        amount_cents: parseInt(document.getElementById('wdAmt').value, 10),
+        note: `Withdrawal via ${document.getElementById('wdMethod').value}`
+      })
+    }).then(r => r.json());
+    if (j.ok) {
+      showAlert(alert, 'success', j.message || 'Withdrawal request submitted.');
+      e.target.reset();
+      loadBalance();
+      loadHistory();
+    } else {
+      showAlert(alert, 'danger', 'Failed: ' + (j.error || 'unknown'));
+    }
+  } catch (err) {
+    showAlert(alert, 'danger', 'Error: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Request Withdrawal';
+  }
 });
 
-// ── transfer ──
 let trTimer;
 document.getElementById('trTarget').addEventListener('input', () => {
   clearTimeout(trTimer);
@@ -289,55 +297,79 @@ document.getElementById('trTarget').addEventListener('input', () => {
   if (!u) return;
   trTimer = setTimeout(async () => {
     try {
-      const j = await fetch('/api/user_lookup?' + new URLSearchParams({ username: u })).then(r=>r.json());
-      box.textContent = (j.ok && j.user) ? `✓ Found: ${j.user.id}` : '✗ User not found';
-    } catch { box.textContent = '✗ Lookup failed'; }
+      const j = await fetch('/api/user_lookup?' + new URLSearchParams({ username: u })).then(r => r.json());
+      box.textContent = (j.ok && j.user) ? `Found user ID: ${j.user.id}` : 'User not found';
+    } catch {
+      box.textContent = 'Lookup failed';
+    }
   }, 300);
 });
 
 document.getElementById('transferForm').addEventListener('submit', async e => {
   e.preventDefault();
-  const btn = e.submitter; btn.disabled=true; btn.textContent='Sending…';
+  const btn = e.submitter;
   const alert = document.getElementById('transferAlert');
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
   alert.className = 'd-none';
   try {
-    const j = await fetch('/api/wallet/transfer', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams(new FormData(e.target)) }).then(r=>r.json());
-    if (j.ok) { showAlert(alert, 'success', 'Transfer sent!'); e.target.reset(); document.getElementById('trLookup').textContent=''; loadBalance(); }
-    else showAlert(alert, 'danger', 'Failed: ' + (j.error||'unknown'));
-  } catch(err) { showAlert(alert, 'danger', 'Error: ' + err.message); }
-  finally { btn.disabled=false; btn.textContent='Send Transfer'; }
+    const j = await fetch('/api/wallet/transfer', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        to_username: document.getElementById('trTarget').value.trim(),
+        amount_cents: parseInt(document.getElementById('trAmt').value, 10),
+        note: document.getElementById('trNote').value.trim() || null
+      })
+    }).then(r => r.json());
+    if (j.ok) {
+      showAlert(alert, 'success', 'Transfer sent successfully.');
+      e.target.reset();
+      document.getElementById('trLookup').textContent = '';
+      loadBalance();
+      loadHistory();
+    } else {
+      showAlert(alert, 'danger', 'Failed: ' + (j.error || 'unknown'));
+    }
+  } catch (err) {
+    showAlert(alert, 'danger', 'Error: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Send Transfer';
+  }
 });
 
-// ── history ──
 async function loadHistory() {
   const tbody = document.getElementById('historyBody');
-  tbody.innerHTML = '<tr><td colspan="5" class="text-body-secondary">Loading…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="5" class="text-body-secondary">Loading...</td></tr>';
   try {
-    const j = await fetch('/api/wallet/history').then(r=>r.json());
-    if (!j.ok || !Array.isArray(j.transactions) || !j.transactions.length) {
+    const j = await fetch('/api/wallet/transactions').then(r => r.json());
+    const items = Array.isArray(j.items) ? j.items : [];
+    if (!j.ok || !items.length) {
       tbody.innerHTML = '<tr><td colspan="5" class="text-body-secondary">No transactions yet.</td></tr>';
       return;
     }
     const statusBadge = s => {
-      const map = { pending:'warning', completed:'success', rejected:'danger', processing:'info' };
-      return `<span class="badge bg-${map[s]||'secondary'}">${esc(s)}</span>`;
+      const map = { pending:'warning', approved:'info', completed:'success', rejected:'danger' };
+      return `<span class="badge bg-${map[s] || 'secondary'}">${esc(s)}</span>`;
     };
-    tbody.innerHTML = j.transactions.map(t =>
-      `<tr>
-        <td class="small text-nowrap">${esc((t.created_at||'').slice(0,16))}</td>
-        <td class="small">${esc(t.type||'—')}</td>
-        <td class="small fw-semibold">${t.amount_cents >= 0 ? '+' : ''}$${((t.amount_cents||0)/100).toFixed(2)}</td>
-        <td class="small">${statusBadge(t.status||'—')}</td>
-        <td class="small text-body-secondary">${esc(t.note||'')}</td>
-      </tr>`
-    ).join('');
-  } catch(e) { tbody.innerHTML = `<tr><td colspan="5" class="text-body-secondary">Error: ${esc(String(e))}</td></tr>`; }
+    tbody.innerHTML = items.map(t => {
+      const sign = ['deposit', 'transfer_in'].includes(t.txn_type) ? '+' : '-';
+      const note = t.note || t.admin_note || (t.ref_username ? `Related user: ${t.ref_username}` : '');
+      return `<tr>
+        <td class="small text-nowrap">${esc((t.created_at || '').slice(0, 16))}</td>
+        <td class="small">${esc(t.txn_type || '-')}</td>
+        <td class="small fw-semibold">${sign}$${(Math.abs(t.amount_cents || 0) / 100).toFixed(2)}</td>
+        <td class="small">${statusBadge(t.status || '-')}</td>
+        <td class="small text-body-secondary">${esc(note)}</td>
+      </tr>`;
+    }).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="5" class="text-body-secondary">Error: ${esc(String(err))}</td></tr>`;
+  }
 }
 
-function showAlert(el, type, msg) {
-  el.className = `alert alert-${type}`;
-  el.textContent = msg;
-}
+loadBalance();
 </script>
 </body>
 </html>

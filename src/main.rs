@@ -12,6 +12,7 @@ mod db;
 mod email;
 mod ffmpeg;
 mod handlers;
+mod middleware;
 mod payment_settings;
 mod plugins;
 mod sessions;
@@ -29,6 +30,8 @@ async fn main() -> anyhow::Result<()> {
 async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::Result<()> {
     use axum::{
         extract::DefaultBodyLimit,
+        middleware::from_fn,
+        middleware::from_fn_with_state,
         response::Redirect,
         routing::{get, post},
         Router,
@@ -110,7 +113,10 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
             get(admin_payment_settings_get).post(admin_payment_settings_save),
         )
         .route("/admin/smtp", get(admin_smtp_get).post(admin_smtp_save))
-        .with_state(AdminState { pool: pool.clone() });
+        .with_state(AdminState {
+            pool: pool.clone(),
+            cfg: cfg.clone(),
+        });
 
     let user_auth_router = Router::new()
         .route(
@@ -238,7 +244,10 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
             "/admin/wallet/transactions/:id/reject",
             post(admin_wallet_reject),
         )
-        .with_state(AdminState { pool: pool.clone() });
+        .with_state(AdminState {
+            pool: pool.clone(),
+            cfg: cfg.clone(),
+        });
 
     let affiliate_state = AffiliateState {
         pool: pool.clone(),
@@ -295,6 +304,15 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
         .merge(admin_wallet_router)
         .merge(affiliate_router)
         .merge(chat_router)
+        .layer(from_fn(middleware::security_headers))
+        .layer(from_fn_with_state(
+            cfg.clone(),
+            middleware::basic_rate_limit,
+        ))
+        .layer(from_fn_with_state(
+            cfg.clone(),
+            middleware::browser_csrf_guard,
+        ))
         .layer(CookieManagerLayer::new());
 
     start_cleanup_task(pool.clone(), cfg.hls_root.clone());

@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 use argon2::password_hash::{rand_core::OsRng, SaltString};
 use argon2::{Argon2, PasswordHasher};
+use tracing::{info, warn};
 
 #[derive(Clone)]
 pub struct SetupState {
@@ -26,11 +27,34 @@ pub async fn setup_admin(
     State(st): State<SetupState>,
     Query(q): Query<SetupQuery>,
 ) -> Html<String> {
-    // Jika ENV token diset, wajib cocok dengan query ?token=...
-    if let Some(required) = &st.token {
-        if q.token.as_deref() != Some(required.as_str()) {
-            return Html("<h1>Unauthorized</h1><p>Invalid or missing token.</p>".into());
-        }
+    let Some(required) = &st.token else {
+        warn!(
+            action = "setup_admin_blocked",
+            reason = "bootstrap_disabled",
+            "admin bootstrap attempted while disabled"
+        );
+        return Html("<h1>Unavailable</h1><p>Admin bootstrap is disabled.</p>".into());
+    };
+    if q.token.as_deref() != Some(required.as_str()) {
+        warn!(
+            action = "setup_admin_blocked",
+            reason = "invalid_token",
+            "admin bootstrap attempted with invalid token"
+        );
+        return Html("<h1>Unauthorized</h1><p>Invalid or missing token.</p>".into());
+    }
+
+    let admin_count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM users WHERE is_admin = 1")
+        .fetch_one(&st.pool)
+        .await
+        .unwrap_or(0);
+    if admin_count > 0 {
+        warn!(
+            action = "setup_admin_blocked",
+            reason = "admin_exists",
+            "admin bootstrap attempted after admin already exists"
+        );
+        return Html("<h1>Forbidden</h1><p>Admin bootstrap is no longer available after an admin account exists.</p>".into());
     }
 
     // Baca email & password bootstrap dari ENV
@@ -66,6 +90,7 @@ pub async fn setup_admin(
             {
                 return Html(format!("<h1>Error</h1><pre>UPDATE failed: {e}</pre>"));
             }
+            info!(action = "setup_admin_success", mode = "promote_existing", email = %email_norm, "admin bootstrap succeeded");
             Html("<h1>OK</h1><p>Existing user promoted to admin and password reset.</p>".into())
         }
         Ok(None) => {
@@ -89,6 +114,7 @@ pub async fn setup_admin(
             {
                 return Html(format!("<h1>Error</h1><pre>INSERT failed: {e}</pre>"));
             }
+            info!(action = "setup_admin_success", mode = "create_new", email = %email_norm, "admin bootstrap succeeded");
             Html("<h1>OK</h1><p>Admin user created.</p>".into())
         }
         Err(e) => Html(format!("<h1>Error</h1><pre>SELECT failed: {e}</pre>")),

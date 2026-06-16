@@ -2,7 +2,7 @@
 <html lang="en" data-bs-theme="dark">
 <head>
   <meta charset="utf-8">
-  <title>Admin Dashboard — PPV Stream</title>
+  <title>Admin Dashboard - PPV Stream</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="/public/styles.css">
@@ -12,7 +12,7 @@
 
 <nav class="navbar navbar-expand-md bg-danger shadow-sm">
   <div class="container">
-    <a class="navbar-brand fw-bold text-white" href="/public/admin/dashboard.html" data-platform="brand">🎬 PPV Stream</a>
+    <a class="navbar-brand fw-bold text-white" href="/public/admin/dashboard.html" data-platform="brand">PPV Stream</a>
     <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#adminNav">
       <span class="navbar-toggler-icon"></span>
     </button>
@@ -25,7 +25,7 @@
       </ul>
       <div class="d-flex align-items-center gap-2 mt-2 mt-md-0">
         <span class="badge bg-light text-danger fw-semibold">ADMIN</span>
-        <button class="btn btn-sm btn-outline-light" onclick="toggleTheme()" id="themeToggle">☀️</button>
+        <button class="btn btn-sm btn-outline-light" onclick="toggleTheme()" id="themeToggle">Theme</button>
         <button id="logoutBtn" class="btn btn-sm btn-outline-light">Logout</button>
       </div>
     </div>
@@ -34,51 +34,45 @@
 
 <div class="container py-4 pb-5">
   <h1 class="mb-1 fs-4 fw-bold">Admin Dashboard</h1>
-  <p class="text-body-secondary small mb-4" data-platform="tagline">Pay-Per-View Streaming Platform</p>
+  <p class="text-body-secondary small mb-4">Overview of payment invoices, wallet queues, and support chat.</p>
 
-  <!-- Stats -->
   <div class="row g-3 mb-4" id="statsRow">
-    <div class="col-6 col-md-3"><div class="card shadow-sm text-center p-3"><div class="text-body-secondary small">Total Users</div><div class="fs-3 fw-bold" id="statUsers">—</div></div></div>
-    <div class="col-6 col-md-3"><div class="card shadow-sm text-center p-3"><div class="text-body-secondary small">Total Videos</div><div class="fs-3 fw-bold" id="statVideos">—</div></div></div>
-    <div class="col-6 col-md-3"><div class="card shadow-sm text-center p-3"><div class="text-body-secondary small">Pending Payments</div><div class="fs-3 fw-bold text-warning" id="statPending">—</div></div></div>
-    <div class="col-6 col-md-3"><div class="card shadow-sm text-center p-3"><div class="text-body-secondary small">Revenue (USD)</div><div class="fs-3 fw-bold text-success" id="statRevenue">—</div></div></div>
+    <div class="col-6 col-md-3"><div class="card shadow-sm text-center p-3"><div class="text-body-secondary small">All Invoices</div><div class="fs-3 fw-bold" id="statInvoices">-</div></div></div>
+    <div class="col-6 col-md-3"><div class="card shadow-sm text-center p-3"><div class="text-body-secondary small">Paid Invoices</div><div class="fs-3 fw-bold text-success" id="statPaid">-</div></div></div>
+    <div class="col-6 col-md-3"><div class="card shadow-sm text-center p-3"><div class="text-body-secondary small">Pending Invoices</div><div class="fs-3 fw-bold text-warning" id="statPending">-</div></div></div>
+    <div class="col-6 col-md-3"><div class="card shadow-sm text-center p-3"><div class="text-body-secondary small">Pending Wallet Tx</div><div class="fs-3 fw-bold text-info" id="statWalletPending">-</div></div></div>
   </div>
 
-  <!-- Quick menu -->
   <div class="row g-3 mb-4">
     <div class="col-md-3 col-6">
       <a href="/public/admin/payments.html" class="card shadow-sm text-decoration-none text-body">
         <div class="card-body text-center py-4">
-          <div style="font-size:2rem">💳</div>
           <div class="fw-semibold mt-2">Payments</div>
-          <div class="text-body-secondary small">Review &amp; disburse</div>
+          <div class="text-body-secondary small">Review and disburse</div>
         </div>
       </a>
     </div>
     <div class="col-md-3 col-6">
       <a href="/public/admin/wallet.html" class="card shadow-sm text-decoration-none text-body">
         <div class="card-body text-center py-4">
-          <div style="font-size:2rem">👛</div>
           <div class="fw-semibold mt-2">Wallets</div>
-          <div class="text-body-secondary small">Approve withdrawals</div>
+          <div class="text-body-secondary small">Approve deposits and withdrawals</div>
         </div>
       </a>
     </div>
     <div class="col-md-3 col-6">
       <a href="/public/admin/settings.html" class="card shadow-sm text-decoration-none text-body">
         <div class="card-body text-center py-4">
-          <div style="font-size:2rem">⚙️</div>
           <div class="fw-semibold mt-2">Settings</div>
-          <div class="text-body-secondary small">SMTP, platform config</div>
+          <div class="text-body-secondary small">Payments, SMTP, admin config</div>
         </div>
       </a>
     </div>
     <div class="col-md-3 col-6">
       <a href="/public/browse.html" class="card shadow-sm text-decoration-none text-body">
         <div class="card-body text-center py-4">
-          <div style="font-size:2rem">🎬</div>
           <div class="fw-semibold mt-2">Browse</div>
-          <div class="text-body-secondary small">View public catalog</div>
+          <div class="text-body-secondary small">Open public catalog</div>
         </div>
       </a>
     </div>
@@ -113,10 +107,9 @@
     </div>
   </div>
 
-  <!-- Recent payments -->
   <div class="card shadow-sm">
     <div class="card-header d-flex align-items-center gap-2">
-      <span class="fw-semibold me-auto">Recent Payments</span>
+      <span class="fw-semibold me-auto">Recent Payment Invoices</span>
       <a href="/public/admin/payments.html" class="btn btn-sm btn-outline-secondary">View All</a>
     </div>
     <div class="card-body p-0">
@@ -125,15 +118,16 @@
           <thead class="table-light">
             <tr>
               <th>Date</th>
-              <th>User</th>
+              <th>Invoice</th>
+              <th>Buyer</th>
               <th>Video</th>
               <th>Amount</th>
-              <th>Method</th>
+              <th>Provider</th>
               <th>Status</th>
             </tr>
           </thead>
           <tbody id="recentBody">
-            <tr><td colspan="6" class="text-body-secondary">Loading…</td></tr>
+            <tr><td colspan="7" class="text-body-secondary">Loading...</td></tr>
           </tbody>
         </table>
       </div>
@@ -144,9 +138,18 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 document.getElementById('logoutBtn').addEventListener('click', async () => {
-  await fetch('/admin/logout', { method:'POST' }).catch(()=>{});
+  await fetch('/admin/logout', { method:'POST' }).catch(() => {});
   location.href = '/public/admin/login.html';
 });
+
+function esc(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
 
 const adminChatState = {
   conversations: [],
@@ -192,9 +195,6 @@ async function loadAdminChatConversations(preferredId) {
     if (!adminChatState.activeConversationId && adminChatState.conversations.length) {
       adminChatState.activeConversationId = adminChatState.conversations[0].id;
     }
-    if (adminChatState.activeConversationId && !adminChatState.conversations.some(c => c.id === adminChatState.activeConversationId)) {
-      adminChatState.activeConversationId = adminChatState.conversations[0]?.id || '';
-    }
     renderAdminChatConversations();
     if (adminChatState.activeConversationId) await openAdminConversation(adminChatState.activeConversationId, true);
   } catch {}
@@ -219,19 +219,15 @@ async function openAdminConversation(conversationId, preserveScroll = false) {
       return;
     }
     const messages = Array.isArray(j.messages) ? j.messages : [];
-    if (!messages.length) {
-      box.innerHTML = '<div class="text-body-secondary small">No messages yet.</div>';
-      return;
-    }
-    box.innerHTML = messages.map(m => {
+    box.innerHTML = messages.length ? messages.map(m => {
       const align = m.is_self ? 'text-end' : 'text-start';
       const bubble = m.is_self ? 'bg-danger text-white ms-auto' : 'bg-body-secondary';
       const senderLabel = m.is_self ? 'Admin' : m.sender_username;
       return `<div class="${align} mb-2">
-        <div class="small text-body-secondary mb-1">${esc(senderLabel)} · ${esc(fmtChatTime(m.created_at))}</div>
+        <div class="small text-body-secondary mb-1">${esc(senderLabel)} | ${esc(fmtChatTime(m.created_at))}</div>
         <div class="d-inline-block rounded-3 px-3 py-2 ${bubble}" style="max-width:85%; white-space:pre-wrap">${esc(m.body)}</div>
       </div>`;
-    }).join('');
+    }).join('') : '<div class="text-body-secondary small">No messages yet.</div>';
     if (shouldStickToBottom) box.scrollTop = box.scrollHeight;
   } catch (err) {
     box.innerHTML = `<div class="text-danger small">${esc(String(err))}</div>`;
@@ -267,46 +263,42 @@ document.getElementById('adminChatForm').addEventListener('submit', async e => {
   }
 });
 
-(async function init(){
+async function loadAdminOverview() {
+  const recentBody = document.getElementById('recentBody');
   try {
-    const j = await fetch('/api/admin/stats').then(r=>r.json());
-    if (!j.ok) return;
-    document.getElementById('statUsers').textContent   = j.total_users   ?? '—';
-    document.getElementById('statVideos').textContent  = j.total_videos  ?? '—';
-    document.getElementById('statPending').textContent = j.pending_payments ?? '—';
-    document.getElementById('statRevenue').textContent = j.revenue_usd != null ? '$' + parseFloat(j.revenue_usd).toFixed(2) : '—';
-  } catch {}
+    const payments = await fetch('/admin/payments?limit=10').then(r => r.json());
+    if (payments.ok) {
+      document.getElementById('statInvoices').textContent = payments.totals?.all ?? '-';
+      document.getElementById('statPaid').textContent = payments.totals?.paid ?? '-';
+      document.getElementById('statPending').textContent = payments.totals?.pending ?? '-';
+      const items = Array.isArray(payments.items) ? payments.items : [];
+      recentBody.innerHTML = items.length ? items.map(p => `<tr>
+        <td class="small text-nowrap">${esc((p.created_at || '').slice(0, 16))}</td>
+        <td class="small font-monospace">${esc((p.invoice_uid || '-').slice(0, 12))}</td>
+        <td class="small">${esc(p.buyer_username || '-')}</td>
+        <td class="small">${esc(p.video_title || '-')}</td>
+        <td class="small fw-semibold">${esc(p.currency || 'USD')} ${Number(p.amount || 0).toFixed(2)}</td>
+        <td class="small">${esc(p.provider || '-')}</td>
+        <td class="small">${esc(p.status || '-')}</td>
+      </tr>`).join('') : '<tr><td colspan="7" class="text-body-secondary">No invoices yet.</td></tr>';
+    } else {
+      recentBody.innerHTML = '<tr><td colspan="7" class="text-body-secondary">Failed to load invoices.</td></tr>';
+    }
+  } catch (err) {
+    recentBody.innerHTML = `<tr><td colspan="7" class="text-danger">${esc(String(err))}</td></tr>`;
+  }
 
   try {
-    const j = await fetch('/api/admin/payments?limit=10').then(r=>r.json());
-    const tbody = document.getElementById('recentBody');
-    if (!j.ok || !Array.isArray(j.payments) || !j.payments.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="text-body-secondary">No payments yet.</td></tr>';
-      return;
-    }
-    const statusBadge = s => {
-      const map = { pending:'warning', completed:'success', rejected:'danger', processing:'info' };
-      return `<span class="badge bg-${map[s]||'secondary'}">${esc(s)}</span>`;
-    };
-    const methodBadge = m => {
-      if (m === 'x402')   return '<span class="badge badge-x402">x402</span>';
-      if (m === 'wallet') return '<span class="badge badge-wallet">Wallet</span>';
-      return `<span class="badge badge-fiat">${esc(m)}</span>`;
-    };
-    tbody.innerHTML = j.payments.map(p =>
-      `<tr>
-        <td class="small text-nowrap">${esc((p.created_at||'').slice(0,16))}</td>
-        <td class="small">${esc(p.username||p.user_id||'—')}</td>
-        <td class="small">${esc(p.video_title||p.video_id||'—')}</td>
-        <td class="small fw-semibold">$${((p.amount_cents||0)/100).toFixed(2)}</td>
-        <td class="small">${methodBadge(p.method||'—')}</td>
-        <td class="small">${statusBadge(p.status||'—')}</td>
-      </tr>`
-    ).join('');
-  } catch(e) { document.getElementById('recentBody').innerHTML = `<tr><td colspan="6" class="text-danger">${esc(String(e))}</td></tr>`; }
-})();
+    const wallet = await fetch('/admin/wallet/transactions?status=pending&limit=1').then(r => r.json());
+    document.getElementById('statWalletPending').textContent = wallet.ok ? (wallet.totals?.pending ?? '-') : '-';
+  } catch {
+    document.getElementById('statWalletPending').textContent = '-';
+  }
+}
+
 setAdminChatComposerEnabled(false);
 loadAdminChatConversations();
+loadAdminOverview();
 adminChatState.pollHandle = setInterval(() => {
   loadAdminChatConversations(adminChatState.activeConversationId);
 }, 8000);

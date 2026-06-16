@@ -568,6 +568,7 @@ pub async fn x402_confirm(
     let invoice = sqlx::query!(
         r#"
         SELECT id, user_id, video_id, invoice_uid, invoice_uid_hash, required_amount_wei
+             , status, tx_hash
         FROM x402_invoices
         WHERE invoice_uid=$1
         LIMIT 1
@@ -581,6 +582,20 @@ pub async fn x402_confirm(
     let Some(invoice) = invoice else {
         return Json(json!({"ok": false, "error": "invoice not found"}));
     };
+
+    if invoice.status.as_deref() == Some("paid") {
+        let same_tx = invoice
+            .tx_hash
+            .as_deref()
+            .map(|value| value.eq_ignore_ascii_case(&body.tx_hash))
+            .unwrap_or(false);
+        return Json(json!({
+            "ok": true,
+            "status": "paid",
+            "replayed": true,
+            "same_tx": same_tx
+        }));
+    }
 
     // The HTTP RPC endpoint is required to fetch the transaction receipt.
     let rpc_url = std::env::var("X402_RPC_HTTP").unwrap_or_default();

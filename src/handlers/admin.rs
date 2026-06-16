@@ -1,6 +1,7 @@
 // src/handlers/admin.rs
 use crate::payment_settings::load_payment_settings;
 use crate::plugins::payment::PaymentPluginRegistry;
+use crate::{config::Config, sessions};
 use axum::{
     extract::{Path, Query, State},
     response::{Html, IntoResponse},
@@ -9,10 +10,24 @@ use axum::{
 use serde::Deserialize;
 use serde_json::json;
 use sqlx::Row;
+use tower_cookies::Cookies;
+use tracing::{info, warn};
 
 #[derive(Clone)]
 pub struct AdminState {
     pub pool: crate::db::PgPool,
+    pub cfg: Config,
+}
+
+async fn ensure_admin_session(
+    st: &AdminState,
+    cookies: &Cookies,
+) -> Result<String, Json<serde_json::Value>> {
+    match sessions::current_user_id(&st.pool, &st.cfg, cookies).await {
+        Some((user_id, true)) => Ok(user_id),
+        Some(_) => Err(Json(json!({"ok": false, "error": "admin only"}))),
+        None => Err(Json(json!({"ok": false, "error": "not logged in"}))),
+    }
 }
 
 // (asumsikan kamu sudah punya handler admin_dashboard & admin_stats di file ini)
@@ -24,15 +39,14 @@ pub struct AdminListQuery {
 
 pub async fn admin_data(
     State(st): State<AdminState>,
-    // Jika ingin cek admin session, aktifkan cookies + cek session:
-    // cookies: Cookies,
+    cookies: Cookies,
     Query(q): Query<AdminListQuery>,
 ) -> Html<String> {
-    // ---- (Opsional) Cek admin dari session cookie ----
-    // match sessions::current_user_id(&st.pool, &cookies).await {
-    //     Ok(Some((_uid, is_admin))) if is_admin => {},
-    //     _ => return Html("<h1>Forbidden</h1><p>Admin only</p>".into()),
-    // }
+    let admin_user_id = match ensure_admin_session(&st, &cookies).await {
+        Ok(user_id) => user_id,
+        Err(_) => return Html("<h1>Forbidden</h1><p>Admin only</p>".into()),
+    };
+    info!(admin_user_id = %admin_user_id, action = "admin_data_view", limit = q.limit.unwrap_or(50).min(500), "admin data viewed");
 
     let limit = q.limit.unwrap_or(50).min(500); // batas aman
 
@@ -313,11 +327,18 @@ pub struct PaymentsQuery {
 
 pub async fn admin_payments(
     State(st): State<AdminState>,
+    cookies: Cookies,
     Query(q): Query<PaymentsQuery>,
 ) -> impl IntoResponse {
+    let admin_user_id = match ensure_admin_session(&st, &cookies).await {
+        Ok(user_id) => user_id,
+        Err(resp) => return resp,
+    };
+
     let limit = q.limit.unwrap_or(100).min(1000);
     let provider = q.provider.as_deref().unwrap_or("");
     let status = q.status.as_deref().unwrap_or("");
+    info!(admin_user_id = %admin_user_id, action = "admin_payments_view", provider = provider, status = status, limit = limit, "admin payments viewed");
 
     // Build WHERE clauses dynamically using runtime query (not macro) to avoid DB-at-build-time
     let base_sql = r#"
@@ -431,8 +452,14 @@ pub async fn admin_payments(
 
 pub async fn admin_disburse(
     State(st): State<AdminState>,
+    cookies: Cookies,
     Path(uid): Path<String>,
 ) -> impl IntoResponse {
+    let admin_user_id = match ensure_admin_session(&st, &cookies).await {
+        Ok(user_id) => user_id,
+        Err(resp) => return resp,
+    };
+
     // Fetch invoice + creator bank_account in one query
     let row = sqlx::query(
         r#"SELECT fi.provider, fi.amount, fi.currency, fi.status, fi.disbursed_at,
@@ -477,15 +504,17 @@ pub async fn admin_disburse(
                         let _ = sqlx::query(
                             "UPDATE fiat_invoices SET disbursed_at = now(), disburse_ref = $1 WHERE invoice_uid = $2"
                         )
-                        .bind(&disburse_ref)
-                        .bind(&uid)
-                        .execute(&st.pool)
-                        .await;
+                    .bind(&disburse_ref)
+                    .bind(&uid)
+                    .execute(&st.pool)
+                    .await;
+                        info!(admin_user_id = %admin_user_id, action = "admin_disburse", provider = %provider, invoice_uid = %uid, amount_cents = amount, method = "xendit_api", disburse_ref = %disburse_ref, "manual admin disbursement executed");
                         return Json(
                             json!({"ok": true, "disburse_ref": disburse_ref, "method": "xendit_api"}),
                         );
                     }
                     Err(e) => {
+                        warn!(admin_user_id = %admin_user_id, action = "admin_disburse_failed", provider = %provider, invoice_uid = %uid, amount_cents = amount, error = %e, "admin disbursement failed");
                         return Json(
                             json!({"ok": false, "error": format!("xendit disburse: {e}")}),
                         );
@@ -505,6 +534,7 @@ pub async fn admin_disburse(
     .bind(&uid)
     .execute(&st.pool)
     .await;
+    info!(admin_user_id = %admin_user_id, action = "admin_disburse", provider = %provider, invoice_uid = %uid, amount_cents = amount, method = "manual", "manual disbursement marked");
 
     Json(json!({"ok": true, "method": "manual", "invoice_uid": uid}))
 }
@@ -513,7 +543,13 @@ pub async fn admin_disburse(
 // SMTP settings — GET /admin/smtp  /  POST /admin/smtp
 // ---------------------------------------------------------------------------
 
-pub async fn admin_smtp_get(State(st): State<AdminState>) -> impl IntoResponse {
+pub async fn admin_smtp_get(State(st): State<AdminState>, cookies: Cookies) -> impl IntoResponse {
+    let admin_user_id = match ensure_admin_session(&st, &cookies).await {
+        Ok(user_id) => user_id,
+        Err(resp) => return resp,
+    };
+    info!(admin_user_id = %admin_user_id, action = "admin_smtp_view", "smtp settings viewed");
+
     let row = sqlx::query(
         "SELECT host, port, username, password, from_email, from_name, use_tls, enabled
          FROM smtp_settings WHERE id = 1",
@@ -565,7 +601,16 @@ pub struct PaymentSettingsSavePayload {
     pub default_provider: Option<String>,
 }
 
-pub async fn admin_payment_settings_get(State(st): State<AdminState>) -> impl IntoResponse {
+pub async fn admin_payment_settings_get(
+    State(st): State<AdminState>,
+    cookies: Cookies,
+) -> impl IntoResponse {
+    let admin_user_id = match ensure_admin_session(&st, &cookies).await {
+        Ok(user_id) => user_id,
+        Err(resp) => return resp,
+    };
+    info!(admin_user_id = %admin_user_id, action = "admin_payment_settings_view", "payment settings viewed");
+
     let settings = load_payment_settings(&st.pool).await;
     let capabilities =
         PaymentPluginRegistry::capabilities_from_env_with_pool(Some(st.pool.clone()));
@@ -591,8 +636,14 @@ pub async fn admin_payment_settings_get(State(st): State<AdminState>) -> impl In
 
 pub async fn admin_payment_settings_save(
     State(st): State<AdminState>,
+    cookies: Cookies,
     Json(p): Json<PaymentSettingsSavePayload>,
 ) -> impl IntoResponse {
+    let admin_user_id = match ensure_admin_session(&st, &cookies).await {
+        Ok(user_id) => user_id,
+        Err(resp) => return resp,
+    };
+
     let capabilities =
         PaymentPluginRegistry::capabilities_from_env_with_pool(Some(st.pool.clone()));
     let configured = capabilities
@@ -670,15 +721,36 @@ pub async fn admin_payment_settings_save(
     .await;
 
     match res {
-        Ok(_) => Json(json!({"ok": true, "message": "Payment settings saved."})),
+        Ok(_) => {
+            info!(
+                admin_user_id = %admin_user_id,
+                action = "admin_payment_settings_save",
+                wallet_payment_enabled = p.wallet_payment_enabled,
+                wallet_transfer_enabled = p.wallet_transfer_enabled,
+                paypal_enabled = p.paypal_enabled,
+                stripe_enabled = p.stripe_enabled,
+                xendit_enabled = p.xendit_enabled,
+                midtrans_enabled = p.midtrans_enabled,
+                x402_enabled = p.x402_enabled,
+                default_provider = ?default_provider,
+                "payment settings saved"
+            );
+            Json(json!({"ok": true, "message": "Payment settings saved."}))
+        }
         Err(e) => Json(json!({"ok": false, "error": format!("db: {e}")})),
     }
 }
 
 pub async fn admin_smtp_save(
     State(st): State<AdminState>,
+    cookies: Cookies,
     Json(p): Json<SmtpSavePayload>,
 ) -> impl IntoResponse {
+    let admin_user_id = match ensure_admin_session(&st, &cookies).await {
+        Ok(user_id) => user_id,
+        Err(resp) => return resp,
+    };
+
     let res = sqlx::query(
         r#"INSERT INTO smtp_settings (id, host, port, username, password, from_email, from_name, use_tls, enabled, updated_at)
            VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, now())
@@ -700,6 +772,18 @@ pub async fn admin_smtp_save(
     if let Err(e) = res {
         return Json(json!({"ok": false, "error": format!("db: {e}")}));
     }
+    info!(
+        admin_user_id = %admin_user_id,
+        action = "admin_smtp_save",
+        host = %p.host,
+        port = p.port,
+        from_email = %p.from_email,
+        from_name = %p.from_name,
+        use_tls = p.use_tls,
+        enabled = p.enabled,
+        test_email = ?p.test_email,
+        "smtp settings saved"
+    );
 
     // Optional test email
     if let Some(test_to) = &p.test_email {
@@ -737,11 +821,17 @@ pub struct WalletTxnQuery {
 
 pub async fn admin_wallet_transactions(
     State(st): State<AdminState>,
+    cookies: Cookies,
     Query(q): Query<WalletTxnQuery>,
 ) -> impl IntoResponse {
+    let admin_user_id = match ensure_admin_session(&st, &cookies).await {
+        Ok(user_id) => user_id,
+        Err(resp) => return resp,
+    };
     let limit = q.limit.unwrap_or(100).min(1000);
     let ttype = q.txn_type.as_deref().unwrap_or("");
     let status = q.status.as_deref().unwrap_or("");
+    info!(admin_user_id = %admin_user_id, action = "admin_wallet_transactions_view", txn_type = ttype, status = status, limit = limit, "wallet transactions viewed");
 
     let mut conditions: Vec<String> = vec![];
     if !ttype.is_empty() {
@@ -822,9 +912,15 @@ pub struct WalletActionPayload {
 
 pub async fn admin_wallet_approve(
     State(st): State<AdminState>,
+    cookies: Cookies,
     Path(txn_id): Path<i64>,
     Json(p): Json<WalletActionPayload>,
 ) -> impl IntoResponse {
+    let admin_user_id = match ensure_admin_session(&st, &cookies).await {
+        Ok(user_id) => user_id,
+        Err(resp) => return resp,
+    };
+
     let mut tx = match st.pool.begin().await {
         Ok(t) => t,
         Err(e) => return Json(json!({"ok": false, "error": format!("db: {e}")})),
@@ -893,7 +989,10 @@ pub async fn admin_wallet_approve(
     }
 
     match tx.commit().await {
-        Ok(_) => Json(json!({"ok": true, "new_balance_cents": new_bal})),
+        Ok(_) => {
+            info!(admin_user_id = %admin_user_id, action = "admin_wallet_approve", txn_id = txn_id, user_id = %user_id, txn_type = %txn_type, amount_cents = amount_cents, new_balance_cents = new_bal, admin_note = ?p.admin_note, "wallet deposit approved");
+            Json(json!({"ok": true, "new_balance_cents": new_bal}))
+        }
         Err(e) => Json(json!({"ok": false, "error": format!("commit: {e}")})),
     }
 }
@@ -904,9 +1003,15 @@ pub async fn admin_wallet_approve(
 
 pub async fn admin_wallet_complete(
     State(st): State<AdminState>,
+    cookies: Cookies,
     Path(txn_id): Path<i64>,
     Json(p): Json<WalletActionPayload>,
 ) -> impl IntoResponse {
+    let admin_user_id = match ensure_admin_session(&st, &cookies).await {
+        Ok(user_id) => user_id,
+        Err(resp) => return resp,
+    };
+
     let row = sqlx::query("SELECT txn_type, status FROM wallet_transactions WHERE id = $1")
         .bind(txn_id)
         .fetch_optional(&st.pool)
@@ -936,7 +1041,10 @@ pub async fn admin_wallet_complete(
     .bind(p.admin_note.as_deref()).bind(txn_id)
     .execute(&st.pool).await
     {
-        Ok(_)  => Json(json!({"ok": true})),
+        Ok(_)  => {
+            info!(admin_user_id = %admin_user_id, action = "admin_wallet_complete", txn_id = txn_id, txn_type = %txn_type, admin_note = ?p.admin_note, "wallet withdrawal marked completed");
+            Json(json!({"ok": true}))
+        }
         Err(e) => Json(json!({"ok": false, "error": format!("db: {e}")})),
     }
 }
@@ -947,9 +1055,15 @@ pub async fn admin_wallet_complete(
 
 pub async fn admin_wallet_reject(
     State(st): State<AdminState>,
+    cookies: Cookies,
     Path(txn_id): Path<i64>,
     Json(p): Json<WalletActionPayload>,
 ) -> impl IntoResponse {
+    let admin_user_id = match ensure_admin_session(&st, &cookies).await {
+        Ok(user_id) => user_id,
+        Err(resp) => return resp,
+    };
+
     let mut tx = match st.pool.begin().await {
         Ok(t) => t,
         Err(e) => return Json(json!({"ok": false, "error": format!("db: {e}")})),
@@ -1010,7 +1124,10 @@ pub async fn admin_wallet_reject(
     }
 
     match tx.commit().await {
-        Ok(_) => Json(json!({"ok": true, "refunded": is_withdrawal})),
+        Ok(_) => {
+            info!(admin_user_id = %admin_user_id, action = "admin_wallet_reject", txn_id = txn_id, user_id = %user_id, txn_type = %txn_type, amount_cents = amount_cents, refunded = is_withdrawal, admin_note = ?p.admin_note, "wallet transaction rejected");
+            Json(json!({"ok": true, "refunded": is_withdrawal}))
+        }
         Err(e) => Json(json!({"ok": false, "error": format!("commit: {e}")})),
     }
 }
