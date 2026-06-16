@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>PPV Stream — Tutorial & Page Guide</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --bg: #0d0d0d; --surface: #141414; --border: #252525;
+      --accent: #7c3aed; --accent2: #10b981; --danger: #ef4444;
+      --text: #e5e5e5; --muted: #888; --heading: #c4b5fd;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, sans-serif; display: flex; min-height: 100vh; }
+
+    /* Sidebar */
+    aside {
+      width: 260px; min-width: 260px; background: var(--surface);
+      border-right: 1px solid var(--border); padding: 24px 0;
+      position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    }
+    aside .logo { padding: 0 20px 20px; font-size: 1rem; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+    aside .section-label { padding: 10px 20px 4px; font-size: .68rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+    aside a { display: block; padding: 8px 20px; font-size: .85rem; color: var(--muted); text-decoration: none; border-left: 3px solid transparent; transition: all .15s; }
+    aside a:hover { color: var(--text); background: rgba(124,58,237,.08); }
+    aside a.active { color: var(--heading); border-left-color: var(--accent); background: rgba(124,58,237,.12); }
+
+    /* Main */
+    main { flex: 1; padding: 40px 48px; max-width: 1000px; }
+    main h1 { font-size: 1.9rem; color: var(--heading); margin-bottom: .5rem; }
+    main > p.lead { color: var(--muted); font-size: 1rem; margin-bottom: 3rem; line-height: 1.6; }
+
+    section { margin-bottom: 60px; scroll-margin-top: 32px; }
+    section h2 { font-size: 1.3rem; color: var(--heading); margin-bottom: .3rem; border-bottom: 1px solid var(--border); padding-bottom: .5rem; }
+    section .page-tag { display: inline-block; font-size: .72rem; font-weight: 700; background: rgba(124,58,237,.15); color: var(--accent); border: 1px solid rgba(124,58,237,.3); border-radius: 20px; padding: 2px 10px; margin-bottom: 12px; margin-top: 6px; }
+    section .page-tag.admin { background: rgba(239,68,68,.12); color: #f87171; border-color: rgba(239,68,68,.3); }
+    section p { color: #ccc; font-size: .92rem; line-height: 1.65; margin-bottom: .75rem; }
+    section ul { padding-left: 20px; color: #ccc; font-size: .9rem; line-height: 1.7; margin-bottom: .75rem; }
+    section ul li { margin-bottom: .2rem; }
+
+    .func-table { width: 100%; border-collapse: collapse; font-size: .85rem; margin: 16px 0; }
+    .func-table th { background: #1a1a2a; color: var(--muted); text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; }
+    .func-table td { padding: 9px 12px; border-bottom: 1px solid #1e1e1e; vertical-align: top; }
+    .func-table td:first-child { font-weight: 600; color: var(--heading); white-space: nowrap; }
+    .func-table td:nth-child(2) { color: var(--muted); font-size: .8rem; white-space: nowrap; }
+    .func-table td:nth-child(3) { color: #ccc; }
+
+    .preview-link { display: inline-flex; align-items: center; gap: 8px; margin-top: 14px; padding: 9px 18px; background: rgba(124,58,237,.12); border: 1px solid rgba(124,58,237,.3); border-radius: 8px; color: var(--accent); text-decoration: none; font-size: .85rem; font-weight: 600; transition: all .15s; }
+    .preview-link:hover { background: rgba(124,58,237,.22); }
+    .preview-link.admin-link { background: rgba(239,68,68,.1); border-color: rgba(239,68,68,.3); color: #f87171; }
+    .preview-link.admin-link:hover { background: rgba(239,68,68,.18); }
+
+    .callout { background: #1a1a2a; border: 1px solid #2a2a4a; border-left: 4px solid var(--accent); border-radius: 8px; padding: 14px 18px; margin: 16px 0; font-size: .88rem; color: #c4b5fd; line-height: 1.55; }
+    .callout.warn { border-left-color: #f59e0b; color: #fde68a; background: #1a1500; border-color: #3a3000; }
+    .callout.tip  { border-left-color: var(--accent2); color: #a7f3d0; background: #001a10; border-color: #003a1a; }
+
+    .flow-steps { counter-reset: step; margin: 12px 0; }
+    .flow-steps li { list-style: none; padding: 8px 0 8px 40px; position: relative; color: #ccc; font-size: .9rem; border-bottom: 1px solid #1a1a1a; }
+    .flow-steps li:last-child { border-bottom: none; }
+    .flow-steps li::before { counter-increment: step; content: counter(step); position: absolute; left: 0; top: 7px; background: var(--accent); color: #fff; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .75rem; font-weight: 700; }
+
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: .72rem; font-weight: 700; }
+    .badge-user  { background: #1e3a5f; color: #60a5fa; }
+    .badge-admin { background: #4a0000; color: #fca5a5; }
+    .badge-both  { background: #1a2a1a; color: #86efac; }
+
+    .toc-divider { height: 1px; background: var(--border); margin: 60px 0; }
+  </style>
+</head>
+<body>
+
+<aside>
+  <div class="logo">📚 PPV Stream Tutorial</div>
+
+  <div class="section-label">User Pages</div>
+  <a href="#browse">Browse Videos</a>
+  <a href="#dashboard">User Dashboard</a>
+  <a href="#wallet">Wallet</a>
+  <a href="#affiliate">Affiliate Program</a>
+  <a href="#watch">Watch / Payment</a>
+  <a href="#auth">Login &amp; Register</a>
+
+  <div class="section-label" style="margin-top:12px">Admin Pages</div>
+  <a href="#admin-dashboard">Admin Dashboard</a>
+  <a href="#admin-payments">Payment Monitoring</a>
+  <a href="#admin-settings">SMTP &amp; Settings</a>
+  <a href="#admin-wallet">Admin Wallet</a>
+
+  <div class="section-label" style="margin-top:12px">Mockups</div>
+  <a href="mockups/browse.html" target="_blank">Browse ↗</a>
+  <a href="mockups/user-dashboard.html" target="_blank">User Dashboard ↗</a>
+  <a href="mockups/user-wallet.html" target="_blank">Wallet ↗</a>
+  <a href="mockups/affiliate.html" target="_blank">Affiliate ↗</a>
+  <a href="mockups/watch.html" target="_blank">Watch ↗</a>
+  <a href="mockups/admin-dashboard.html" target="_blank">Admin Dashboard ↗</a>
+  <a href="mockups/admin-payments.html" target="_blank">Admin Payments ↗</a>
+  <a href="mockups/admin-settings.html" target="_blank">Admin Settings ↗</a>
+  <a href="mockups/admin-wallet.html" target="_blank">Admin Wallet ↗</a>
+</aside>
+
+<main>
+  <h1>PPV Stream — Page Guide</h1>
+  <p class="lead">Complete explanation of every page in the platform, what each section does, and how they connect. Open the <strong>Mockups</strong> links in the sidebar to see static visual replicas of each page with realistic dummy data.</p>
+
+  <!-- ─────────────────────────── USER: BROWSE ─────────────────────────── -->
+  <section id="browse">
+    <h2>Browse Videos</h2>
+    <span class="page-tag">User Page</span>
+    <p>The public landing page of the platform. Any visitor (including non-logged-in users) can see all available videos. This is the first page users see when they arrive on the site.</p>
+
+    <table class="func-table">
+      <tr><th>UI Element</th><th>Location</th><th>Function</th></tr>
+      <tr><td>Navbar brand "🎬 PPV Stream"</td><td>Top-left</td><td>Always links back to this browse page. Acts as the site logo / home button.</td></tr>
+      <tr><td>Search input</td><td>Top toolbar</td><td>Filters the video grid in real-time by title, creator username, or description text.</td></tr>
+      <tr><td>Sort dropdown</td><td>Top toolbar</td><td>Sorts cards by: Newest, Cheapest, Most Expensive, or Alphabetical (A–Z).</td></tr>
+      <tr><td>Video cards</td><td>Grid</td><td>Each card shows: thumbnail placeholder, title, creator username, price, HLS-ready indicator. Clicking a card opens the Watch page.</td></tr>
+      <tr><td>User badge</td><td>Navbar right</td><td>Shows currently logged-in username, or a Login link if not authenticated.</td></tr>
+      <tr><td>Dashboard link</td><td>Navbar</td><td>Goes to the user's own dashboard (requires login).</td></tr>
+    </table>
+
+    <div class="callout tip">The video grid dynamically fetches from <code>GET /api/videos</code>. Free videos (price = 0) are labelled "Free". Paid videos show the price in IDR.</div>
+
+    <a class="preview-link" href="mockups/browse.html" target="_blank">▶ View Mockup</a>
+  </section>
+
+  <!-- ─────────────────────────── USER: DASHBOARD ─────────────────────────── -->
+  <section id="dashboard">
+    <h2>User Dashboard</h2>
+    <span class="page-tag">User Page</span>
+    <p>The main control panel for every registered user. It combines content creation tools, profile management, and access control — all on one page. Only accessible when logged in.</p>
+
+    <table class="func-table">
+      <tr><th>Section</th><th>API</th><th>Function</th></tr>
+      <tr><td>Edit Profile &amp; Contact</td><td>GET/POST /api/profile</td><td>Creator fills in: WhatsApp number, bank account (for fiat payouts), EVM wallet address + preferred chain (for X402 crypto payouts), profile bio. This information appears on the creator's public profile page so buyers can verify payment details.</td></tr>
+      <tr><td>Change Password</td><td>POST /api/change_password</td><td>Updates the user's login password. Requires current password for verification. Sends a confirmation email on success. Has a "show/hide" toggle on each field.</td></tr>
+      <tr><td>My Videos &amp; Access</td><td>GET /api/my_videos</td><td>Lists all videos uploaded by this user. Each card shows: title, video ID (copyable), creation date, current price, and the allowlist. Inline "Edit" form lets the creator update title, description, and price without leaving the page.</td></tr>
+      <tr><td>Upload Video</td><td>POST /api/upload</td><td>Submits an MP4 file. Backend saves it to storage, inserts a DB row, and queues a transcoding job. The video becomes browsable once transcoding finishes (HLS ready).</td></tr>
+      <tr><td>Grant Access (Allowlist)</td><td>POST /api/allow</td><td>Creator manually grants another user permanent access to a video without payment. Useful for reviewers, team members, or giveaways. Has a live username lookup to confirm the user exists before submitting.</td></tr>
+    </table>
+
+    <div class="callout">The Wallet and Affiliate links are in the navbar, not on this page. Dashboard = content creation tools. Wallet = money. Affiliate = commission system.</div>
+
+    <ol class="flow-steps">
+      <li>User registers → lands on Dashboard → fills in profile (bank/wallet) for payout</li>
+      <li>Uploads an MP4 → backend transcodes → video appears in Browse</li>
+      <li>Optionally grants manual access to specific users via Allowlist</li>
+      <li>Buyers purchase → creator sees earnings in Wallet</li>
+    </ol>
+
+    <a class="preview-link" href="mockups/user-dashboard.html" target="_blank">▶ View Mockup</a>
+  </section>
+
+  <!-- ─────────────────────────── USER: WALLET ─────────────────────────── -->
+  <section id="wallet">
+    <h2>Wallet</h2>
+    <span class="page-tag">User Page</span>
+    <p>The internal ledger-based wallet. Every user has a balance in cents (stored as a BIGINT in the database). No blockchain involved — it's a pure accounting system. All operations are atomic PostgreSQL transactions with row-level locking to prevent double-spending.</p>
+
+    <table class="func-table">
+      <tr><th>Section</th><th>API</th><th>Function</th></tr>
+      <tr><td>Balance Card</td><td>GET /api/wallet/balance</td><td>Shows current balance in USD and IDR equivalent. Also shows the last 3 transaction summaries.</td></tr>
+      <tr><td>Deposit</td><td>POST /api/wallet/deposit</td><td>Creates a <em>pending</em> deposit request. The user enters an amount and a note (e.g., bank transfer reference). An admin must approve it for the balance to be credited. Status: pending → approved.</td></tr>
+      <tr><td>Withdraw</td><td>POST /api/wallet/withdraw</td><td>Requests a withdrawal to the user's registered bank account. Balance is immediately held (deducted). Admin processes the bank transfer then marks it complete. Status: pending → completed (or rejected, which refunds the held amount).</td></tr>
+      <tr><td>Transfer</td><td>POST /api/wallet/transfer</td><td>Instant peer-to-peer transfer to another user by username. Both balances update atomically in the same transaction. Rows are locked in alphabetical order to prevent deadlocks.</td></tr>
+      <tr><td>Pay for Video</td><td>POST /api/wallet/pay</td><td>One-click purchase of a video using wallet balance. Deducts from buyer, credits creator (at creator_split_bp rate), and optionally pays affiliate commission if a <code>ref_code</code> was in the URL. Grants immediate video access.</td></tr>
+      <tr><td>Transaction History</td><td>GET /api/wallet/transactions</td><td>Full audit log: type (deposit/withdrawal/transfer_in/transfer_out/purchase/sale/commission), amount, counterparty username, notes, status, timestamp.</td></tr>
+    </table>
+
+    <div class="callout tip">
+      <strong>Affiliate commission from Wallet Pay:</strong> If the buyer arrived via <code>?ref=username</code> link, the <code>wallet_pay</code> handler also calls <code>commission::process_affiliate_commission()</code> after the purchase commits. The commission is deducted from the creator's wallet and credited to the affiliate.
+    </div>
+
+    <div class="callout warn">
+      <strong>Transaction status badges:</strong> <code>pending</code> (yellow) = awaiting admin action. <code>completed</code> (green) = finalized. <code>rejected</code> (red) = cancelled, balance refunded for withdrawals.
+    </div>
+
+    <a class="preview-link" href="mockups/user-wallet.html" target="_blank">▶ View Mockup</a>
+  </section>
+
+  <!-- ─────────────────────────── USER: AFFILIATE ─────────────────────────── -->
+  <section id="affiliate">
+    <h2>Affiliate Program</h2>
+    <span class="page-tag">User Page</span>
+    <p>Three-tab interface combining the creator-side configuration and the affiliate-side earnings dashboard. Any user can be both a creator (who pays commissions) and an affiliate (who earns commissions) simultaneously.</p>
+
+    <table class="func-table">
+      <tr><th>Tab</th><th>Who Uses It</th><th>Function</th></tr>
+      <tr><td>My Earnings</td><td>Affiliate (User B)</td><td>Shows total lifetime commission earned. Table of every commission event: video purchased, buyer username, amount, payment method (wallet/x402/fiat), and timestamp. Commission is already in the wallet balance — this is just the history.</td></tr>
+      <tr><td>My Videos</td><td>Creator (User A)</td><td>Configure the affiliate program per video. Select a video, set commission percentage (0–90%), toggle enabled/disabled, and save. The creator can set different rates for different videos or disable the program on specific titles.</td></tr>
+      <tr><td>Get Links</td><td>Affiliate (User B)</td><td>Generate a referral link for any video with an active affiliate program. The link format is: <code>/public/watch.html?video_id=X&amp;ref=USERNAME</code>. Includes a copy button. Also shows whether the program is currently active for that video.</td></tr>
+    </table>
+
+    <ol class="flow-steps">
+      <li>Creator (Alice) goes to "My Videos" tab → selects her video → sets 15% commission → enables</li>
+      <li>Affiliate (Bob) goes to "Get Links" tab → selects Alice's video → copies referral link</li>
+      <li>Bob shares the link on social media</li>
+      <li>Buyer (Carol) clicks the link → sees "Referred by @bob" notice → purchases</li>
+      <li>Commission is automatically deducted from Alice's wallet and credited to Bob's wallet</li>
+      <li>Bob sees the commission in "My Earnings" tab and in his Wallet transaction history</li>
+    </ol>
+
+    <a class="preview-link" href="mockups/affiliate.html" target="_blank">▶ View Mockup</a>
+  </section>
+
+  <!-- ─────────────────────────── USER: WATCH ─────────────────────────── -->
+  <section id="watch">
+    <h2>Watch / Payment Page</h2>
+    <span class="page-tag">User Page</span>
+    <p>The video detail and purchase page. Opened when a user clicks a video card on the Browse page. This is where all three payment paths converge.</p>
+
+    <table class="func-table">
+      <tr><th>State</th><th>Shown When</th><th>What User Sees</th></tr>
+      <tr><td>Video Info</td><td>Always</td><td>Title, description, creator username, price, creator contact info (WhatsApp, bank, wallet). Creator's public profile description.</td></tr>
+      <tr><td>HLS Player</td><td>After access granted</td><td>Native HTML5 video player with HLS.js. Press <kbd>F</kbd> for fullscreen. Watermark overlaid with buyer's username.</td></tr>
+      <tr><td>Payment Panel</td><td>No access yet</td><td>3-tab payment interface: (1) Wallet Pay — one-click if balance sufficient, (2) Crypto (X402) — MetaMask/EVM wallet, (3) Fiat — Stripe/PayPal/Midtrans/Xendit checkout. All tabs respect the <code>?ref=</code> referral code.</td></tr>
+      <tr><td>Referral Notice</td><td>When ?ref= in URL</td><td>Blue info badge: "Referred by @username. They earn a commission when you purchase." Shown inside the payment panel.</td></tr>
+      <tr><td>Free Video</td><td>Price = 0</td><td>Playback granted immediately without payment. No payment panel shown.</td></tr>
+    </table>
+
+    <div class="callout">The <code>?ref=</code> parameter is captured once on page load into <code>REF_CODE</code> and passed to all three payment methods automatically. The buyer never needs to do anything special — the referral is tracked transparently.</div>
+
+    <a class="preview-link" href="mockups/watch.html" target="_blank">▶ View Mockup</a>
+  </section>
+
+  <!-- ─────────────────────────── USER: AUTH ─────────────────────────── -->
+  <section id="auth">
+    <h2>Login &amp; Register</h2>
+    <span class="page-tag">User Page</span>
+    <p>Standard auth pages. All passwords are hashed with Argon2 in PostgreSQL. Sessions are HMAC-SHA256 signed cookies.</p>
+
+    <table class="func-table">
+      <tr><th>Page</th><th>Route</th><th>Function</th></tr>
+      <tr><td>Register</td><td>/auth/register</td><td>Creates a new user account. Username must be unique. Password minimum 8 characters.</td></tr>
+      <tr><td>Login</td><td>/auth/login</td><td>Authenticates user, creates a signed session cookie (TTL configurable via SESSION_TOKEN_TTL env var).</td></tr>
+      <tr><td>Forgot Password</td><td>/auth/forgot</td><td>Sends a password-reset link to the user's email address. Requires SMTP to be configured.</td></tr>
+      <tr><td>Reset Password</td><td>/auth/reset</td><td>Consumes the one-time reset token from the email link. Sets a new password.</td></tr>
+    </table>
+  </section>
+
+  <div class="toc-divider"></div>
+
+  <!-- ─────────────────────────── ADMIN: DASHBOARD ─────────────────────────── -->
+  <section id="admin-dashboard">
+    <h2>Admin Dashboard</h2>
+    <span class="page-tag admin">Admin Page</span>
+    <p>The admin home page. Red navbar distinguishes it from user pages. Shows platform-wide statistics and quick navigation links to all admin tools.</p>
+
+    <table class="func-table">
+      <tr><th>Section</th><th>API</th><th>Function</th></tr>
+      <tr><td>Ringkasan (Summary)</td><td>GET /admin/stats</td><td>Live counters: Total Users registered, Total Videos uploaded, Total Purchases completed. Updates on each page load.</td></tr>
+      <tr><td>Menu Cepat (Quick Menu)</td><td>—</td><td>Navigation shortcuts to: Payment Monitoring, SMTP Settings, Raw Data view.</td></tr>
+      <tr><td>Navbar links</td><td>—</td><td>Dashboard, Pembayaran (payments), Pengaturan (settings), Raw Data, Browse Site. All admin pages share this navbar.</td></tr>
+    </table>
+
+    <div class="callout">Admin login is at <code>/admin/login</code>. Admin accounts have <code>is_admin = 1</code> in the users table. The bootstrap admin is created via <code>GET /setup_admin</code> using environment variables.</div>
+
+    <a class="preview-link admin-link" href="mockups/admin-dashboard.html" target="_blank">▶ View Mockup</a>
+  </section>
+
+  <!-- ─────────────────────────── ADMIN: PAYMENTS ─────────────────────────── -->
+  <section id="admin-payments">
+    <h2>Payment Monitoring (Pembayaran)</h2>
+    <span class="page-tag admin">Admin Page</span>
+    <p>The fiat payment monitoring and creator payout management page. Shows all invoices created by Stripe, PayPal, Midtrans, and Xendit providers. Admin can track payment status and trigger creator payouts (disburse).</p>
+
+    <table class="func-table">
+      <tr><th>UI Element</th><th>Function</th><th>Detail</th></tr>
+      <tr><td>Status badges (totals)</td><td>Overview</td><td>Shows total count of All / Paid / Pending / Failed invoices at the top of the page.</td></tr>
+      <tr><td>Provider filter</td><td>Filter</td><td>Show only invoices from a specific provider: Stripe, PayPal, Midtrans, Xendit.</td></tr>
+      <tr><td>Status filter</td><td>Filter</td><td>Filter by: pending / paid / failed / expired / cancelled.</td></tr>
+      <tr><td>Limit selector</td><td>Filter</td><td>Show 50 / 100 / 500 rows.</td></tr>
+      <tr><td>Invoice table</td><td>Main data</td><td>Columns: Invoice UID (truncated), Provider (color-coded badge), Buyer (username + email), Video title, Amount, Status, Created date, Paid date, Disburse status, Action button.</td></tr>
+      <tr><td>Disburse button</td><td>Action</td><td>Appears only on paid-but-not-yet-disbursed invoices. Opens a confirmation modal. Xendit: triggers automatic bank transfer via Xendit API. Other providers: marks as "manual" (admin transfers themselves through the provider's dashboard).</td></tr>
+      <tr><td>Disburse modal</td><td>Confirmation</td><td>Shows invoice details, buyer, video, amount, and creator bank account. For Xendit with bank account set: shows "auto-disburse" message. For Xendit without bank: warns cannot auto-disburse. For others: shows "manual transfer" reminder.</td></tr>
+    </table>
+
+    <div class="callout tip">Xendit is the only provider with automatic bank disbursement. For Stripe/PayPal/Midtrans, the admin manually transfers funds through those providers' own dashboards, then clicks "Disburse" here to mark it as done in the system.</div>
+
+    <a class="preview-link admin-link" href="mockups/admin-payments.html" target="_blank">▶ View Mockup</a>
+  </section>
+
+  <!-- ─────────────────────────── ADMIN: SETTINGS ─────────────────────────── -->
+  <section id="admin-settings">
+    <h2>Settings — SMTP &amp; Admin Password</h2>
+    <span class="page-tag admin">Admin Page</span>
+    <p>Two forms on one page: email server configuration and admin password change. Both are admin-only.</p>
+
+    <table class="func-table">
+      <tr><th>Section</th><th>API</th><th>Function</th></tr>
+      <tr><td>Enable email toggle</td><td>POST /admin/smtp</td><td>If off, emails are only logged to server console — nothing is actually sent. Safe for development environments.</td></tr>
+      <tr><td>SMTP configuration</td><td>POST /admin/smtp</td><td>Sets: SMTP Host, Port, Username, Password (App Password for Gmail), From Email, From Name, TLS toggle. Saved to the <code>smtp_settings</code> table in the database (not to .env).</td></tr>
+      <tr><td>Test Email</td><td>POST /admin/smtp</td><td>Sends a real test email to a specified address using the current configuration. The settings are saved first, then the test is sent. Good for verifying SMTP credentials.</td></tr>
+      <tr><td>Ganti Password Admin</td><td>POST /admin/change_password</td><td>Changes the admin login password. Requires the current password. Updates <code>users.password_hash</code> in the database (NOT the .env file). Sends email notification on success.</td></tr>
+      <tr><td>Panduan Konfigurasi</td><td>—</td><td>Read-only reference guide showing correct host/port settings for Gmail, Mailgun, Mailtrap, and Brevo/Sendinblue.</td></tr>
+    </table>
+
+    <div class="callout warn">The .env file is never modified by the application. All runtime settings (SMTP, password) are stored in the database. The .env file only sets the initial bootstrap values.</div>
+
+    <a class="preview-link admin-link" href="mockups/admin-settings.html" target="_blank">▶ View Mockup</a>
+  </section>
+
+  <!-- ─────────────────────────── ADMIN: WALLET ─────────────────────────── -->
+  <section id="admin-wallet">
+    <h2>Admin Wallet Management</h2>
+    <span class="page-tag admin">Admin Page</span>
+    <p>Admin view of the internal wallet system. Admins approve user deposit requests, confirm withdrawals, and reject transactions. This page processes the manual money movement side of the wallet system.</p>
+
+    <table class="func-table">
+      <tr><th>Section</th><th>API</th><th>Function</th></tr>
+      <tr><td>Stats row</td><td>—</td><td>Quick counts: Total Pending Deposits, Total Pending Withdrawals, Total amount waiting for action (in USD).</td></tr>
+      <tr><td>Filter bar</td><td>GET /admin/wallet/transactions</td><td>Filter by: transaction type (deposit/withdrawal/transfer/etc.), status (pending/completed/rejected), limit.</td></tr>
+      <tr><td>Transaction table</td><td>—</td><td>All wallet transactions across all users. Columns: user, type, amount, notes (bank transfer reference, etc.), status badge, date, action buttons.</td></tr>
+      <tr><td>Approve button</td><td>POST /admin/wallet/transactions/:id/approve</td><td>Approves a pending deposit. Credits the amount to the user's balance. Status: pending → completed. Shows a modal to optionally add an admin note.</td></tr>
+      <tr><td>Complete button</td><td>POST /admin/wallet/transactions/:id/complete</td><td>Marks a withdrawal as paid (the admin has already sent the bank transfer). Balance was already held when the withdrawal was created. Status: pending → completed.</td></tr>
+      <tr><td>Reject button</td><td>POST /admin/wallet/transactions/:id/reject</td><td>Rejects a pending transaction. For withdrawals, refunds the held balance back to the user. Status: pending → rejected.</td></tr>
+    </table>
+
+    <ol class="flow-steps">
+      <li>User goes to Wallet page → clicks Deposit → enters amount and bank ref number → submits</li>
+      <li>Admin sees pending deposit in Admin Wallet → verifies the user's bank transfer was received</li>
+      <li>Admin clicks Approve → user's balance is credited</li>
+      <li>User can now spend the balance on videos or transfer to others</li>
+      <li>User requests withdrawal → balance held immediately</li>
+      <li>Admin processes bank transfer → clicks Complete in Admin Wallet</li>
+    </ol>
+
+    <a class="preview-link admin-link" href="mockups/admin-wallet.html" target="_blank">▶ View Mockup</a>
+  </section>
+
+</main>
+
+<script>
+// Highlight active sidebar link based on scroll position
+const sections = document.querySelectorAll('section[id]');
+const links = document.querySelectorAll('aside a[href^="#"]');
+window.addEventListener('scroll', () => {
+  let current = '';
+  sections.forEach(s => { if (window.scrollY >= s.offsetTop - 80) current = s.id; });
+  links.forEach(a => {
+    a.classList.toggle('active', a.getAttribute('href') === '#' + current);
+  });
+}, { passive: true });
+</script>
+</body>
+</html>

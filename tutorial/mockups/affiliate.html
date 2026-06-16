@@ -1,0 +1,220 @@
+<!-- MOCKUP: Affiliate Page — static replica with dummy data -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>[MOCKUP] Affiliate — PPV Stream</title>
+  <style>
+    :root { --bg:#0f0f0f;--card:#1a1a1a;--border:#2a2a2a;--accent:#7c3aed;--accent2:#10b981;--text:#e5e5e5;--muted:#888; }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif}
+    .mockup-banner{background:#1e1b4b;color:#c4b5fd;font-size:.8rem;text-align:center;padding:6px}
+    nav{background:var(--card);border-bottom:1px solid var(--border);padding:.75rem 1.5rem;display:flex;align-items:center;gap:1rem}
+    nav a{color:var(--muted);text-decoration:none;font-size:.9rem}
+    nav .brand{color:var(--accent);font-weight:700;font-size:1.1rem;margin-right:auto}
+    .page{max-width:900px;margin:0 auto;padding:2rem 1rem}
+    h1{font-size:1.6rem;margin-bottom:.25rem}
+    .subtitle{color:var(--muted);margin-bottom:2rem;font-size:.9rem}
+    .tabs{display:flex;gap:.5rem;margin-bottom:1.5rem}
+    .tab-btn{padding:.5rem 1.25rem;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:.9rem}
+    .tab-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .tab-pane{display:none}
+    .tab-pane.active{display:block}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem}
+    .stat-row{display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:1.5rem}
+    .stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem 1.5rem;min-width:140px}
+    .stat .label{color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.05em}
+    .stat .value{font-size:1.5rem;font-weight:700;margin-top:.25rem;color:var(--accent2)}
+    label{display:block;color:var(--muted);font-size:.8rem;margin-bottom:.3rem}
+    input,select{width:100%;padding:.6rem .8rem;background:#222;border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:.9rem}
+    .form-row{margin-bottom:1rem}
+    button{padding:.6rem 1.25rem;border-radius:6px;border:none;cursor:pointer;font-size:.9rem;font-weight:600}
+    .btn-primary{background:var(--accent);color:#fff}
+    .btn-copy{background:#333;color:var(--text);font-size:.8rem;padding:.35rem .75rem}
+    .link-box{display:flex;gap:.5rem;align-items:center}
+    .link-box input{flex:1;font-family:monospace;font-size:.8rem}
+    table{width:100%;border-collapse:collapse;font-size:.85rem}
+    th{text-align:left;padding:.6rem .75rem;color:var(--muted);border-bottom:1px solid var(--border);font-weight:500}
+    td{padding:.65rem .75rem;border-bottom:1px solid #222}
+    tr:last-child td{border-bottom:none}
+    .badge{display:inline-block;padding:.2rem .55rem;border-radius:4px;font-size:.7rem;font-weight:600}
+    .badge-wallet{background:#1e3a5f;color:#60a5fa}
+    .badge-x402{background:#3b1764;color:#c084fc}
+    .badge-fiat{background:#14532d;color:#4ade80}
+    .toggle{display:flex;align-items:center;gap:.5rem}
+    .toggle input[type=checkbox]{width:auto}
+    .empty{color:var(--muted);text-align:center;padding:2rem;font-size:.9rem}
+    .section-title{font-size:1rem;font-weight:600;margin-bottom:1rem}
+    .ann{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#7c3aed;color:#fff;font-size:.68rem;font-weight:700;vertical-align:middle;margin-left:4px}
+    .msg-ok{background:#064e3b;color:#6ee7b7;padding:.75rem 1rem;border-radius:8px;font-size:.85rem;margin-bottom:1rem}
+  </style>
+</head>
+<body>
+<div class="mockup-banner">🔍 STATIC MOCKUP — tidak ada data nyata / no live data, visual demo only</div>
+
+<nav>
+  <span class="brand">PPV Stream</span>
+  <a href="#">Dashboard</a>
+  <a href="#">Wallet</a>
+  <a href="#" style="color:var(--accent)">Affiliate</a>
+</nav>
+
+<div class="page">
+  <h1>Affiliate Program</h1>
+  <p class="subtitle">Earn commissions by sharing videos. Configure your program as a creator, or track your earnings as an affiliate.</p>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('earnings')">My Earnings</button>
+    <button class="tab-btn" onclick="switchTab('settings')">My Videos</button>
+    <button class="tab-btn" onclick="switchTab('links')">Get Links</button>
+  </div>
+
+  <!-- ── Tab 1: My Earnings ── -->
+  <div class="tab-pane active" id="tab-earnings">
+
+    <div class="stat-row">
+      <div class="stat">
+        <div class="label">Total Earned <span class="ann" title="Total komisi yang sudah masuk ke wallet Anda">1</span></div>
+        <div class="value">$18.50</div>
+      </div>
+      <div class="stat">
+        <div class="label">Total Commissions</div>
+        <div class="value" style="font-size:1.3rem">7</div>
+      </div>
+      <div class="stat">
+        <div class="label">This Month</div>
+        <div class="value">$11.00</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Commission History <span class="ann" title="Setiap baris = satu pembelian via referral link Anda">2</span></div>
+      <table>
+        <thead>
+          <tr>
+            <th>Video</th>
+            <th>Buyer</th>
+            <th>Commission</th>
+            <th>Method</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Advanced Rust Programming</td>
+            <td style="color:var(--muted)">carol</td>
+            <td style="color:#10b981;font-family:monospace">+$3.00</td>
+            <td><span class="badge badge-wallet">wallet</span></td>
+            <td style="color:var(--muted);font-size:.8rem">14 Jun 2026 16:45</td>
+          </tr>
+          <tr>
+            <td>Advanced Rust Programming</td>
+            <td style="color:var(--muted)">dave</td>
+            <td style="color:#10b981;font-family:monospace">+$3.00</td>
+            <td><span class="badge badge-x402">x402</span></td>
+            <td style="color:var(--muted);font-size:.8rem">10 Jun 2026 09:15</td>
+          </tr>
+          <tr>
+            <td>System Design Masterclass</td>
+            <td style="color:var(--muted)">eve</td>
+            <td style="color:#10b981;font-family:monospace">+$5.00</td>
+            <td><span class="badge badge-fiat">midtrans</span></td>
+            <td style="color:var(--muted);font-size:.8rem">08 Jun 2026 11:22</td>
+          </tr>
+          <tr>
+            <td>Advanced Rust Programming</td>
+            <td style="color:var(--muted)">frank</td>
+            <td style="color:#10b981;font-family:monospace">+$3.00</td>
+            <td><span class="badge badge-wallet">wallet</span></td>
+            <td style="color:var(--muted);font-size:.8rem">05 Jun 2026 20:33</td>
+          </tr>
+          <tr>
+            <td>System Design Masterclass</td>
+            <td style="color:var(--muted)">grace</td>
+            <td style="color:#10b981;font-family:monospace">+$4.50</td>
+            <td><span class="badge badge-fiat">xendit</span></td>
+            <td style="color:var(--muted);font-size:.8rem">01 Jun 2026 14:10</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Tab 2: My Videos (creator settings) ── -->
+  <div class="tab-pane" id="tab-settings">
+    <div class="card">
+      <div class="section-title">Configure Affiliate Program per Video <span class="ann" title="Pilih video lalu set persentase komisi">3</span></div>
+
+      <div class="msg-ok">✓ Settings saved for "Advanced Rust Programming" — 15% commission enabled</div>
+
+      <div class="form-row video-select">
+        <label>Select your video</label>
+        <select>
+          <option value="vid_aB3x9kQ" selected>Advanced Rust Programming (vid_aB3x9kQ)</option>
+          <option value="vid_cD7m2wL">Intro to Docker (vid_cD7m2wL)</option>
+        </select>
+      </div>
+
+      <div class="form-row">
+        <label>Commission % (0–90) <span class="ann" title="Persentase dari harga video yang akan dibayar ke affiliat. Dibayar dari revenue share creator.">4</span></label>
+        <input type="number" min="0" max="90" value="15">
+        <div style="font-size:.78rem;color:var(--muted);margin-top:.4rem">
+          At 15%: Buyer pays $15.00 → creator nets $10.50 → affiliate earns <strong style="color:#10b981">$2.25</strong>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label>Program Status <span class="ann" title="Matikan untuk stop komisi tanpa menghapus pengaturan">5</span></label>
+        <div class="toggle">
+          <input type="checkbox" id="enabledToggle" checked>
+          <label for="enabledToggle" style="margin:0;color:var(--text)">Enabled</label>
+        </div>
+      </div>
+
+      <button class="btn-primary" style="margin-top:.5rem">Save Settings</button>
+    </div>
+  </div>
+
+  <!-- ── Tab 3: Get Links ── -->
+  <div class="tab-pane" id="tab-links">
+    <div class="card">
+      <div class="section-title">Generate Your Referral Link <span class="ann" title="Link ini melacak bahwa Anda yang mereferensikan buyer">6</span></div>
+
+      <div class="form-row">
+        <label>Select video</label>
+        <select>
+          <option value="vid_aB3x9kQ" selected>Advanced Rust Programming (vid_aB3x9kQ) — alice, 15% commission ✓</option>
+          <option value="vid_eF1n3hP">System Design Masterclass (vid_eF1n3hP) — charlie, 10% commission ✓</option>
+          <option value="vid_cD7m2wL">Intro to Docker (vid_cD7m2wL) — alice, disabled ✗</option>
+        </select>
+      </div>
+
+      <div style="background:#111;border:1px solid #333;border-radius:8px;padding:1rem;margin-top:1rem">
+        <div style="font-size:.75rem;color:var(--muted);margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.05em">Your referral link</div>
+        <div class="link-box">
+          <input type="text" readonly value="https://platform.com/public/watch.html?video_id=vid_aB3x9kQ&ref=bob">
+          <button class="btn-copy">Copy</button>
+        </div>
+        <div style="font-size:.78rem;color:var(--muted);margin-top:.75rem">
+          📌 Share this link on social media. When someone buys through it, you earn <strong style="color:#10b981">15%</strong> of the video price.
+        </div>
+        <div style="font-size:.78rem;color:#6ee7b7;margin-top:.5rem;background:#064e3b;padding:.5rem .75rem;border-radius:6px">
+          ✓ Affiliate program is active for this video
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function switchTab(name) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>

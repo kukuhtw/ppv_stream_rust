@@ -1,0 +1,174 @@
+<!-- MOCKUP: Browse Videos — static replica with dummy data -->
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>[MOCKUP] Browse Video — PPV Stream</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    .video-card { cursor: pointer; transition: box-shadow .15s; }
+    .video-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.15) !important; }
+    .thumb-placeholder { height: 160px; background: linear-gradient(135deg,#e2e8f0,#cbd5e1); display: flex; align-items: center; justify-content: center; font-size: 2.5rem; }
+    .badge-hls { font-size: .65rem; }
+    .mockup-banner { background: #1e1b4b; color: #c4b5fd; font-size: .8rem; text-align: center; padding: 6px; letter-spacing: .04em; }
+    .annotation { position: relative; }
+    .ann-badge { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: #7c3aed; color: #fff; font-size: .7rem; font-weight: 700; position: absolute; top: -10px; right: -10px; z-index: 10; }
+  </style>
+</head>
+<body class="bg-light">
+<div class="mockup-banner">🔍 STATIC MOCKUP — tidak ada data nyata, hanya contoh tampilan / STATIC MOCKUP — no live data, visual demo only</div>
+
+<nav class="navbar navbar-expand-md navbar-light bg-white shadow-sm">
+  <div class="container">
+    <a class="navbar-brand fw-bold" href="#">🎬 PPV Stream</a>
+    <div class="collapse navbar-collapse show">
+      <ul class="navbar-nav me-auto mb-2 mb-md-0">
+        <li class="nav-item"><a class="nav-link active fw-semibold" href="#">Browse</a></li>
+        <li class="nav-item"><a class="nav-link" href="#">Dashboard</a></li>
+      </ul>
+      <span class="badge bg-secondary">alice &lt;alice@example.com&gt;</span>
+    </div>
+  </div>
+</nav>
+
+<div class="container py-4 pb-5">
+  <h1 class="mb-4">Daftar Video</h1>
+
+  <!-- Search & Sort -->
+  <div class="row g-2 mb-4">
+    <div class="col-12 col-md-7">
+      <div class="annotation" style="position:relative;display:inline-block;width:100%">
+        <input class="form-control" placeholder="Cari judul / owner / deskripsi…" value="">
+        <span class="ann-badge" title="Real-time search filter">1</span>
+      </div>
+    </div>
+    <div class="col-12 col-md-3">
+      <div style="position:relative;display:inline-block;width:100%">
+        <select class="form-select">
+          <option selected>Terbaru</option>
+          <option>Termurah</option>
+          <option>Termahal</option>
+          <option>Judul (A-Z)</option>
+        </select>
+        <span class="ann-badge" style="top:-10px;right:-10px;position:absolute;background:#7c3aed;color:#fff;width:22px;height:22px;border-radius:50%;font-size:.7rem;font-weight:700;display:flex;align-items:center;justify-content:center;" title="Sort videos">2</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="alert alert-light border small mb-4">
+    <strong>Legenda callout:</strong>
+    <span class="badge bg-secondary mx-1">1</span> Live search by title/creator/desc &nbsp;
+    <span class="badge bg-secondary mx-1">2</span> Sort order &nbsp;
+    <span class="badge bg-secondary mx-1">3</span> HLS ready (video bisa ditonton) &nbsp;
+    <span class="badge bg-secondary mx-1">4</span> Harga (klik untuk beli/tonton)
+  </div>
+
+  <!-- Video Grid -->
+  <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-3">
+
+    <!-- Card 1 -->
+    <div class="col">
+      <div class="card shadow-sm video-card h-100" style="position:relative">
+        <div class="thumb-placeholder rounded-top">🎥</div>
+        <div class="card-body">
+          <h6 class="card-title fw-bold mb-1">Advanced Rust Programming</h6>
+          <p class="text-muted small mb-1">by <strong>alice</strong></p>
+          <p class="text-muted small mb-2">Belajar ownership, lifetimes, async Rust dan lebih lagi...</p>
+          <div class="d-flex align-items-center justify-content-between">
+            <span class="badge bg-success badge-hls">✓ HLS Ready</span>
+            <span class="fw-bold text-primary">Rp 150.000</span>
+          </div>
+        </div>
+        <span style="position:absolute;top:8px;right:8px;background:#7c3aed;color:#fff;border-radius:50%;width:22px;height:22px;font-size:.7rem;font-weight:700;display:flex;align-items:center;justify-content:center;">3</span>
+        <span style="position:absolute;bottom:12px;right:12px;background:#7c3aed;color:#fff;border-radius:50%;width:22px;height:22px;font-size:.7rem;font-weight:700;display:flex;align-items:center;justify-content:center;">4</span>
+      </div>
+    </div>
+
+    <!-- Card 2 -->
+    <div class="col">
+      <div class="card shadow-sm video-card h-100">
+        <div class="thumb-placeholder rounded-top">🌐</div>
+        <div class="card-body">
+          <h6 class="card-title fw-bold mb-1">Web3 for Beginners</h6>
+          <p class="text-muted small mb-1">by <strong>bob</strong></p>
+          <p class="text-muted small mb-2">Pengantar blockchain, smart contract, dan DeFi dari nol.</p>
+          <div class="d-flex align-items-center justify-content-between">
+            <span class="badge bg-success badge-hls">✓ HLS Ready</span>
+            <span class="fw-bold text-primary">Rp 100.000</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 3 -->
+    <div class="col">
+      <div class="card shadow-sm video-card h-100">
+        <div class="thumb-placeholder rounded-top">🏗️</div>
+        <div class="card-body">
+          <h6 class="card-title fw-bold mb-1">System Design Masterclass</h6>
+          <p class="text-muted small mb-1">by <strong>charlie</strong></p>
+          <p class="text-muted small mb-2">Microservices, load balancing, database sharding explained.</p>
+          <div class="d-flex align-items-center justify-content-between">
+            <span class="badge bg-success badge-hls">✓ HLS Ready</span>
+            <span class="fw-bold text-primary">Rp 200.000</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 4: Free -->
+    <div class="col">
+      <div class="card shadow-sm video-card h-100">
+        <div class="thumb-placeholder rounded-top" style="background:linear-gradient(135deg,#d1fae5,#a7f3d0)">🆓</div>
+        <div class="card-body">
+          <h6 class="card-title fw-bold mb-1">Intro to Docker (Free)</h6>
+          <p class="text-muted small mb-1">by <strong>alice</strong></p>
+          <p class="text-muted small mb-2">Container basics, Docker Compose, dan deployment workflow.</p>
+          <div class="d-flex align-items-center justify-content-between">
+            <span class="badge bg-success badge-hls">✓ HLS Ready</span>
+            <span class="fw-bold text-success">Free</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 5: Processing -->
+    <div class="col">
+      <div class="card shadow-sm video-card h-100">
+        <div class="thumb-placeholder rounded-top" style="background:linear-gradient(135deg,#fef3c7,#fde68a)">⏳</div>
+        <div class="card-body">
+          <h6 class="card-title fw-bold mb-1">PostgreSQL Performance Tuning</h6>
+          <p class="text-muted small mb-1">by <strong>alice</strong></p>
+          <p class="text-muted small mb-2">Indexes, EXPLAIN ANALYZE, query optimization...</p>
+          <div class="d-flex align-items-center justify-content-between">
+            <span class="badge bg-warning text-dark badge-hls">⏳ Processing</span>
+            <span class="fw-bold text-primary">Rp 175.000</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 6 -->
+    <div class="col">
+      <div class="card shadow-sm video-card h-100">
+        <div class="thumb-placeholder rounded-top" style="background:linear-gradient(135deg,#ede9fe,#ddd6fe)">🔐</div>
+        <div class="card-body">
+          <h6 class="card-title fw-bold mb-1">Zero Trust Security</h6>
+          <p class="text-muted small mb-1">by <strong>dave</strong></p>
+          <p class="text-muted small mb-2">Modern security architecture: mTLS, SPIFFE, OPA policies.</p>
+          <div class="d-flex align-items-center justify-content-between">
+            <span class="badge bg-success badge-hls">✓ HLS Ready</span>
+            <span class="fw-bold text-primary">Rp 250.000</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /grid -->
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
