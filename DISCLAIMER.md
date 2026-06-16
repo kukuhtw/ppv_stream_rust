@@ -1,5 +1,7 @@
 # Disclaimer
 
+-> [README.md](/c:/rust/github_ppv_stream_rust/ppv_stream_rust/README.md)
+
 This repository, application, and related documentation are provided for software, operational, and educational purposes.
 
 ## No Legal Advice
