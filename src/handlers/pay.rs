@@ -826,3 +826,115 @@ pub async fn x402_confirm(
 
     Json(json!({"ok": true, "status": "paid"}))
 }
+
+// ─── GET /api/pay/all_options?video_id= ──────────────────────────────────────
+// Returns all available payment methods for one video in a single call:
+//   - wallet: buyer's current balance, whether they can afford it
+//   - x402:   available if tokens are configured
+//   - fiat:   available providers (from PAYMENT_PLUGINS env)
+//
+// Used by watch.html to decide which payment tabs to render.
+
+pub async fn all_options(
+    State(st): State<VideoState>,
+    cookies:   Cookies,
+    Query(q):  Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let video_id = q.get("video_id").cloned().unwrap_or_default();
+    if video_id.is_empty() {
+        return Json(json!({"ok": false, "error": "video_id required"}));
+    }
+
+    // Load video price and owner
+    let video_row = sqlx::query(
+        "SELECT v.price_cents, v.owner_id FROM videos v WHERE v.id = $1 LIMIT 1"
+    )
+    .bind(&video_id)
+    .fetch_optional(&st.pool)
+    .await;
+
+    let video_row = match video_row {
+        Ok(Some(r)) => r,
+        Ok(None)    => return Json(json!({"ok": false, "error": "video not found"})),
+        Err(e)      => return Json(json!({"ok": false, "error": format!("db: {e}")})),
+    };
+
+    let price_cents: i64    = video_row.try_get("price_cents").unwrap_or(0);
+    let owner_id:    String = video_row.try_get("owner_id").unwrap_or_default();
+
+    // Wallet balance (null if not logged in)
+    let current_user = sessions::current_user_id(&st.pool, &st.cfg, &cookies).await;
+    let (wallet_balance, is_owner, already_purchased) = if let Some((uid, _)) = &current_user {
+        let bal: i64 = sqlx::query_scalar("SELECT balance_cents FROM users WHERE id = $1")
+            .bind(uid)
+            .fetch_optional(&st.pool)
+            .await
+            .ok()
+            .flatten()
+            .unwrap_or(0);
+
+        let purchased: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM purchases WHERE user_id = $1 AND video_id = $2"
+        )
+        .bind(uid).bind(&video_id)
+        .fetch_one(&st.pool)
+        .await
+        .unwrap_or(0);
+
+        (Some(bal), uid == &owner_id, purchased > 0)
+    } else {
+        (None, false, false)
+    };
+
+    // X402 tokens
+    let tokens = sqlx::query(
+        r#"SELECT chain, chain_id, symbol, decimals,
+                  COALESCE(erc20_address, erc20) AS erc20_address
+           FROM pay_tokens WHERE is_active = TRUE ORDER BY chain_id, symbol"#
+    )
+    .fetch_all(&st.pool)
+    .await
+    .unwrap_or_default();
+
+    let token_list: Vec<serde_json::Value> = tokens.iter().map(|t| json!({
+        "chain":     t.try_get::<String, _>("chain").unwrap_or_default(),
+        "chain_id":  t.try_get::<i64,    _>("chain_id").unwrap_or(0),
+        "symbol":    t.try_get::<String, _>("symbol").unwrap_or_default(),
+        "decimals":  t.try_get::<i32,    _>("decimals").unwrap_or(18),
+        "erc20":     t.try_get::<Option<String>, _>("erc20_address").unwrap_or(None),
+    })).collect();
+
+    // Fiat providers from env (admin-configured)
+    let fiat_providers: Vec<String> = std::env::var("PAYMENT_PLUGINS")
+        .unwrap_or_default()
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty() && s != "x402")
+        .collect();
+
+    let cents_display = |c: i64| -> String {
+        format!("${}.{:02}", c / 100, (c % 100).unsigned_abs())
+    };
+
+    Json(json!({
+        "ok": true,
+        "video_id":        video_id,
+        "price_cents":     price_cents,
+        "price_display":   cents_display(price_cents),
+        "is_owner":        is_owner,
+        "already_purchased": already_purchased,
+        "wallet": {
+            "balance_cents":   wallet_balance,
+            "balance_display": wallet_balance.map(|b| cents_display(b)),
+            "can_afford":      wallet_balance.map(|b| b >= price_cents && !is_owner),
+        },
+        "x402": {
+            "available": !token_list.is_empty(),
+            "tokens":    token_list,
+        },
+        "fiat": {
+            "available": !fiat_providers.is_empty(),
+            "providers": fiat_providers,
+        }
+    }))
+}

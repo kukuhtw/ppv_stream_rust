@@ -38,7 +38,11 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
     use crate::handlers::pay;
     use crate::handlers::me::{me, MeState};
     use crate::handlers::{
-        admin::{admin_data, admin_disburse, admin_payments, admin_smtp_get, admin_smtp_save, AdminState},
+        admin::{
+            admin_data, admin_disburse, admin_payments, admin_smtp_get, admin_smtp_save,
+            admin_wallet_approve, admin_wallet_complete, admin_wallet_reject,
+            admin_wallet_transactions, AdminState,
+        },
         auth_admin::{admin_change_password, post_admin_login, post_admin_logout, AuthAdminState},
         auth_user::{change_password, post_login, post_logout, post_register, AuthUserState},
         kurs::{router as kurs_router, KursState},
@@ -51,6 +55,10 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
         upload::{upload_video, UploadState},
         users::{get_my_profile, public_profile, update_my_profile, UsersState},
         video::{add_allow, list_videos, my_videos, update_video, user_lookup, VideoState},
+        wallet::{
+            wallet_balance, wallet_deposit, wallet_pay_video, wallet_transactions,
+            wallet_transfer, wallet_withdraw, WalletState,
+        },
     };
     use crate::plugins::payment::PaymentPluginRegistry;
     use crate::plugins::storage::StorageRegistry;
@@ -147,6 +155,7 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
         .route("/api/pay/x402/start", post(pay::x402_start))
         .route("/api/crypto_price", get(pay::crypto_price))
         .route("/api/pay/x402/confirm", post(pay::x402_confirm))
+        .route("/api/pay/all_options",  get(pay::all_options))
         .with_state(VideoState {
             pool: pool.clone(),
             cfg: cfg.clone(),
@@ -188,6 +197,22 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
 
     let kurs_router = kurs_router(KursState { cfg: cfg.clone() });
 
+    let wallet_router = Router::new()
+        .route("/api/wallet/balance",      get(wallet_balance))
+        .route("/api/wallet/transactions", get(wallet_transactions))
+        .route("/api/wallet/deposit",      post(wallet_deposit))
+        .route("/api/wallet/withdraw",     post(wallet_withdraw))
+        .route("/api/wallet/transfer",     post(wallet_transfer))
+        .route("/api/wallet/pay",          post(wallet_pay_video))
+        .with_state(WalletState { pool: pool.clone(), cfg: cfg.clone() });
+
+    let admin_wallet_router = Router::new()
+        .route("/admin/wallet/transactions",              get(admin_wallet_transactions))
+        .route("/admin/wallet/transactions/:id/approve",  post(admin_wallet_approve))
+        .route("/admin/wallet/transactions/:id/complete", post(admin_wallet_complete))
+        .route("/admin/wallet/transactions/:id/reject",   post(admin_wallet_reject))
+        .with_state(AdminState { pool: pool.clone() });
+
     let app = static_router
         .merge(admin_pages_router)
         .merge(user_auth_router)
@@ -200,6 +225,8 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
         .merge(streaming_router)
         .merge(me_router)
         .merge(kurs_router)
+        .merge(wallet_router)
+        .merge(admin_wallet_router)
         .layer(CookieManagerLayer::new());
 
     start_cleanup_task(pool.clone(), cfg.hls_root.clone());

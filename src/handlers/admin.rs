@@ -578,3 +578,253 @@ pub async fn admin_smtp_save(
 
     Json(json!({"ok": true, "saved": true}))
 }
+
+// ---------------------------------------------------------------------------
+// Wallet admin — GET /admin/wallet/transactions?type=&status=&limit=
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+pub struct WalletTxnQuery {
+    pub txn_type: Option<String>,
+    pub status:   Option<String>,
+    pub limit:    Option<i64>,
+}
+
+pub async fn admin_wallet_transactions(
+    State(st): State<AdminState>,
+    Query(q):  Query<WalletTxnQuery>,
+) -> impl IntoResponse {
+    let limit  = q.limit.unwrap_or(100).min(1000);
+    let ttype  = q.txn_type.as_deref().unwrap_or("");
+    let status = q.status.as_deref().unwrap_or("");
+
+    let mut conditions: Vec<String> = vec![];
+    if !ttype.is_empty()  { conditions.push(format!("wt.txn_type = '{}'", ttype.replace('\'', "''"))); }
+    if !status.is_empty() { conditions.push(format!("wt.status = '{}'",   status.replace('\'', "''"))); }
+    let where_clause = if conditions.is_empty() { String::new() } else { format!("WHERE {}", conditions.join(" AND ")) };
+
+    let sql = format!(
+        r#"SELECT wt.id, wt.txn_type, wt.amount_cents, wt.balance_after, wt.status,
+                  wt.note, wt.admin_note, wt.created_at::TEXT AS created_at,
+                  u.username, u.email,
+                  u2.username AS ref_username
+           FROM wallet_transactions wt
+           JOIN users u  ON u.id  = wt.user_id
+           LEFT JOIN users u2 ON u2.id = wt.ref_user_id
+           {where_clause}
+           ORDER BY wt.created_at DESC
+           LIMIT {limit}"#
+    );
+
+    let rows = sqlx::query(&sql).fetch_all(&st.pool).await.unwrap_or_default();
+
+    let items: Vec<serde_json::Value> = rows.iter().map(|r| {
+        json!({
+            "id":            r.try_get::<i64,            _>("id").unwrap_or(0),
+            "txn_type":      r.try_get::<String,         _>("txn_type").unwrap_or_default(),
+            "amount_cents":  r.try_get::<i64,            _>("amount_cents").unwrap_or(0),
+            "balance_after": r.try_get::<i64,            _>("balance_after").unwrap_or(0),
+            "status":        r.try_get::<String,         _>("status").unwrap_or_default(),
+            "note":          r.try_get::<Option<String>, _>("note").unwrap_or(None),
+            "admin_note":    r.try_get::<Option<String>, _>("admin_note").unwrap_or(None),
+            "created_at":    r.try_get::<Option<String>, _>("created_at").unwrap_or(None),
+            "username":      r.try_get::<String,         _>("username").unwrap_or_default(),
+            "email":         r.try_get::<String,         _>("email").unwrap_or_default(),
+            "ref_username":  r.try_get::<Option<String>, _>("ref_username").unwrap_or(None),
+        })
+    }).collect();
+
+    let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM wallet_transactions")
+        .fetch_one(&st.pool).await.unwrap_or(0);
+    let total_pending: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM wallet_transactions WHERE status='pending'")
+        .fetch_one(&st.pool).await.unwrap_or(0);
+
+    Json(json!({
+        "ok": true,
+        "totals": { "all": total, "pending": total_pending },
+        "items": items
+    }))
+}
+
+// ---------------------------------------------------------------------------
+// Wallet admin — POST /admin/wallet/transactions/:id/approve
+// Approve a deposit → credit user balance. Reject a withdrawal → refund.
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+pub struct WalletActionPayload {
+    pub admin_note: Option<String>,
+}
+
+pub async fn admin_wallet_approve(
+    State(st):    State<AdminState>,
+    Path(txn_id): Path<i64>,
+    Json(p):      Json<WalletActionPayload>,
+) -> impl IntoResponse {
+    let mut tx = match st.pool.begin().await {
+        Ok(t)  => t,
+        Err(e) => return Json(json!({"ok": false, "error": format!("db: {e}")})),
+    };
+
+    let row = sqlx::query(
+        "SELECT user_id, txn_type, amount_cents, status FROM wallet_transactions WHERE id = $1 FOR UPDATE"
+    )
+    .bind(txn_id)
+    .fetch_optional(&mut *tx)
+    .await;
+
+    let row = match row {
+        Ok(Some(r)) => r,
+        Ok(None)    => { let _ = tx.rollback().await; return Json(json!({"ok": false, "error": "transaction not found"})); }
+        Err(e)      => { let _ = tx.rollback().await; return Json(json!({"ok": false, "error": format!("db: {e}")})); }
+    };
+
+    let status:       String = row.try_get("status").unwrap_or_default();
+    let txn_type:     String = row.try_get("txn_type").unwrap_or_default();
+    let user_id:      String = row.try_get("user_id").unwrap_or_default();
+    let amount_cents: i64    = row.try_get("amount_cents").unwrap_or(0);
+
+    if status != "pending" {
+        let _ = tx.rollback().await;
+        return Json(json!({"ok": false, "error": format!("cannot approve: status is '{status}'")}));
+    }
+    if txn_type != "deposit" {
+        let _ = tx.rollback().await;
+        return Json(json!({"ok": false, "error": "only deposits can be approved via this endpoint"}));
+    }
+
+    let new_bal: i64 = match sqlx::query_scalar(
+        "UPDATE users SET balance_cents = balance_cents + $1 WHERE id = $2 RETURNING balance_cents"
+    )
+    .bind(amount_cents).bind(&user_id)
+    .fetch_one(&mut *tx).await
+    {
+        Ok(b) => b,
+        Err(e) => { let _ = tx.rollback().await; return Json(json!({"ok": false, "error": format!("db credit: {e}")})); }
+    };
+
+    if let Err(e) = sqlx::query(
+        "UPDATE wallet_transactions SET status='approved', balance_after=$1, admin_note=$2, updated_at=now() WHERE id=$3"
+    )
+    .bind(new_bal).bind(p.admin_note.as_deref()).bind(txn_id)
+    .execute(&mut *tx).await
+    {
+        let _ = tx.rollback().await;
+        return Json(json!({"ok": false, "error": format!("db update: {e}")}));
+    }
+
+    match tx.commit().await {
+        Ok(_)  => Json(json!({"ok": true, "new_balance_cents": new_bal})),
+        Err(e) => Json(json!({"ok": false, "error": format!("commit: {e}")})),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Wallet admin — POST /admin/wallet/transactions/:id/complete
+// ---------------------------------------------------------------------------
+
+pub async fn admin_wallet_complete(
+    State(st):    State<AdminState>,
+    Path(txn_id): Path<i64>,
+    Json(p):      Json<WalletActionPayload>,
+) -> impl IntoResponse {
+    let row = sqlx::query(
+        "SELECT txn_type, status FROM wallet_transactions WHERE id = $1"
+    )
+    .bind(txn_id)
+    .fetch_optional(&st.pool)
+    .await;
+
+    let row = match row {
+        Ok(Some(r)) => r,
+        Ok(None)    => return Json(json!({"ok": false, "error": "transaction not found"})),
+        Err(e)      => return Json(json!({"ok": false, "error": format!("db: {e}")})),
+    };
+
+    let status:   String = row.try_get("status").unwrap_or_default();
+    let txn_type: String = row.try_get("txn_type").unwrap_or_default();
+
+    if status != "pending" {
+        return Json(json!({"ok": false, "error": format!("status is '{status}', not pending")}));
+    }
+    if txn_type != "withdrawal" {
+        return Json(json!({"ok": false, "error": "only withdrawals can be completed via this endpoint"}));
+    }
+
+    match sqlx::query(
+        "UPDATE wallet_transactions SET status='completed', admin_note=$1, updated_at=now() WHERE id=$2"
+    )
+    .bind(p.admin_note.as_deref()).bind(txn_id)
+    .execute(&st.pool).await
+    {
+        Ok(_)  => Json(json!({"ok": true})),
+        Err(e) => Json(json!({"ok": false, "error": format!("db: {e}")})),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Wallet admin — POST /admin/wallet/transactions/:id/reject
+// ---------------------------------------------------------------------------
+
+pub async fn admin_wallet_reject(
+    State(st):    State<AdminState>,
+    Path(txn_id): Path<i64>,
+    Json(p):      Json<WalletActionPayload>,
+) -> impl IntoResponse {
+    let mut tx = match st.pool.begin().await {
+        Ok(t)  => t,
+        Err(e) => return Json(json!({"ok": false, "error": format!("db: {e}")})),
+    };
+
+    let row = sqlx::query(
+        "SELECT user_id, txn_type, amount_cents, status FROM wallet_transactions WHERE id = $1 FOR UPDATE"
+    )
+    .bind(txn_id)
+    .fetch_optional(&mut *tx)
+    .await;
+
+    let row = match row {
+        Ok(Some(r)) => r,
+        Ok(None)    => { let _ = tx.rollback().await; return Json(json!({"ok": false, "error": "transaction not found"})); }
+        Err(e)      => { let _ = tx.rollback().await; return Json(json!({"ok": false, "error": format!("db: {e}")})); }
+    };
+
+    let status:       String = row.try_get("status").unwrap_or_default();
+    let txn_type:     String = row.try_get("txn_type").unwrap_or_default();
+    let user_id:      String = row.try_get("user_id").unwrap_or_default();
+    let amount_cents: i64    = row.try_get("amount_cents").unwrap_or(0);
+
+    if status != "pending" {
+        let _ = tx.rollback().await;
+        return Json(json!({"ok": false, "error": format!("status is '{status}', cannot reject")}));
+    }
+
+    let is_withdrawal = txn_type == "withdrawal";
+
+    if is_withdrawal {
+        if let Err(e) = sqlx::query(
+            "UPDATE users SET balance_cents = balance_cents + $1 WHERE id = $2"
+        )
+        .bind(amount_cents).bind(&user_id)
+        .execute(&mut *tx).await
+        {
+            let _ = tx.rollback().await;
+            return Json(json!({"ok": false, "error": format!("db refund: {e}")}));
+        }
+    }
+
+    if let Err(e) = sqlx::query(
+        "UPDATE wallet_transactions SET status='rejected', admin_note=$1, updated_at=now() WHERE id=$2"
+    )
+    .bind(p.admin_note.as_deref()).bind(txn_id)
+    .execute(&mut *tx).await
+    {
+        let _ = tx.rollback().await;
+        return Json(json!({"ok": false, "error": format!("db: {e}")}));
+    }
+
+    match tx.commit().await {
+        Ok(_)  => Json(json!({"ok": true, "refunded": is_withdrawal})),
+        Err(e) => Json(json!({"ok": false, "error": format!("commit: {e}")})),
+    }
+}

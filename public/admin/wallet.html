@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin Wallet – PPV Stream</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:system-ui,-apple-system,sans-serif;background:#0a0a14;color:#e8e8e8;min-height:100vh}
+    a{color:#a78bfa;text-decoration:none}a:hover{text-decoration:underline}
+
+    header{background:#12102a;border-bottom:1px solid #2a2a4a;padding:14px 24px;display:flex;align-items:center;gap:16px}
+    header h1{font-size:1.05rem;font-weight:600;color:#f472b6}
+    header nav{margin-left:auto;display:flex;gap:16px;font-size:.9rem}
+
+    .container{max-width:1200px;margin:28px auto;padding:0 16px}
+
+    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:26px}
+    .stat{background:#16162a;border:1px solid #2a2a4a;border-radius:10px;padding:16px 20px}
+    .stat .v{font-size:1.6rem;font-weight:700;color:#e0e7ff}
+    .stat .l{font-size:.78rem;color:#818cf8;margin-top:4px;text-transform:uppercase;letter-spacing:.06em}
+
+    .filters{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:18px;align-items:center}
+    .filters select,.filters input{background:#16162a;border:1px solid #374151;color:#e8e8e8;border-radius:7px;padding:8px 12px;font-size:.85rem}
+    .btn{display:inline-flex;align-items:center;padding:8px 16px;border-radius:7px;font-size:.85rem;font-weight:600;cursor:pointer;border:none;transition:opacity .15s}
+    .btn:hover{opacity:.82}
+    .btn-indigo{background:#6366f1;color:#fff}
+    .btn-green{background:#059669;color:#fff}
+    .btn-amber{background:#d97706;color:#000}
+    .btn-red{background:#dc2626;color:#fff}
+    .btn-sm{padding:5px 12px;font-size:.78rem}
+
+    table{width:100%;border-collapse:collapse;font-size:.81rem}
+    thead th{background:#12102a;color:#818cf8;text-align:left;padding:10px 12px;border-bottom:1px solid #2a2a4a;font-weight:500;text-transform:uppercase;font-size:.72rem;letter-spacing:.05em;white-space:nowrap}
+    tbody tr:hover{background:rgba(99,102,241,.05)}
+    td{padding:9px 12px;border-bottom:1px solid #1a1a2e;vertical-align:middle}
+    .mono{font-family:ui-monospace,monospace}
+
+    .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:.7rem;font-weight:700;text-transform:uppercase}
+    .b-yellow{background:#451a03;color:#fcd34d}
+    .b-green{background:#064e3b;color:#6ee7b7}
+    .b-red{background:#450a0a;color:#fca5a5}
+    .b-blue{background:#1e3a5f;color:#93c5fd}
+
+    .type-deposit{color:#34d399}
+    .type-withdrawal{color:#f87171}
+    .type-transfer_in{color:#60a5fa}
+    .type-transfer_out{color:#fb923c}
+
+    .card{background:#16162a;border:1px solid #2a2a4a;border-radius:12px;padding:22px;margin-bottom:24px}
+    .card-title{font-size:.82rem;text-transform:uppercase;letter-spacing:.07em;color:#6366f1;margin-bottom:16px;font-weight:600}
+
+    .action-row{display:flex;gap:8px;flex-wrap:wrap}
+
+    /* Modal */
+    .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:100;display:none}
+    .modal-bg.open{display:flex}
+    .modal{background:#1a1a2e;border:1px solid #374151;border-radius:14px;padding:28px;width:100%;max-width:420px}
+    .modal h3{margin-bottom:16px;font-size:1rem;color:#e0e7ff}
+    .modal label{display:block;font-size:.8rem;color:#9ca3af;margin-bottom:4px;margin-top:12px}
+    .modal input,.modal textarea{width:100%;background:#0a0a14;border:1px solid #374151;color:#e8e8e8;border-radius:7px;padding:9px 12px;font-size:.88rem}
+    .modal textarea{resize:vertical;min-height:70px}
+    .modal .btns{display:flex;gap:10px;margin-top:18px;justify-content:flex-end}
+    .msg{border-radius:7px;padding:9px 13px;font-size:.83rem;margin-top:10px;display:none}
+    .msg.ok{background:#064e3b;color:#6ee7b7;border:1px solid #065f46}
+    .msg.err{background:#450a0a;color:#fca5a5;border:1px solid #7f1d1d}
+    .msg.show{display:block}
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>PPV Stream Admin &rsaquo; Wallet</h1>
+  <nav>
+    <a href="/admin/data">Users & Data</a>
+    <a href="/admin/payments">Fiat Payments</a>
+    <a href="#" onclick="doLogout()">Logout</a>
+  </nav>
+</header>
+
+<div class="container">
+
+  <!-- Stats -->
+  <div class="stats" id="stats">
+    <div class="stat"><div class="v" id="statAll">—</div><div class="l">Total Transactions</div></div>
+    <div class="stat"><div class="v" id="statPending">—</div><div class="l">Pending</div></div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters">
+    <select id="filterType" onchange="loadTxns()">
+      <option value="">All Types</option>
+      <option value="deposit">Deposit</option>
+      <option value="withdrawal">Withdrawal</option>
+      <option value="transfer_in">Transfer In</option>
+      <option value="transfer_out">Transfer Out</option>
+    </select>
+    <select id="filterStatus" onchange="loadTxns()">
+      <option value="">All Statuses</option>
+      <option value="pending">Pending</option>
+      <option value="approved">Approved</option>
+      <option value="completed">Completed</option>
+      <option value="rejected">Rejected</option>
+    </select>
+    <input type="number" id="filterLimit" value="100" min="10" max="1000" style="width:90px" onchange="loadTxns()">
+    <button class="btn btn-indigo" onclick="loadTxns()">Refresh</button>
+  </div>
+
+  <!-- Table -->
+  <div class="card">
+    <p class="card-title">Wallet Transactions</p>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>User</th>
+            <th>Type</th>
+            <th>Amount</th>
+            <th>Bal. After</th>
+            <th>Status</th>
+            <th>Counterparty</th>
+            <th>Note</th>
+            <th>Date</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="txnBody">
+          <tr><td colspan="10" style="text-align:center;color:#6b7280;padding:28px">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- Action Modal -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3 id="modalTitle">Action</h3>
+    <label>Admin Note (optional)</label>
+    <textarea id="modalNote" placeholder="Reason, reference number, etc."></textarea>
+    <div class="msg" id="modalMsg"></div>
+    <div class="btns">
+      <button class="btn btn-red" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-green" id="modalConfirmBtn">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+let pendingAction = null;  // {txnId, action}
+
+function cents(n) {
+  const v = parseInt(n)||0;
+  return `$${Math.floor(v/100)}.${String(Math.abs(v)%100).padStart(2,'0')}`;
+}
+
+function typeBadge(t) {
+  const map = {
+    deposit:      '<span class="type-deposit">↓ Deposit</span>',
+    withdrawal:   '<span class="type-withdrawal">↑ Withdrawal</span>',
+    transfer_in:  '<span class="type-transfer_in">⇐ In</span>',
+    transfer_out: '<span class="type-transfer_out">⇒ Out</span>',
+  };
+  return map[t] || t;
+}
+
+function statusBadge(s) {
+  const map = {pending:'b-yellow',approved:'b-green',completed:'b-green',rejected:'b-red'};
+  return `<span class="badge ${map[s]||'b-blue'}">${s}</span>`;
+}
+
+function actionButtons(t) {
+  if (t.status !== 'pending') return '—';
+  const btns = [];
+  if (t.txn_type === 'deposit') {
+    btns.push(`<button class="btn btn-green btn-sm" onclick="openModal(${t.id},'approve')">Approve</button>`);
+    btns.push(`<button class="btn btn-red btn-sm" onclick="openModal(${t.id},'reject')">Reject</button>`);
+  } else if (t.txn_type === 'withdrawal') {
+    btns.push(`<button class="btn btn-amber btn-sm" onclick="openModal(${t.id},'complete')">Mark Paid</button>`);
+    btns.push(`<button class="btn btn-red btn-sm" onclick="openModal(${t.id},'reject')">Reject & Refund</button>`);
+  }
+  return `<div class="action-row">${btns.join('')}</div>`;
+}
+
+async function loadTxns() {
+  const type   = $('filterType').value;
+  const status = $('filterStatus').value;
+  const limit  = $('filterLimit').value || 100;
+  const params = new URLSearchParams();
+  if (type)   params.set('txn_type', type);
+  if (status) params.set('status', status);
+  params.set('limit', limit);
+
+  const r = await fetch(`/admin/wallet/transactions?${params}`).then(x=>x.json()).catch(()=>({ok:false}));
+  if (!r.ok) {
+    $('txnBody').innerHTML = `<tr><td colspan="10" style="text-align:center;color:#f87171;padding:28px">Failed to load. Are you logged in as admin?</td></tr>`;
+    return;
+  }
+
+  $('statAll').textContent    = r.totals?.all     ?? '—';
+  $('statPending').textContent = r.totals?.pending ?? '—';
+
+  if (!r.items?.length) {
+    $('txnBody').innerHTML = `<tr><td colspan="10" style="text-align:center;color:#6b7280;padding:28px">No transactions found.</td></tr>`;
+    return;
+  }
+
+  $('txnBody').innerHTML = r.items.map(t => `
+    <tr>
+      <td class="mono">${t.id}</td>
+      <td><strong>${t.username}</strong><br><span style="color:#6b7280;font-size:.75rem">${t.email}</span></td>
+      <td>${typeBadge(t.txn_type)}</td>
+      <td class="mono">${cents(t.amount_cents)}</td>
+      <td class="mono">${cents(t.balance_after)}</td>
+      <td>${statusBadge(t.status)}</td>
+      <td>${t.ref_username ? `@${t.ref_username}` : '—'}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.note||''}">${t.note||'—'}</td>
+      <td class="mono" style="white-space:nowrap">${(t.created_at||'').slice(0,16).replace('T',' ')}</td>
+      <td>${actionButtons(t)}</td>
+    </tr>
+  `).join('');
+}
+
+function openModal(txnId, action) {
+  pendingAction = {txnId, action};
+  const labels = {approve:'Approve Deposit', complete:'Mark Withdrawal Paid', reject:'Reject & Refund'};
+  $('modalTitle').textContent = labels[action] || action;
+  $('modalNote').value = '';
+  $('modalMsg').className = 'msg';
+  $('modalBg').classList.add('open');
+}
+
+function closeModal() {
+  $('modalBg').classList.remove('open');
+  pendingAction = null;
+}
+
+$('modalConfirmBtn').addEventListener('click', async () => {
+  if (!pendingAction) return;
+  const {txnId, action} = pendingAction;
+  const note = $('modalNote').value.trim();
+
+  const r = await fetch(`/admin/wallet/transactions/${txnId}/${action}`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({admin_note: note || null})
+  }).then(x=>x.json()).catch(()=>({ok:false, error:'network error'}));
+
+  const msgEl = $('modalMsg');
+  msgEl.className = `msg show ${r.ok ? 'ok' : 'err'}`;
+  msgEl.textContent = r.ok ? 'Done!' : (r.error || 'Failed');
+
+  if (r.ok) {
+    setTimeout(() => { closeModal(); loadTxns(); }, 800);
+  }
+});
+
+// Close modal on background click
+$('modalBg').addEventListener('click', e => { if (e.target === $('modalBg')) closeModal(); });
+
+async function doLogout() {
+  await fetch('/admin/logout', {method:'POST'});
+  location.href = '/public/admin/login.html';
+}
+
+loadTxns();
+</script>
+</body>
+</html>
