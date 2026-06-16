@@ -583,7 +583,7 @@ pub async fn x402_confirm(
         return Json(json!({"ok": false, "error": "invoice not found"}));
     };
 
-    if invoice.status.as_deref() == Some("paid") {
+    if invoice.status == "paid" {
         let same_tx = invoice
             .tx_hash
             .as_deref()

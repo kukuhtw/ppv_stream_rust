@@ -384,7 +384,7 @@ pub async fn change_password(
 
     // Send notification email (fire-and-forget)
     let pool_clone = st.pool.clone();
-    let email_addr = row.email.clone().unwrap_or_default();
+    let email_addr = row.email.clone();
     let username = row.username.clone();
     tokio::spawn(async move {
         email::send_password_changed(&pool_clone, &email_addr, &username).await;

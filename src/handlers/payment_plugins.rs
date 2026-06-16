@@ -153,11 +153,7 @@ async fn create_invoice_with_provider(
     .await;
 
     let (video_title, creator_id, video_price_cents) = match video_row {
-        Ok(Some(r)) => (
-            r.title.unwrap_or_else(|| "Video".into()),
-            r.creator_id,
-            r.price_cents.unwrap_or(0),
-        ),
+        Ok(Some(r)) => (r.title, r.creator_id, r.price_cents),
         Ok(None) => return Json(json!({"ok": false, "error": "video not found"})),
         Err(e) => return Json(json!({"ok": false, "error": format!("db error: {e}")})),
     };
@@ -283,7 +279,7 @@ pub async fn confirm_payment(
 }
 
 async fn confirm_payment_with_provider(
-    state: PaymentPluginState,
+    _state: PaymentPluginState,
     registry: PaymentPluginRegistry,
     provider: String,
     payload: ConfirmPaymentPayload,
@@ -469,7 +465,7 @@ pub async fn handle_webhook(
             inv.amount,
             ref_username,
             &provider,
-            Some(invoice_uid),
+            Some(invoice_uid.as_str()),
         )
         .await
         {

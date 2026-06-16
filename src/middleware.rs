@@ -5,7 +5,7 @@ use std::{
 };
 
 use axum::{
-    extract::Request,
+    extract::{Request, State},
     http::{
         header::{CACHE_CONTROL, ORIGIN, REFERER},
         HeaderValue, Method, StatusCode, Uri,
@@ -27,7 +27,7 @@ const RATE_LIMIT_WINDOW: Duration = Duration::from_secs(300);
 const RATE_LIMIT_MAX_ATTEMPTS: usize = 20;
 
 pub async fn browser_csrf_guard(
-    cfg: Config,
+    State(cfg): State<Config>,
     req: Request,
     next: Next,
 ) -> Result<Response, Response> {
@@ -64,7 +64,11 @@ pub async fn browser_csrf_guard(
     Ok(next.run(req).await)
 }
 
-pub async fn basic_rate_limit(cfg: Config, req: Request, next: Next) -> Result<Response, Response> {
+pub async fn basic_rate_limit(
+    State(cfg): State<Config>,
+    req: Request,
+    next: Next,
+) -> Result<Response, Response> {
     // Apply a narrow rate limit only to high-risk POST routes such as login,
     // registration, and password changes. This keeps the behavior predictable
     // while reducing brute-force and credential-stuffing pressure.

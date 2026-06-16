@@ -174,7 +174,7 @@ pub async fn request_play(
         user_id,
         video.id,
         session_dir_string,
-        PLAYBACK_SESSION_TTL_SECONDS
+        PLAYBACK_SESSION_TTL_SECONDS as f64
     )
     .execute(&st.pool)
     .await
