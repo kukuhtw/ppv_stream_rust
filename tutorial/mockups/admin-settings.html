@@ -1,0 +1,188 @@
+<!-- MOCKUP: Admin Settings (SMTP + Admin Password) — static replica -->
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>[MOCKUP] Admin — Pengaturan SMTP</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    .mockup-banner{background:#4a0000;color:#fca5a5;font-size:.8rem;text-align:center;padding:6px}
+    .ann{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#dc2626;color:#fff;font-size:.68rem;font-weight:700;vertical-align:middle;margin-left:4px}
+  </style>
+</head>
+<body class="bg-light">
+<div class="mockup-banner">🔍 STATIC MOCKUP (ADMIN) — tidak ada data nyata / no live data</div>
+
+<nav class="navbar navbar-expand-md navbar-dark bg-danger shadow-sm">
+  <div class="container-fluid">
+    <a class="navbar-brand fw-bold" href="#">Admin Panel</a>
+    <div class="collapse navbar-collapse show">
+      <ul class="navbar-nav ms-auto">
+        <li class="nav-item"><a class="nav-link text-white" href="#">Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link text-white" href="#">Pembayaran</a></li>
+        <li class="nav-item"><a class="nav-link text-white active fw-bold" href="#">Pengaturan</a></li>
+        <li class="nav-item"><a class="nav-link text-white" href="#">Raw Data</a></li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<div class="container py-4" style="max-width:680px">
+  <h4 class="mb-4">Pengaturan Email (SMTP)</h4>
+
+  <!-- Success alert example -->
+  <div class="alert alert-success alert-dismissible mb-3 small">
+    Pengaturan berhasil disimpan. Test email dikirim ke <strong>admin@example.com</strong>
+    <button type="button" class="btn-close"></button>
+  </div>
+
+  <!-- SMTP Form -->
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <form>
+        <div class="row g-3">
+
+          <!-- Enable toggle -->
+          <div class="col-12">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="smtpEnabled" checked>
+              <label class="form-check-label fw-semibold" for="smtpEnabled">
+                Aktifkan pengiriman email <span class="ann" title="If OFF, emails only logged to server console — nothing sent to users">1</span>
+              </label>
+            </div>
+            <div class="form-text">Jika dimatikan, email hanya dicatat di log server.</div>
+          </div>
+
+          <!-- Host + Port -->
+          <div class="col-md-8">
+            <label class="form-label">SMTP Host <span class="text-danger">*</span> <span class="ann" title="Mail server address — e.g. smtp.gmail.com">2</span></label>
+            <input type="text" class="form-control" value="smtp.gmail.com">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Port</label>
+            <input type="number" class="form-control" value="587">
+          </div>
+
+          <!-- Username + Password -->
+          <div class="col-md-6">
+            <label class="form-label">Username / Email <span class="ann" title="Your email or SMTP login, e.g. noreply@yourdomain.com">3</span></label>
+            <input type="text" class="form-control" value="noreply@ppvstream.io">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Password / App Password <span class="ann" title="For Gmail, use App Password (not your account password)">4</span></label>
+            <div class="input-group">
+              <input type="password" class="form-control" value="••••••••••••••••">
+              <button class="btn btn-outline-secondary" type="button">Lihat</button>
+            </div>
+          </div>
+
+          <!-- From email + name -->
+          <div class="col-md-8">
+            <label class="form-label">From Email <span class="text-danger">*</span></label>
+            <input type="email" class="form-control" value="noreply@ppvstream.io">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">From Name</label>
+            <input type="text" class="form-control" value="PPV Stream">
+          </div>
+
+          <!-- TLS toggle -->
+          <div class="col-12">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="smtpTls">
+              <label class="form-check-label" for="smtpTls">
+                Gunakan TLS (port 465) — matikan jika pakai STARTTLS (port 587) <span class="ann" title="Gmail port 587 = STARTTLS, leave TLS OFF. Port 465 = TLS, turn it ON.">5</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Test email -->
+          <div class="col-12 border-top pt-3">
+            <label class="form-label fw-semibold">Test Email <span class="ann" title="Saves settings then sends a real test email to verify configuration">6</span></label>
+            <div class="input-group">
+              <input type="email" class="form-control" value="admin@example.com" placeholder="Kirim test email ke alamat ini">
+              <button class="btn btn-outline-info" type="button">Kirim Test</button>
+            </div>
+            <div class="form-text">Menggunakan konfigurasi di atas, disimpan dulu sebelum kirim.</div>
+          </div>
+
+        </div>
+
+        <div class="mt-4 d-flex gap-2">
+          <button type="button" class="btn btn-danger px-4">Simpan Pengaturan</button>
+          <button type="button" class="btn btn-outline-secondary">Reset</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Admin Password Change -->
+  <div class="card mt-4 shadow-sm">
+    <div class="card-header fw-semibold">Ganti Password Admin <span class="ann" title="Updates users.password_hash in DB. The .env file is never changed.">7</span></div>
+    <div class="card-body">
+      <form>
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label">Password Sekarang <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input type="password" class="form-control" placeholder="Password saat ini" value="••••••••">
+              <button class="btn btn-outline-secondary" type="button">Lihat</button>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Password Baru <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input type="password" class="form-control" placeholder="Min. 8 karakter">
+              <button class="btn btn-outline-secondary" type="button">Lihat</button>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Konfirmasi Password Baru <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input type="password" class="form-control" placeholder="Ulangi password baru">
+              <button class="btn btn-outline-secondary" type="button">Lihat</button>
+            </div>
+          </div>
+        </div>
+        <div class="mt-3">
+          <button type="button" class="btn btn-warning px-4">Ubah Password</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- SMTP Guide -->
+  <div class="card mt-4 shadow-sm">
+    <div class="card-header fw-semibold small">Panduan Konfigurasi <span class="ann" title="Read-only reference guide for common SMTP providers">8</span></div>
+    <div class="card-body small text-muted">
+      <dl class="row mb-0">
+        <dt class="col-sm-4">Gmail</dt>
+        <dd class="col-sm-8">Host: <code>smtp.gmail.com</code>, Port: <code>587</code>, gunakan App Password (bukan password akun). Matikan TLS, gunakan STARTTLS.</dd>
+        <dt class="col-sm-4">Mailgun</dt>
+        <dd class="col-sm-8">Host: <code>smtp.mailgun.org</code>, Port: <code>587</code>, Username: alamat email Mailgun, Password: SMTP password dari dashboard.</dd>
+        <dt class="col-sm-4">Mailtrap (dev)</dt>
+        <dd class="col-sm-8">Host: <code>sandbox.smtp.mailtrap.io</code>, Port: <code>587</code>. Cocok untuk testing tanpa kirim email asli.</dd>
+        <dt class="col-sm-4">Brevo / Sendinblue</dt>
+        <dd class="col-sm-8">Host: <code>smtp-relay.brevo.com</code>, Port: <code>587</code>.</dd>
+      </dl>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="alert alert-light border mt-4">
+    <strong>Callout legend:</strong>
+    <span class="ann">1</span> Email enable/disable &nbsp;
+    <span class="ann">2</span> SMTP server host &nbsp;
+    <span class="ann">3</span> SMTP username &nbsp;
+    <span class="ann">4</span> App password &nbsp;
+    <span class="ann">5</span> TLS vs STARTTLS &nbsp;
+    <span class="ann">6</span> Send test email &nbsp;
+    <span class="ann">7</span> Admin password change &nbsp;
+    <span class="ann">8</span> Provider config guide
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
