@@ -43,6 +43,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 # 4) Copy aset yang relatif stabil (jarang berubah)
 COPY public ./public
 COPY sql    ./sql
+COPY migrations ./migrations
 
 # 5) Copy source asli (ini yang sering berubah)
 COPY src ./src
@@ -82,6 +83,7 @@ COPY --from=builder /tmp/ppv_stream /usr/local/bin/ppv_stream
 COPY --from=builder /tmp/seed_dummy /usr/local/bin/seed_dummy
 COPY public /app/public
 COPY sql    /app/sql
+COPY migrations /app/migrations
 
 # ===== Direktori default untuk upload & HLS =====
 RUN mkdir -p /tmp/hls /data && \
