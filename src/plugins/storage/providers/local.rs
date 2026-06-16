@@ -19,6 +19,7 @@ use crate::plugins::storage::traits::StoragePlugin;
 
 pub struct LocalStoragePlugin {
     base_path: String,
+    #[allow(dead_code)]
     base_url: String,
 }
 

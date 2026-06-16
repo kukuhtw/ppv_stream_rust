@@ -29,6 +29,7 @@ impl PaymentPluginRegistry {
         }
     }
 
+    #[allow(dead_code)]
     pub fn from_env() -> Self {
         Self::from_env_with_pool(None)
     }
@@ -129,6 +130,7 @@ impl PaymentPluginRegistry {
         self.plugins.get(&provider.to_ascii_lowercase()).cloned()
     }
 
+    #[allow(dead_code)]
     pub fn default(&self) -> Option<Arc<dyn PaymentPlugin>> {
         self.default_provider
             .as_deref()

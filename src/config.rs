@@ -40,6 +40,7 @@ pub struct Config {
 
     // ===== X402 =====
     pub x402_contract: String,
+    #[allow(dead_code)]
     pub x402_admin_wallet: String,
     pub x402_rpc_wss: String,    // untuk watcher (WebSocket RPC)
     pub x402_chain_id: u64,      // chain default (mis: 137)

@@ -154,6 +154,7 @@ fn render_template(template: &str, values: &[(&str, &str)]) -> String {
 // ---------------------------------------------------------------------------
 
 /// Send a password reset link for the forgot-password flow.
+#[allow(dead_code)]
 pub async fn send_reset(pool: &PgPool, to_email: &str, token: &str, base_url: &str) {
     let cfg = SmtpConfig::load(pool).await;
     let reset_url = format!("{base_url}/public/auth/reset_password.html?token={token}");

@@ -33,6 +33,7 @@ pub struct S3StoragePlugin {
     bucket: String,
     region: String,
     endpoint: String,
+    #[allow(dead_code)]
     public_url: Option<String>,
 }
 

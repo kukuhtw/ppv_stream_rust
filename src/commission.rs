@@ -19,6 +19,7 @@ use sqlx::Row;
 /// Returns `Ok(commission_cents)` when the commission was paid, `Ok(0)` when
 /// skipped (affiliate disabled, missing, or invalid), and `Err` only for
 /// unexpected database failures.
+#[allow(clippy::too_many_arguments)]
 pub async fn process_affiliate_commission(
     pool: &PgPool,
     video_id: &str,

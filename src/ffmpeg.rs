@@ -67,10 +67,12 @@ pub async fn run_ffmpeg(args: &[String], work_dir: &str) -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 pub async fn transcode_hls(_input_path: &str, session_dir: &str, args: Vec<String>) -> Result<()> {
     run_ffmpeg(&args, session_dir).await
 }
 
+#[allow(dead_code)]
 pub async fn faststart_mp4(input: &str, output: &str) -> Result<()> {
     let work_dir = Path::new(output)
         .parent()
@@ -103,6 +105,7 @@ pub async fn faststart_mp4(input: &str, output: &str) -> Result<()> {
     run_ffmpeg(&args, &work_dir).await
 }
 
+#[allow(dead_code)]
 pub async fn ffprobe_duration(input: &str) -> Option<f64> {
     let mut cmd = Command::new("ffprobe");
     cmd.args([
@@ -133,6 +136,7 @@ pub async fn ffprobe_duration(input: &str) -> Option<f64> {
     }
 }
 
+#[allow(dead_code)]
 pub async fn ffprobe_dimensions(input: &str) -> Option<(u32, u32)> {
     let mut cmd = Command::new("ffprobe");
     cmd.args([
@@ -168,6 +172,7 @@ pub async fn ffprobe_dimensions(input: &str) -> Option<(u32, u32)> {
     }
 }
 
+#[allow(dead_code)]
 pub async fn ffprobe_has_audio(input: &str) -> bool {
     let mut cmd = Command::new("ffprobe");
     cmd.args([
@@ -199,6 +204,7 @@ pub async fn ffprobe_has_audio(input: &str) -> bool {
     }
 }
 
+#[allow(dead_code)]
 pub async fn encode_hls_abr(
     input_mp4: &str,
     out_dir: &str,
@@ -265,9 +271,9 @@ pub async fn encode_hls_abr(
         "1:a:0".to_string()
     };
 
-    for i in 0..n {
+    for vout in vouts.iter().take(n) {
         args.push("-map".into());
-        args.push(vouts[i].clone());
+        args.push(vout.clone());
         args.push("-map".into());
         args.push(audio_map_src.clone());
     }

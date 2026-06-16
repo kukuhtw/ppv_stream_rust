@@ -163,10 +163,12 @@ pub async fn post_logout(State(st): State<AuthUserState>, cookies: Cookies) -> i
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 pub struct ForgotForm {
     pub email: String,
 }
 
+#[allow(dead_code)]
 pub async fn post_forgot(
     State(st): State<AuthUserState>,
     Form(f): Form<ForgotForm>,
@@ -214,11 +216,13 @@ pub async fn post_forgot(
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 pub struct ResetForm {
     pub token: String,
     pub password: String,
 }
 
+#[allow(dead_code)]
 pub async fn post_reset(
     State(st): State<AuthUserState>,
     Form(f): Form<ResetForm>,

@@ -25,10 +25,12 @@ pub trait StoragePlugin: Send + Sync {
 
     /// Return a URL for serving `key` — a presigned URL, a public CDN URL,
     /// or a local HTTP path, depending on the backend configuration.
+    #[allow(dead_code)]
     async fn get_url(&self, key: &str) -> String;
 
     /// Download `key` from the backend and write it to `dest` on the local
     /// filesystem (used to fetch originals for FFmpeg re-processing).
+    #[allow(dead_code)]
     async fn get_to_file(&self, key: &str, dest: &Path) -> Result<()>;
 
     /// Delete `key` from the backend.

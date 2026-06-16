@@ -1006,7 +1006,7 @@ pub async fn all_options(
         "wallet": {
             "available":       payment_settings.wallet_payment_enabled,
             "balance_cents":   wallet_balance,
-            "balance_display": wallet_balance.map(|b| cents_display(b)),
+            "balance_display": wallet_balance.map(cents_display),
             "can_afford":      wallet_balance.map(|b| payment_settings.wallet_payment_enabled && b >= price_cents && !is_owner),
         },
         "x402": {

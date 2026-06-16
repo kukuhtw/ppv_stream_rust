@@ -782,6 +782,7 @@ async fn update_storage_job_progress(
     .await;
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn insert_storage_migration_job_item(
     pool: &crate::db::PgPool,
     job_id: &str,

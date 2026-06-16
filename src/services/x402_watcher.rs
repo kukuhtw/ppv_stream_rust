@@ -56,7 +56,7 @@ async fn watch_once(pool: &PgPool, wss_url: &str, contract_addr: Address) -> Res
         match event {
             Ok(ev) => {
                 // Normalisasi hash: 0x + lowercase
-                let bytes: [u8; 32] = ev.invoice_uid.into(); // H256 -> [u8;32]
+                let bytes: [u8; 32] = ev.invoice_uid; // H256 -> [u8;32]
                 let invoice_hash = format!("0x{}", hex::encode(bytes));
                 let payer = format!("{:?}", ev.payer); // atau ev.payer.encode_hex::<String>()
                 let video_id = ev.video_id.clone();

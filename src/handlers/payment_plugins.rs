@@ -30,8 +30,10 @@ pub struct PaymentPluginState {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateInvoicePayload {
+    #[allow(dead_code)]
     pub user_id: String,
     pub video_id: String,
+    #[allow(dead_code)]
     pub amount_cents: i64,
     pub currency: String,
     pub buyer_email: Option<String>,

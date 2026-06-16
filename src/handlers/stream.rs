@@ -267,7 +267,7 @@ pub async fn request_play(
         "-b:a".into(),
         "128k".into(),
         "-threads".into(),
-        format!("{}", num_cpus::get().min(4).max(1)),
+        format!("{}", num_cpus::get().clamp(1, 4)),
         "-start_number".into(),
         "0".into(),
         "-hls_time".into(),
