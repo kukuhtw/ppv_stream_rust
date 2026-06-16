@@ -16,6 +16,29 @@ All three paths support **affiliate referral tracking** via `?ref=USERNAME` in t
 
 ---
 
+## Disbursement and Affiliate Settlement Matrix
+
+**Disbursement** means how the creator receives the creator share after a sale.
+
+**Affiliate settlement** means how the affiliate commission is paid when the buyer used a referral link.
+
+These two things happen in different layers:
+
+| Payment Path | Where buyer funds land first | How creator gets paid | Auto-disburse? | Admin action needed? | How affiliate gets paid |
+|---|---|---|---|---|---|
+| **Internal Wallet** | Platform wallet ledger | Creator balance is credited in `users.balance_cents` | Yes | No | Creator-funded transfer inside the internal wallet |
+| **x402** | Blockchain smart contract | Smart contract sends creator share directly to creator EVM wallet | Yes | No | Creator-funded transfer inside the internal wallet after confirmation |
+| **Stripe / PayPal / Midtrans** | Provider account / platform-controlled collection flow | Creator payout is done later outside the checkout flow | No | Yes, manual disburse | Creator-funded transfer inside the internal wallet after webhook confirmation |
+| **Xendit** | Xendit payment flow | Backend calls Xendit Disbursements API to creator bank account | Yes, if payout call succeeds | Usually no; retry possible from admin panel | Creator-funded transfer inside the internal wallet after webhook confirmation |
+
+Important:
+
+- buyer access is granted when payment is confirmed
+- creator disbursement may happen earlier, later, or on another rail
+- affiliate commission is always settled through the **platform wallet ledger**, even when the buyer paid with crypto or fiat
+
+---
+
 ## Payment Methods
 
 | Provider | Status | Currency | Auto-disburse |
@@ -66,6 +89,21 @@ POST /api/wallet/pay  { video_id, ref_code }
     ▼
 Buyer gets immediate access. Page reloads → video streams ✅
 ```
+
+### Disbursement for Wallet Purchases
+
+For wallet purchases, the creator share is settled immediately inside the platform ledger:
+
+1. buyer balance is debited
+2. creator balance is credited with `price × CREATOR_SPLIT_BP / 10000`
+3. platform keeps the remaining share by not crediting it to the creator
+4. if an affiliate referral exists, commission is deducted from the creator wallet balance and credited to the affiliate wallet balance
+
+So for wallet purchases:
+
+- creator payout is **instant**
+- affiliate payout is **instant**
+- there is **no manual disburse step**
 
 → Full wallet documentation: [WALLET.md](WALLET.md)
 
@@ -126,6 +164,31 @@ Backend  POST /api/pay/x402/confirm
 Buyer
     └─ Page reloads → video streams ✅
 ```
+
+---
+
+### Disbursement for x402 Purchases
+
+For x402 purchases, the creator share does **not** go through the platform wallet first.
+
+The smart contract splits the payment atomically:
+
+- creator share goes directly to the creator EVM wallet
+- admin share goes directly to `X402_ADMIN_WALLET`
+
+After that, the backend confirms the purchase and then handles affiliate logic separately:
+
+1. payment is verified on-chain
+2. access is granted
+3. backend reads `x402_invoices.affiliate_ref`
+4. backend tries to deduct commission from the creator's **internal platform wallet balance**
+5. backend credits the affiliate's **internal platform wallet balance**
+
+This means:
+
+- creator sale payout is **on-chain instant**
+- affiliate payout is **off-chain / internal-wallet settlement**
+- if the creator does not have enough internal wallet balance, affiliate commission can be skipped while the sale still succeeds
 
 ---
 
@@ -272,6 +335,52 @@ Provider sends webhook → POST /api/pay/:provider/webhook
 Buyer now has permanent access to the video ✅
 ```
 
+### Disbursement for Fiat Gateway Purchases
+
+For fiat gateways, buyer access and creator payout are separate steps.
+
+After webhook confirmation, the backend:
+
+1. marks the invoice as paid
+2. grants buyer access
+3. processes affiliate commission in the internal wallet if `affiliate_ref` is present
+4. handles creator disbursement depending on provider
+
+#### Stripe / PayPal / Midtrans
+
+These providers do **not** auto-payout the creator in the current implementation.
+
+So the flow is:
+
+- buyer pays through the provider
+- webhook confirms payment
+- buyer gets access
+- affiliate commission is attempted
+- admin later disburses the creator share manually
+
+Manual disburse means:
+
+- the real payout is done outside the automated checkout flow
+- admin uses the provider dashboard or another payout process
+- admin then uses `/public/admin/payments.html` to mark the invoice as disbursed
+
+#### Xendit
+
+Xendit supports automatic creator payout.
+
+So after webhook confirmation:
+
+- buyer gets access
+- affiliate commission is attempted
+- backend calls Xendit Disbursements API for the creator share
+- `disbursed_at` and `disburse_ref` are stored if the payout succeeds
+
+If the Xendit payout fails:
+
+- the sale remains paid
+- the buyer still keeps access
+- admin can retry creator payout later from the admin payment page
+
 ### Provider-Specific Details
 
 | Provider | Checkout API | Webhook Verification | Creator Payout |
@@ -308,6 +417,21 @@ The admin dashboard at `/public/admin/payments.html` provides:
 API: `GET /admin/payments?provider=&status=&limit=`
 Disburse: `POST /admin/payments/:invoice_uid/disburse`
 
+### Manual Disburse vs Auto-Disburse
+
+In admin terms:
+
+- **Wallet**: nothing to disburse; creator was already credited
+- **x402**: nothing to disburse; creator was already paid on-chain
+- **Stripe / PayPal / Midtrans**: admin must disburse manually
+- **Xendit**: system usually auto-disburses, but admin can retry if needed
+
+When an affiliate link exists, the admin should remember:
+
+- creator disbursement and affiliate payout are separate operations
+- affiliate payout does not need manual approval per transaction
+- affiliate payout may be skipped if the creator internal wallet has insufficient balance
+
 ---
 
 ## Affiliate Commission Integration
@@ -323,6 +447,35 @@ All three payment paths propagate the `?ref=USERNAME` referral code:
 Commission is `price_cents × commission_pct / 100`, deducted from creator's wallet balance and credited to affiliate's wallet balance. Requires `affiliate_settings.is_enabled = true` for the video.
 
 → Full affiliate documentation: [AFFILIATE.md](AFFILIATE.md)
+
+### What Happens When a Referred Buyer Pays
+
+#### Wallet
+
+- creator gets the creator share immediately in the internal wallet
+- affiliate commission is then moved from creator wallet to affiliate wallet
+- creator net = creator share minus affiliate commission
+
+#### x402
+
+- creator gets the creator share directly on-chain
+- affiliate commission is then attempted from creator internal wallet balance
+- on-chain payout and affiliate payout are separate rails
+
+#### Stripe / PayPal / Midtrans
+
+- buyer payment is confirmed by webhook
+- buyer access is granted
+- affiliate commission is attempted in the internal wallet
+- creator disbursement still waits for admin manual action
+
+#### Xendit
+
+- buyer payment is confirmed by webhook
+- buyer access is granted
+- affiliate commission is attempted in the internal wallet
+- backend also attempts creator auto-disbursement to bank
+- admin can retry if the auto-disbursement fails
 
 ---
 

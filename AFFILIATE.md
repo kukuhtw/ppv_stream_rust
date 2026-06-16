@@ -58,6 +58,19 @@ Creator nets:      $ 8.00  (after commission)
 | Crypto (X402) | After on-chain payment is verified and access is granted |
 | Fiat (Stripe/PayPal/Midtrans/Xendit) | After the payment provider webhook confirms payment |
 
+### Commission Timing vs Creator Disbursement
+
+Affiliate commission timing is **not always the same** as creator disbursement timing.
+
+| Payment Method | When creator gets sale proceeds | When affiliate gets commission | Admin manual action needed? |
+|----------------|--------------------------------|-------------------------------|-----------------------------|
+| Wallet | Immediately in internal wallet balance | Immediately after purchase commit | No |
+| X402 | Immediately on-chain to creator EVM wallet | After backend confirms the on-chain payment | No creator disburse action |
+| Stripe / PayPal / Midtrans | Later, after admin handles payout manually | After provider webhook confirms payment | Yes, creator disbursement is manual |
+| Xendit | Usually right after webhook through Xendit Disbursements API | After provider webhook confirms payment | Usually no, but admin can retry payout if auto-disburse fails |
+
+This means a referred sale can already create affiliate earnings even when the creator payout is still pending manual disbursement on a fiat provider.
+
 ### Safety Rules
 
 - **Affiliate ≠ Buyer**: Self-referral is blocked. If the buyer and affiliate are the same account, no commission is paid.
@@ -147,6 +160,13 @@ The `?ref=` parameter is captured once in the browser and passed through all thr
 
 After the atomic purchase transaction commits (buyer debited, creator credited), `process_affiliate_commission` is called as a best-effort step in a separate transaction.
 
+Disbursement behavior for wallet purchases:
+
+- creator share is already credited before affiliate commission runs
+- affiliate commission then reduces the creator's internal wallet balance
+- net creator wallet result = creator split minus affiliate commission
+- no admin disbursement step exists for this sale path
+
 #### Crypto X402 (`POST /api/pay/x402/start` + `POST /api/pay/x402/confirm`)
 
 ```json
@@ -156,6 +176,13 @@ After the atomic purchase transaction commits (buyer debited, creator credited),
 
 The `affiliate_ref` is stored on the `x402_invoices` row at invoice creation. At payment confirmation (`x402_confirm`), after access is granted, the handler reads `affiliate_ref` back from the DB and calls the commission helper.
 
+Disbursement behavior for x402 purchases:
+
+- the creator sale proceeds are paid directly on-chain by the smart contract
+- the affiliate commission is still paid from the creator's **internal platform wallet balance**
+- therefore, creator payout and affiliate payout happen on two different rails
+- if the creator has insufficient internal wallet balance, affiliate commission can be skipped even though the creator already received the on-chain sale proceeds
+
 #### Fiat Gateway (`POST /api/pay/:provider/start` + webhook)
 
 ```json
@@ -164,6 +191,22 @@ The `affiliate_ref` is stored on the `x402_invoices` row at invoice creation. At
 ```
 
 Same pattern: `affiliate_ref` is stored on the `fiat_invoices` row at invoice creation. The webhook handler (called by Stripe/PayPal/Midtrans/Xendit) reads `affiliate_ref` after confirming payment and calls the commission helper.
+
+Disbursement behavior for fiat purchases:
+
+- buyer access is granted after webhook confirmation
+- affiliate commission is attempted immediately after webhook confirmation
+- creator payout depends on the provider:
+  - Stripe / PayPal / Midtrans: manual disbursement later by admin
+  - Xendit: automatic disbursement attempt via Xendit API
+
+So a creator can have:
+
+- affiliate commission already deducted
+- buyer already unlocked
+- creator bank payout still pending
+
+for manual-disburse fiat providers.
 
 ### Handler Endpoints (`src/handlers/affiliate.rs`)
 
@@ -207,6 +250,21 @@ A referral notice badge is rendered in the payment panel when `REF_CODE` is non-
 - **Best-effort semantics**: commission failure never rolls back a purchase. A buyer always gets access even if the commission step has a transient error.
 - **Idempotency**: commission is tied to a single purchase event. Since `affiliate_ref` is stored on the invoice at creation, replaying the webhook does not create a duplicate commission (the `purchases` insert uses `ON CONFLICT DO NOTHING`).
 - **Input validation**: `commission_pct` is server-side constrained to `0–90`. The `affiliate_username` is looked up by exact DB match — it cannot be spoofed to an arbitrary wallet.
+
+### Best-Effort Rule During Disbursement
+
+When a referred purchase succeeds, the system prioritises **buyer access first**.
+
+That means:
+
+- the buyer should not lose access just because affiliate commission failed
+- the creator disbursement method should not block access once payment is confirmed
+- affiliate settlement can be skipped if the creator's internal wallet does not contain enough balance for the commission deduction
+
+This is especially important for:
+
+- **x402**, where creator sale payout happens on-chain but affiliate settlement is off-chain
+- **Stripe / PayPal / Midtrans**, where creator payout may still be pending manual disbursement
 
 ---
 

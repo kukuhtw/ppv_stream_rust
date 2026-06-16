@@ -45,7 +45,20 @@ Important folders and files:
 
 Create a `.env` file in the project root.
 
-Use this minimal local-development example as your starting point:
+The recommended starting point is:
+
+```bash
+cp .env.example .env
+```
+
+The current `.env.example` is optimized for this starter profile:
+
+- PayPal
+- Xendit
+- internal wallet
+- local storage
+
+If you want to build the file manually, use this example:
 
 ```env
 # Core application
@@ -99,9 +112,9 @@ X402_RPC_WSS=
 X402_CHAIN_ID=80002
 X402_DEADLINE_SECS=900
 
-# Optional fiat payment providers
-PAYMENT_PLUGINS=
-PAYMENT_DEFAULT_PROVIDER=
+# Recommended starter providers
+PAYMENT_PLUGINS=paypal,xendit
+PAYMENT_DEFAULT_PROVIDER=paypal
 
 STRIPE_ENV=test
 STRIPE_SECRET_KEY=
@@ -135,6 +148,7 @@ Notes:
 - `DATABASE_URL` is used by the running app.
 - `DATABASE_URL_BUILD` is used by the Docker build because this project uses `sqlx` macros that may require database access during compilation.
 - For local non-Docker development, `DATABASE_URL` must be reachable **before** you run `cargo build` or `cargo run`.
+- Internal wallet payment and wallet transfer are not controlled by `PAYMENT_PLUGINS`. They are toggled from `Admin > Settings > Payment Methods`.
 
 ---
 
@@ -259,7 +273,11 @@ cd ppv_stream_rust
 
 ### Step 2: Create `.env`
 
-Create a `.env` file in the project root using the sample above.
+Create a `.env` file in the project root. The easiest option is:
+
+```bash
+cp .env.example .env
+```
 
 For Docker, make sure these are correct:
 
@@ -467,6 +485,8 @@ BASE_URL=http://localhost:8080
 PUBLIC_DIR=public
 STORAGE_BACKEND=local
 STORAGE_LOCAL_PATH=storage
+PAYMENT_PLUGINS=paypal,xendit
+PAYMENT_DEFAULT_PROVIDER=paypal
 ```
 
 ### Step 4: Create required local directories
@@ -814,9 +834,15 @@ Fiat providers are optional and can be enabled one by one.
 Use `PAYMENT_PLUGINS` as a comma-separated list, for example:
 
 ```env
-PAYMENT_PLUGINS=stripe,paypal,midtrans,xendit
-PAYMENT_DEFAULT_PROVIDER=stripe
+PAYMENT_PLUGINS=paypal,xendit
+PAYMENT_DEFAULT_PROVIDER=paypal
 ```
+
+Important:
+
+- `PAYMENT_PLUGINS` only controls external payment plugins.
+- internal wallet checkout and user-to-user wallet transfer are managed from the browser in `Admin > Settings > Payment Methods`
+- provider secrets still stay in `.env`
 
 ### Stripe
 
@@ -865,9 +891,9 @@ If you want the smoothest path, use this order:
 4. Bootstrap the admin account.
 5. Verify registration, login, upload, and playback.
 6. Enable local storage first.
-7. Enable wallet payments.
-8. Enable x402 testnet payments.
-9. Enable one fiat provider at a time.
+7. Enable wallet payment and wallet transfer from `Admin > Settings`.
+8. Enable PayPal and Xendit first.
+9. Add x402 testnet payments later if needed.
 
 This keeps troubleshooting simple because you add one subsystem at a time.
 
