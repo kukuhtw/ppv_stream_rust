@@ -119,6 +119,17 @@ This is especially useful for brands that want to:
 - give niche creators a place to monetize deeper expertise that would be buried on mass platforms
 - build community loyalty through recurring creator-led content rather than only paid ads
 
+The kinds of brands that can benefit most include:
+
+- education brands, bootcamps, schools, universities, and professional training providers that want to sell classes, workshops, certification content, or mentor-led video programs
+- beauty, fashion, and lifestyle brands that want to build ambassador content, tutorials, behind-the-scenes stories, style classes, and paid creator challenges
+- fitness, wellness, and coaching brands that want to offer workout programs, yoga sessions, meditation classes, nutrition education, or premium coaching videos
+- event brands, conference organizers, and experience-led brands that want to monetize replays, workshop archives, VIP sessions, sponsor stories, and post-event learning hubs
+- religious, cultural, and community brands that want to broadcast lectures, gatherings, member programs, spiritual education, or community stories under their own identity
+- media brands, podcast networks, and creator collectives that want to sell extended cuts, interviews, documentary content, fan access, or multi-creator catalogs
+- gaming, esports, and fandom brands that want to host coaching videos, tournament replays, creator commentary, fan events, and behind-the-scenes content
+- product brands with strong communities, such as camera, music, automotive, outdoor gear, coffee, cooking, craft, or creator-tool brands, where customers and ambassadors can teach, review, demonstrate, and tell stories through paid video
+
 In practice, a brand could use the platform to host:
 
 - creator-led product education series
