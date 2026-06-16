@@ -2,6 +2,8 @@
 
 > *"Fair streaming for creators, secure content for viewers, and freedom for everyone."*
 
+→ [README.md](README.md) | [WALLET.md](WALLET.md) | [AFFILIATE.md](AFFILIATE.md) | [PAYMENT.md](PAYMENT.md)
+
 ---
 
 ## The Problem Worth Solving
@@ -162,6 +164,27 @@ The stack is intentionally minimal: one Rust binary, one PostgreSQL database, on
 
 ---
 
+## What We've Built
+
+Beyond the streaming core, PPV Stream Rust now includes a complete commerce layer:
+
+### Internal Wallet
+Every user has a wallet balance on the platform — a pure database ledger, no blockchain. Creators receive their revenue share directly into their balance. Users can top up via admin-approved deposits, withdraw via admin-processed payouts, and transfer between each other instantly. The wallet is also the payment method for purchasing videos — no external service needed.
+
+→ [How the wallet works →](WALLET.md)
+
+### Affiliate System
+Creators who want to grow their audience can enable an affiliate program on any video. They set a commission percentage (up to 90% of the video price). Affiliates share a unique referral link (`?ref=USERNAME`). When a buyer purchases through that link, the affiliate earns their commission automatically — deducted from the creator's wallet balance and credited to the affiliate's balance. This works across all three payment methods: wallet, crypto, and fiat.
+
+→ [How the affiliate system works →](AFFILIATE.md)
+
+### Three-Path Payment Panel
+Buyers see a unified payment panel with three tabs: Wallet (instant, no crypto needed), X402 Crypto (MetaMask), and Payment Gateway (Stripe/PayPal/Midtrans/Xendit). The system auto-selects the best available option based on what the admin has configured and whether the buyer can afford it from their wallet.
+
+→ [All payment methods →](PAYMENT.md)
+
+---
+
 ## The Vision
 
 The internet deserves a world where:
@@ -203,3 +226,17 @@ Licensed under the Apache 2.0 License. Use it, fork it, build on it.
 ---
 
 *The creator economy needs infrastructure that works for creators, not against them. This is ours to build — together.*
+
+---
+
+## Documentation
+
+| Document | What it covers |
+|----------|---------------|
+| [README.md](README.md) | Quick start, feature list, architecture |
+| [WALLET.md](WALLET.md) | Internal wallet — deposits, withdrawals, transfers, video purchases |
+| [AFFILIATE.md](AFFILIATE.md) | Affiliate referral program — setup, commission flows, earnings |
+| [PAYMENT.md](PAYMENT.md) | All payment methods — wallet, X402, Stripe, PayPal, Midtrans, Xendit |
+| [PAYMENT_PLUGIN_ARCHITECTURE.md](PAYMENT_PLUGIN_ARCHITECTURE.md) | How payment providers are structured |
+| [TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md) | Full codebase reference |
+| [updated.md](updated.md) | Changelog — latest architecture improvements |

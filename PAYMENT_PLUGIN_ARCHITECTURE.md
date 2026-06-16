@@ -1,5 +1,7 @@
 # Payment Plugin Architecture
 
+→ [README.md](README.md) | [PAYMENT.md](PAYMENT.md) | [AFFILIATE.md](AFFILIATE.md) | [TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md)
+
 This repository has a fully implemented payment plugin system under:
 
 ```text
@@ -342,11 +344,28 @@ The plugin system writes to:
 
 | Table | Written by |
 |---|---|
-| `fiat_invoices` | `create_payment_invoice` — pre-inserted as `pending` |
+| `fiat_invoices` | `create_payment_invoice` — pre-inserted as `pending`; `affiliate_ref` stored separately |
 | `fiat_invoices` | `handle_webhook` — updated to `paid` with `paid_at` and `provider_ref` |
 | `purchases` | `handle_webhook` — one row per successful fiat payment |
 | `allowlist` | `handle_webhook` — grants permanent playback access |
 | `fiat_invoices` | `admin_disburse` — sets `disbursed_at` and `disburse_ref` |
+| `wallet_transactions` | `commission::process_affiliate_commission` — after webhook confirms payment |
+| `affiliate_commissions` | `commission::process_affiliate_commission` — commission audit row |
+
+### Affiliate Referral Tracking
+
+`fiat_invoices` has an `affiliate_ref TEXT` column (added by `migrations/029_affiliate.sql`). The referral username is stored at invoice creation time using a runtime SQL query (separate from the `sqlx::query!()` insert, so the offline cache is not affected):
+
+```rust
+// In create_invoice_with_provider, after the pre-insert:
+sqlx::query("UPDATE fiat_invoices SET affiliate_ref = $1 WHERE invoice_uid = $2")
+    .bind(ref_username).bind(&invoice_uid)
+    .execute(&state.pool).await;
+```
+
+The webhook handler reads `affiliate_ref` back and calls `commission::process_affiliate_commission()` after access is granted.
+
+→ See [AFFILIATE.md](AFFILIATE.md) for the full commission flow.
 
 ## Implementation Status
 
@@ -379,3 +398,12 @@ Avoid this at the beginning:
 ```text
 runtime .so/.dll loading
 ```
+
+---
+
+## Related Documentation
+
+- [README.md](README.md) — platform overview
+- [PAYMENT.md](PAYMENT.md) — all payment methods including wallet and X402
+- [AFFILIATE.md](AFFILIATE.md) — how affiliate_ref flows through the plugin webhook
+- [TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md) — code-level reference for handlers/payment_plugins.rs

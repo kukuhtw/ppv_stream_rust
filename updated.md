@@ -1,333 +1,181 @@
-# PPV Stream Rust – Latest Architecture Updates
+# PPV Stream Rust — Architecture & Feature Changelog
 
-This document summarizes the major improvements introduced in the latest version of the platform, focusing on performance, security, maintainability, payment extensibility, and operational robustness.
+This document summarises all major improvements delivered to date, from the core streaming pipeline to the wallet system, payment panel, and affiliate program.
 
----
-
-# 1. Video Upload Pipeline
-
-## Previous Implementation
-
-* Uploaded files were written directly to the final destination.
-* No atomic protection against partial uploads.
-* Limited validation of uploaded content.
-* Failed database operations could leave orphaned files.
-
-## Current Implementation
-
-* Buffered I/O using `BufWriter` to reduce disk write overhead.
-* Uploads are written to a temporary `*.part` file first.
-* Atomic rename is performed only after upload completes successfully.
-* Real-time upload size validation using `MAX_UPLOAD_BYTES`.
-* Extension whitelist validation using `ALLOW_EXTS`.
-* Best-effort MIME type detection using file signature inspection.
-* Automatic cleanup when database persistence fails.
-* Improved operational logging.
-
-Benefits:
-
-* Better performance.
-* Reduced filesystem corruption risk.
-* Stronger upload security.
-* Cleaner failure recovery.
+→ Back to [README.md](README.md) | Full docs in the [Documentation Index](README.md#-documentation-index)
 
 ---
 
-# 2. Video Transcoding and HLS Generation
+## Latest: Affiliate System (Migration 029)
 
-## Previous Implementation
+The affiliate system lets creators grow video sales through referral links. No blockchain needed — everything is settled in the internal wallet ledger.
 
-* HLS generation logic was fragmented.
-* Adaptive bitrate handling was inconsistent.
-* Startup playback performance could be improved.
+**New files:**
+- `migrations/029_affiliate.sql` — `affiliate_settings`, `affiliate_commissions`, `affiliate_ref` columns on invoice tables
+- `src/commission.rs` — standalone commission helper used by all three payment paths
+- `src/handlers/affiliate.rs` — CRUD for affiliate settings, earnings, admin view
+- `public/affiliate.html` — three-tab dashboard (earnings / creator settings / referral links)
 
-## Current Implementation
+**How it works:**
+1. Creator enables affiliate program and sets commission % (0–90) via `/api/affiliate/settings`.
+2. Affiliate copies their referral link: `/public/watch.html?video_id=X&ref=USERNAME`.
+3. Buyer purchases through the link — commission is automatically deducted from creator's wallet and credited to affiliate's wallet.
+4. Works across all three payment methods: wallet, X402 crypto, and fiat gateway.
 
-* MP4 faststart optimization using:
-
-```text
--movflags +faststart
-```
-
-* Multi-bitrate HLS generation in a single FFmpeg process.
-* Adaptive bitrate ladder:
-
-```text
-240p
-360p
-480p
-```
-
-* Automatic anti-upscaling.
-* Audio fallback support using `anullsrc`.
-* Concurrency control through `Semaphore`.
-* Structured output folders:
-
-```text
-media/<video_id>/
-├── master.m3u8
-├── v0/
-├── v1/
-└── v2/
-```
-
-* Improved database processing state tracking:
-
-```text
-processing
-ready
-error
-```
-
-Benefits:
-
-* Lower CPU usage.
-* Faster streaming startup.
-* Better operational visibility.
+→ Full details: [AFFILIATE.md](AFFILIATE.md)
 
 ---
 
-# 3. FFmpeg Runtime Layer
+## Internal Wallet (Migration 028)
 
-## New Capabilities
+A pure database ledger wallet — no blockchain, no third-party processor.
 
-Reusable FFmpeg execution helper:
+**New files:**
+- `migrations/028_wallet.sql` — `users.balance_cents BIGINT`, `wallet_transactions` table
+- `src/handlers/wallet.rs` — balance, deposit, withdraw, transfer, pay-video endpoints
+- Wallet admin endpoints appended to `src/handlers/admin.rs`
+- `public/wallet.html` — user wallet UI
+- `public/admin/wallet.html` — admin wallet management
 
-```rust
-run_ffmpeg(args, work_dir)
-```
+**Transaction types:**
 
-Additional probing utilities:
+| Type | Who triggers | Effect |
+|------|-------------|--------|
+| `deposit` | User submits | Pending until admin approves, then balance credited |
+| `withdrawal` | User submits | Balance held immediately; admin marks paid or rejects (refund) |
+| `transfer_out` / `transfer_in` | P2P transfer | Instant, atomic, both sides get ledger rows |
+| `payment` | Wallet video purchase | Buyer debited, creator credited, purchase + allowlist inserted |
+| `transfer_out` / `transfer_in` | Affiliate commission | Creator debited, affiliate credited |
 
-```text
-ffprobe_duration()
-ffprobe_dimensions()
-ffprobe_has_audio()
-```
-
-Advantages:
-
-* Cleaner code separation.
-* Easier maintenance.
-* Safer working directory management.
-
----
-
-# 4. Streaming and HLS Delivery
-
-## Previous Implementation
-
-* Segment files were often loaded completely into memory.
-
-## Current Implementation
-
-* Streaming delivery using:
-
-```rust
-ReaderStream
-```
-
-* Consistent cache control:
-
-```text
-Cache-Control: no-store
-```
-
-* Stronger path validation.
-* Better HLS segment handling.
-* Dynamic watermark rendering support.
-* FFmpeg thread count optimized using available CPU cores.
-
-Benefits:
-
-* Lower memory consumption.
-* Better scalability.
-* Improved streaming stability.
+→ Full details: [WALLET.md](WALLET.md)
 
 ---
 
-# 5. Session Management and Authentication
+## 3-Tab Payment Panel on watch.html
 
-## Previous Implementation
+The watch page now consolidates all payment methods into a single unified UI instead of separate pages.
 
-* Plain session identifier stored in cookie.
-* Fixed expiration period.
-* No cryptographic integrity protection.
+**New endpoint:** `GET /api/pay/all_options?video_id=` returns in one call:
+- Wallet: buyer balance, `can_afford` flag
+- X402: available tokens from `pay_tokens`
+- Fiat: active providers from `PAYMENT_PLUGINS` env
 
-## Current Implementation
-
-* HMAC-SHA256 signed session cookies.
-* Configurable session lifetime.
-* HttpOnly cookie support.
-* SameSite=Lax policy.
-* Session validation protected against cookie tampering.
-
-Cookie format:
-
-```text
-base64(session_id).base64(signature)
-```
-
-Benefits:
-
-* Stronger security.
-* Protection against forged session cookies.
+**UI behaviour:**
+- Only tabs with available options are shown.
+- Default tab is auto-selected: Wallet (if can_afford) → X402 → Fiat.
+- Referral notice shown when `?ref=` is present in URL.
 
 ---
 
-# 6. Configuration and Storage Layout
+## Payment Plugin Architecture
 
-## New Improvements
+All fiat providers share a common `PaymentPlugin` trait. Adding a new provider means implementing three methods: `create_invoice`, `confirm_payment`, and optionally `disburse_to_creator`.
 
-Dedicated storage separation:
-
-```text
-MEDIA_DIR
-HLS_ROOT
-TMP_DIR
 ```
-
-New environment variables:
-
-```text
-ALLOW_EXTS
-MAX_UPLOAD_BYTES
-SESSION_TOKEN_TTL
-HMAC_SECRET
-MEDIA_DIR
-HLS_ROOT
-TMP_DIR
-WATERMARK_FONT
-```
-
-Startup logging now redacts sensitive database credentials.
-
----
-
-# 7. Security Hardening
-
-Major improvements:
-
-* Atomic file writes.
-* Upload size limits.
-* MIME validation.
-* Signed cookies.
-* Session expiration cleanup.
-* Safer streaming delivery.
-* Improved error tracking.
-* Better filesystem isolation.
-
-Database diagnostics now store:
-
-```text
-last_error
-```
-
-for troubleshooting and operational monitoring.
-
----
-
-# 8. Payment Plugin Architecture (New)
-
-A major architectural enhancement is the introduction of a provider-neutral payment system.
-
-## New Structure
-
-```text
 src/plugins/payment/
-├── env.rs
-├── models.rs
-├── traits.rs
-├── registry.rs
+├── traits.rs      ← PaymentPlugin trait
+├── registry.rs    ← Runtime selection from PAYMENT_PLUGINS env
+├── models.rs      ← Shared request/response types
 └── providers/
-    ├── x402.rs
-    ├── paypal.rs
     ├── stripe.rs
+    ├── paypal.rs
     ├── midtrans.rs
-    └── xendit.rs
+    ├── xendit.rs
+    └── x402.rs
 ```
 
-## Supported Providers
+All providers store `affiliate_ref` on their invoice row at creation time so the webhook can pay the commission correctly.
 
-```text
-x402
-PayPal
-Stripe
-Midtrans
-Xendit
-```
-
-## Core Design
-
-All payment providers implement a common trait:
-
-```rust
-PaymentPlugin
-```
-
-This allows runtime provider selection without changing business logic.
-
-## New API Endpoints
-
-```text
-GET  /api/pay/providers
-POST /api/pay/start
-POST /api/pay/confirm
-POST /api/pay/:provider/start
-POST /api/pay/:provider/confirm
-```
-
-## Benefits
-
-* Easier provider integration.
-* Cleaner separation of concerns.
-* Multi-country payment support.
-* Reduced vendor lock-in.
+→ Full details: [PAYMENT_PLUGIN_ARCHITECTURE.md](PAYMENT_PLUGIN_ARCHITECTURE.md)
 
 ---
 
-# 9. CI/CD Improvements
+## Storage Plugin Architecture
 
-A GitHub Actions workflow has been added.
+File storage is now plugin-based. Switch between local disk and S3-compatible storage via env:
 
-```text
-.github/workflows/rust-ci.yml
 ```
-
-Validation steps:
-
-```text
-cargo fmt
-cargo check
-cargo clippy
-cargo test
+STORAGE_PLUGIN=local   # or s3
 ```
-
-Benefits:
-
-* Automated quality control.
-* Faster detection of regressions.
-* Better development workflow.
 
 ---
 
-# 10. Overall Impact
+## Video Upload Pipeline
 
-The latest architecture is significantly stronger than the previous implementation.
+- Buffered I/O (`BufWriter`) with atomic rename (`*.part` → final path).
+- Real-time size limit (`MAX_UPLOAD_BYTES`), extension whitelist (`ALLOW_EXTS`), MIME sniffing.
+- DB cleanup on failure; file cleaned up on DB error.
 
-Key improvements:
+---
 
-```text
-✔ Faster uploads
-✔ Faster streaming startup
-✔ Lower memory consumption
-✔ Better HLS scalability
-✔ Stronger authentication security
-✔ Better operational observability
-✔ Modular payment architecture
-✔ Easier future customization
-✔ CI/CD readiness
-✔ Cleaner Rust code organization
-```
+## Transcoding Worker
 
-The platform is now positioned to evolve from a simple PPV video application into a customizable creator platform capable of supporting multiple payment providers, advanced monetization strategies, and future plugin-based extensions.
+- MP4 faststart (`-movflags +faststart`) before HLS generation.
+- Single FFmpeg process for multi-rendition ABR (240p / 360p / 480p).
+- Anti-upscale: ladder adjusts to source height.
+- Silent-audio fallback via `anullsrc`.
+- Semaphore-controlled concurrency.
+
+---
+
+## HLS Streaming
+
+- Per-viewer isolated session directory with moving watermark (username + timestamp).
+- `ReaderStream` for segment delivery — no full-file reads into memory.
+- `Cache-Control: no-store` on all playlists and segments.
+
+---
+
+## Session Security
+
+- HMAC-SHA256 signed `ppv_session` cookie: `base64(sid).base64(hmac)`.
+- Configurable TTL (`SESSION_TOKEN_TTL`).
+- `HttpOnly` + `SameSite=Lax`.
+- Admin sessions validated against `is_admin` flag.
+
+→ Full details: [ADMIN_AUTHENTICATION.md](ADMIN_AUTHENTICATION.md)
+
+---
+
+## Configuration & Environment Variables
+
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `HMAC_SECRET` | Signs session cookies |
+| `SESSION_TOKEN_TTL` | Session lifetime in seconds |
+| `ALLOW_EXTS` | Comma-separated upload extensions |
+| `MAX_UPLOAD_BYTES` | Upload size limit |
+| `MEDIA_DIR` | Transcoded HLS output root |
+| `HLS_ROOT` | Per-viewer watermarked session root |
+| `TMP_DIR` | Temporary upload directory |
+| `WATERMARK_FONT` | Path to watermark font file |
+| `PAYMENT_PLUGINS` | Enabled providers: `stripe,paypal,midtrans,xendit,x402` |
+| `CREATOR_SPLIT_BP` | Creator's share in basis points (default 9000 = 90%) |
+| `X402_CONTRACT_ADDRESS` | Deployed X402Splitter contract address |
+| `X402_RPC_HTTP` | EVM HTTP RPC endpoint |
+| `X402_ADMIN_PRIVKEY` | Admin signing key for invoice authorization |
+| `STORAGE_PLUGIN` | `local` or `s3` |
+| `ADMIN_BOOTSTRAP_TOKEN` | One-time token for initial admin setup |
+
+---
+
+## Database Migration History
+
+| Migration | Adds |
+|-----------|------|
+| 001–012 | Core: users, sessions, videos, allowlist, purchases, profile |
+| 013–024 | X402: pay_tokens, x402_invoices, compat view |
+| 025–027 | Fiat invoices, payment plugin schema, SMTP settings |
+| 028 | `users.balance_cents`, `wallet_transactions` |
+| 029 | `affiliate_settings`, `affiliate_commissions`, `affiliate_ref` on invoices |
+
+---
+
+## Related Documentation
+
+- [README.md](README.md) — platform overview and quick start
+- [WALLET.md](WALLET.md) — wallet system deep-dive
+- [AFFILIATE.md](AFFILIATE.md) — affiliate system deep-dive
+- [PAYMENT.md](PAYMENT.md) — all payment methods
+- [TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md) — full codebase reference

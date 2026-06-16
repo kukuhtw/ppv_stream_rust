@@ -1,5 +1,7 @@
 # Affiliate System — PPV Stream
 
+→ [README.md](README.md) | [WALLET.md](WALLET.md) | [PAYMENT.md](PAYMENT.md) | [TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md)
+
 ## Overview
 
 The affiliate system lets creators grow their video sales by incentivising other users to promote their content. A creator configures a commission percentage per video; affiliates share unique referral links; when a buyer purchases through a referral link, the affiliate earns a commission automatically — no admin approval needed, no smart contract, no blockchain. Everything is settled as ledger entries in the internal wallet.

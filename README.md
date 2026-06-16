@@ -1,626 +1,319 @@
-# 🎬 PPV Stream — Rust-Based Pay-Per-View Video Platform
+# PPV Stream Rust — Open Source White Label Video Commerce Platform
 
-**PPV Stream** is a secure video streaming application built with **Rust (Axum)** and **PostgreSQL**, designed for independent creators to monetize their content fairly through a **Pay-Per-View (PPV)** model.  
+> *"Fair streaming for creators, secure content for viewers, and freedom for everyone."*
 
-It features watermark-protected HLS streaming, authentication, upload management, and user dashboards.
+**PPV Stream** is a production-ready, self-hosted Pay-Per-View video platform built with **Rust (Axum)** and **PostgreSQL**. It ships everything a creator marketplace needs — multi-provider payments, an internal wallet, an affiliate system, forensic watermarking, adaptive HLS streaming, and a plugin-based storage/payment architecture — all open-source and white-label.
 
-**PPV Stream Rust** empowers anyone to build their own secure video streaming platform — like having your own version of **OnlyFans or Netflix**, but fully **open-source** and **privacy-controlled**.  
+🎥 **Demo on YouTube:**
+- [https://www.youtube.com/watch?v=WOsDwBcD03A](https://www.youtube.com/watch?v=WOsDwBcD03A)
+- [https://www.youtube.com/watch?v=IuSjkMoYEHk](https://www.youtube.com/watch?v=IuSjkMoYEHk)
+- [https://www.youtube.com/watch?v=dm8eRdstBHY](https://www.youtube.com/watch?v=dm8eRdstBHY)
 
-Each video is streamed via encrypted HLS with forensic watermarking to discourage piracy.
+---
 
-🎥 **Demo on YouTube:**  
-🔗 [https://www.youtube.com/watch?v=WOsDwBcD03A](https://www.youtube.com/watch?v=WOsDwBcD03A)
+## 📚 Documentation Index
 
-🔗 [https://www.youtube.com/watch?v=IuSjkMoYEHk](https://www.youtube.com/watch?v=IuSjkMoYEHk)
+| Document | Description |
+|----------|-------------|
+| **README.md** *(this file)* | Platform overview, quick start, architecture, feature list |
+| [VISION.md](VISION.md) | Inspiration — the problems we solve and the creator economy we're building |
+| [WALLET.md](WALLET.md) | Internal fiat wallet — business flows, DB design, API reference |
+| [AFFILIATE.md](AFFILIATE.md) | Affiliate system — referral links, commission flows, security model |
+| [PAYMENT.md](PAYMENT.md) | All payment methods: Wallet, X402 crypto, Fiat gateways |
+| [PAYMENT_PLUGIN_ARCHITECTURE.md](PAYMENT_PLUGIN_ARCHITECTURE.md) | How payment providers are structured and extended |
+| [ADMIN_AUTHENTICATION.md](ADMIN_AUTHENTICATION.md) | Admin login, wallet admin, affiliate admin |
+| [TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md) | Full codebase reference — every module, function, and data flow |
+| [updated.md](updated.md) | Changelog — architecture improvements and new feature summaries |
+| [RUST_CONCEPTS_FOR_BEGINNERS.md](RUST_CONCEPTS_FOR_BEGINNERS.md) | Rust concepts used in this project, explained for newcomers |
 
-🔗 [https://www.youtube.com/watch?v=dm8eRdstBHY](https://www.youtube.com/watch?v=dm8eRdstBHY)
+---
+
+## 🚀 Key Features
+
+### Commerce & Payments
+- 💰 **Internal Wallet** — deposit, withdraw, P2P transfer; admin-managed payouts; [details →](WALLET.md)
+- 💳 **3-Tab Payment Panel** — Wallet / Crypto X402 / Fiat Gateway in one UI
+- ⛓️ **X402 Smart Contract** — on-chain payments with auto-split (creator 90%, platform 10%); [details →](PAYMENT.md)
+- 🏦 **Multi-Provider Fiat** — Stripe, PayPal, Midtrans, Xendit via plugin architecture; [details →](PAYMENT_PLUGIN_ARCHITECTURE.md)
+- 🔔 **Webhook Receivers** — each provider delivers payment notifications automatically
+- 🏧 **Xendit Auto-Disburse** — 90% of payment goes to creator's bank account instantly
+
+### Affiliate & Growth
+- 🤝 **Affiliate System** — creators set commission % per video; affiliates earn from referral sales; [details →](AFFILIATE.md)
+- 🔗 **Referral Links** — `?ref=USERNAME` captured across all payment paths (wallet, x402, fiat)
+- 📊 **Earnings Dashboard** — affiliates track commissions; creators track program performance
+
+### Content & Streaming
+- 🎥 **Video Upload** — MP4 with size limit, MIME validation, atomic writes
+- ⚡ **Adaptive HLS Transcoding** — FFmpeg multi-rendition (240p/360p/480p) in a single process
+- 💧 **Forensic Watermarking** — per-viewer moving watermark to deter piracy
+- 🔐 **Session-Scoped HLS** — each viewer gets a unique, isolated stream segment set
+
+### Platform & Operations
+- 👤 **User & Admin Authentication** — HMAC-SHA256 signed cookies, Argon2 password hashing; [details →](ADMIN_AUTHENTICATION.md)
+- 👥 **Allowlist System** — creators grant manual access; purchases auto-grant
+- 📧 **SMTP Email Notifications** — password reset, change-password confirmation
+- 🧩 **Admin Panel** — users, videos, wallet transactions, fiat invoices, SMTP, affiliate commissions
+- 💵 **USD → IDR Conversion** — live exchange rate from `/api/kurs`
+- 🗄️ **Storage Plugins** — local disk or cloud storage via plugin registry
 
 ---
 
 ## 🌍 Vision
 
-To make it possible for every creator, teacher, performer, or filmmaker to **earn money directly from their audience**, using a fair and transparent pay-per-view system that protects their creative rights.
+To make it possible for every creator, teacher, performer, or filmmaker to **earn money directly from their audience** — using a fair, transparent, and forensically protected pay-per-view system with no centralized gatekeepers.
 
-PPV Stream Rust is **open-source**, **self-hosted**, and **built for creators who want independence** — no centralized platform, no gatekeepers, and no hidden fees.
-
----
-
-## 💡 New Feature: C2C Marketplace
-
-PPV Stream Rust makes it easy for anyone to create a **video streaming marketplace** — similar to **OnlyFans**, but **consumer-to-consumer (C2C)**.
-
-Users can **pay other users directly** to watch exclusive content, tutorials, music performances, religious broadcasts, short films, or personal vlogs.
-
-This model allows:
-
-* 💸 **Direct payments** between viewers and creators (no middleman)
-* 🧾 **Transparent transactions** for every pay-per-view event
-* 🌐 **Independent video portals** that anyone can host and brand as their own marketplace
+→ Read the full vision: [VISION.md](VISION.md)
 
 ---
 
-## ⚙️ Built-in X402 Smart Contract Payment
+## 💡 C2C Video Marketplace
 
-The C2C system is powered by the **X402 payment contract**, a Solidity-based module integrated into PPV Stream Rust.
+PPV Stream Rust enables a **consumer-to-consumer (C2C) marketplace** where users pay other users directly:
 
-With **X402**, every video purchase is securely processed on the blockchain, ensuring **trust, transparency, and automation**.
+- Creators upload exclusive content and set their price
+- Buyers purchase access with wallet balance, crypto, or fiat
+- Affiliates share referral links and earn commission
+- Platform retains a configurable fee (default 10%)
 
-Key features of the X402 integration:
-
-* 🔐 **Decentralized Settlement** — funds are transferred directly from viewer → creator via on-chain transaction.
-* ⚖️ **Auto-Split Fees** — payments are automatically divided between the **creator (e.g., 90%)** and **platform admin (e.g., 10%)**.
-* 💰 **Multi-Token Support** — users can pay using **native coins (MEGA, MATIC, ETH)** or **ERC-20 tokens (USDC, USDT, etc.)**.
-* 🪙 **Transparent Ledger** — all `Paid` events are logged on-chain with invoice UID, payer, creator, and amount in wei.
-* 🧾 **Invoice Hashing (Keccak256)** — every invoice has a unique hash (`invoice_uid_hash`) that binds the payment to the specific video ID.
+The affiliate layer means creators can grow their audience without advertising spend — they pay commissions only when sales actually happen.
 
 ---
 
-**Example workflow:**
+## ⚙️ X402 Smart Contract Payment
 
-1. Viewer clicks *Buy with Crypto (X402)*.
-2. System creates an on-chain invoice (`invoice_uid`).
-3. MetaMask opens and executes `payNative` or `payERC20`.
-4. The smart contract emits a `Paid` event — funds automatically go to the creator and admin wallets.
-5. Viewer instantly gains access to the video (`allowlist` updated).
+The X402 integration processes on-chain payments with automatic fund splitting:
 
----
+- **Decentralized Settlement** — funds go directly from viewer to creator via smart contract
+- **Auto-Split** — creator 90%, platform admin 10% (configurable via basis points)
+- **Multi-Token** — native coins (MATIC, ETH) or ERC-20 tokens (USDC, USDT)
+- **Invoice Hashing** — Keccak256 hash binds each payment to a specific invoice + video
 
-This makes PPV Stream Rust not only a **decentralized pay-per-view platform**, but also a **ready-to-use C2C video marketplace** with **trustless crypto payments** and **full ownership control** for every creator.
-
-Here’s the  summary updated october 26th, 2025 — clearly structured and focused on **performance**, **security**, and **data flow** differences between the old and new logic:
-
----
-
-# 1) Video Upload
-
-* **Old:** wrote files directly to the target using `File::create` + `write_all` per chunk.
-* **New:**
-
-  * Uses **Buffered I/O** with `BufWriter` (~1 MB) → fewer syscalls.
-  * Writes to a temporary `*.part` file, then **atomically renames** it → prevents half-written files.
-  * Enforces **file size limit** (`MAX_UPLOAD_BYTES`) and counts bytes in real time.
-  * Adds **extension whitelist** (`ALLOW_EXTS`) and **MIME sniffing** via `infer`.
-  * If DB insert fails, the file is **cleaned up**.
-  * Logs file size and storage location.
-
----
-
-# 2) Transcoding Worker
-
-* **Old:** no `faststart`; inconsistent ABR quality; several missing functions.
-* **New:**
-
-  * Adds **MP4 faststart** (`-c copy -movflags +faststart`) before HLS → faster initial seeking.
-  * Supports **multi-rendition ABR** (240p/360p/480p) in **a single ffmpeg process** using `-filter_complex` + `-var_stream_map` → better CPU/IO efficiency.
-  * Includes **anti-upscale** logic (ladder adjusts to source height).
-  * Handles **silent audio** with `anullsrc` + `-shortest`.
-  * Uses **Semaphore** for controlled concurrency.
-  * DB status is clearly tracked: `processing → ready|error`, with `last_error` and `hls_master` path stored.
-  * Clean output structure under `media/<video_id>`; includes `master.m3u8` and variant subfolders.
-
----
-
-# 3) FFMPEG Runner & Probing
-
-* **Old:** `transcode_hls` ran raw command args, no dedicated working directory.
-* **New:**
-
-  * Introduces `run_ffmpeg(args, work_dir)` → all output written inside the safe target folder.
-  * `transcode_hls` now truly runs inside its `session_dir`.
-  * Adds helpers: `ffprobe_duration`, `ffprobe_dimensions`, `ffprobe_has_audio`.
-  * HLS ABR encoding is now a utility function respecting `hwaccel` (default: CPU).
-
----
-
-# 4) Streaming (Play) & HLS Serving
-
-* **Old:** read entire HLS file into memory (`Vec<u8>`) before sending; watermark logic similar.
-* **New:**
-
-  * Streams files using **`ReaderStream`** → no full file loaded in RAM.
-  * Consistent **`Cache-Control: no-store`** headers.
-  * Stricter path and extension validation.
-  * Moving watermark remains, and ffmpeg threads are set to `num_cpus()`.
-
----
-
-# 5) Sessions & Cookies
-
-* **Old:** stored plain `sid` cookie; fixed 7-day TTL; no integrity protection.
-* **New:**
-
-  * TTL now configurable (`SESSION_TOKEN_TTL`).
-  * Cookie **signed with HMAC-SHA256** (`b64(sid).b64(sig)`) → prevents forgery.
-  * Secure cookie attributes: `HttpOnly`, `SameSite=Lax`.
-  * API now requires `&Config` for access to `hmac_secret` and TTL:
-
-    * `create_session(pool, &cfg, user_id, is_admin, cookies)`
-    * `destroy_session(pool, &cfg, cookies)`
-    * `current_user_id(pool, &cfg, cookies)`
-
----
-
-# 6) Configuration & Directories
-
-* **Old:** `media_dir` sometimes defaulted to `hls_root`; `tmp_dir` fixed; no `allow_exts`.
-* **New:**
-
-  * Default **`media_dir = media/`**, with separate **`hls_root`** for temporary HLS sessions.
-  * **`tmp_dir`** now cross-platform (uses OS temp; `/dev/shm` on Linux if available).
-  * **`ensure_dirs`** creates all required directories, including `hls_root`.
-  * `allow_exts` read from `ALLOW_EXTS`.
-  * Startup logs redact DB credentials.
-
----
-
-# 7) Security & Robustness
-
-* **Old:** potential race conditions / partial uploads; cookies could be forged; full-file reads for streaming.
-* **New:**
-
-  * Atomic rename + size limit + MIME validation on upload.
-  * HMAC-signed cookies + expired-session cleanup.
-  * Streaming I/O for HLS serving.
-  * `last_error` written to DB on failures for easier diagnostics.
-
----
-
-# 8) Migration Impact (Changed APIs)
-
-* `sessions::*` functions now require `&Config`.
-* `Worker::new(pool, cfg, concurrency)` stores `cfg` for TTL/dirs.
-* `ffmpeg::run_ffmpeg(args, work_dir)` now used by both worker and streaming layers.
-* New or updated environment variables:
-  `ALLOW_EXTS`, `MAX_UPLOAD_BYTES`, `SESSION_TOKEN_TTL`, `HMAC_SECRET`, `HLS_ROOT`, `MEDIA_DIR`, `TMP_DIR`, `WATERMARK_FONT`.
-
----
-
-## Summary
-
-The new version is significantly **faster** (buffered I/O, single-process multi-rendition, faststart), **more memory-efficient** (streamed HLS delivery), and far more **secure** (HMAC cookies, path validation, size & MIME checks), while offering better **observability** (DB status and error logging).
-
-
-## 🚀 Key Features
-
-* 🔐 **User & Admin Authentication** (login/register/reset password/change password)
-* 🎥 **Video Upload** (MP4, stored securely in `/storage/`)
-* 💧 **Dynamic Watermarking** – watermark moves randomly every few seconds
-* ⚡ **HLS Transcoding via FFmpeg** – fast, segmented streaming
-* 💰 **Pay-Per-View Access** – users pay per video
-* 👥 **Allowlist System** – creators can manually grant view access
-* 📊 **Dashboard** for video management and viewer control
-* 🖥️ **Responsive Frontend** – HTML + JS in `/public`
-* 🧩 **Admin Panel** – manage users, fiat payments, SMTP settings, and video content
-* 💵 **USD → IDR Conversion** for pricing ($1 = Rp17,000)
-* 💳 **Multi-Provider Fiat Payment** – Stripe, PayPal, Midtrans, Xendit via plugin architecture
-* 🔔 **Webhook Receivers** – each provider delivers payment notifications automatically
-* 📧 **SMTP Email Notifications** – password reset, change-password confirmation
-* 🏦 **Auto-Disburse** – Xendit auto-transfers 90% of payment to creator's bank account
-* 📊 **Admin Payment Dashboard** – monitor all fiat invoices, trigger manual disburse
+→ See [PAYMENT.md](PAYMENT.md) for the full payment flow including wallet and fiat.
 
 ---
 
 ## 🔄 Business Processes
 
-This section describes the platform's primary business workflows from the perspectives of viewers, creators, payments, and system operations.
-
 ### Primary Actors
 
-| Actor | Responsibilities |
-|---|---|
-| **Viewer / buyer** | Registers, logs in, selects a video, pays for access, and watches unlocked content. |
-| **Creator / video owner** | Completes payment profile details, uploads videos, sets prices, manages metadata, and grants manual access. |
-| **Platform administrator** | Bootstraps or logs in as an administrator; monitors users, sessions, videos, allowlists, purchases, fiat invoices; configures SMTP; and triggers disburse. |
-| **Backend system** | Authenticates sessions, stores metadata, runs transcoding, verifies payments, manages access rights, and serves HLS. |
-| **X402 smart contract** | Processes on-chain payments and splits funds between the creator and administrator according to basis points signed by the backend. |
+| Actor | Role |
+|-------|------|
+| **Viewer / Buyer** | Registers, purchases video access via wallet/crypto/fiat, watches watermarked stream |
+| **Creator / Video Owner** | Uploads videos, sets price, configures affiliate program, receives wallet revenue |
+| **Affiliate** | Shares referral links, earns commission from creator's revenue when buyers convert |
+| **Platform Admin** | Manages users, approves deposits/payouts, monitors all payments and commissions |
+| **X402 Smart Contract** | Splits on-chain payments between creator and platform per signed basis points |
 
-### 1. Registration, Login, and Sessions
+### 1. Registration & Authentication
 
-1. A user registers through `POST /auth/register`.
-2. The backend validates the input, hashes the password with Argon2, and creates the user record.
-3. A user logs in through `POST /auth/login`; an administrator uses `POST /admin/login`.
-4. After validating the credentials, the backend creates a database session and sends an HMAC-SHA256-signed `ppv_session` cookie.
-5. Every protected endpoint verifies the cookie signature, loads the session, and confirms that it has not expired.
-6. Logging out removes both the database session and browser cookie.
-7. During password recovery, a time-limited, single-use token is stored and later marked as `used` after the password is changed successfully.
+1. User registers via `POST /auth/register` — Argon2 password hash, DB user row.
+2. Login via `POST /auth/login` — HMAC-SHA256 signed `ppv_session` cookie.
+3. Every protected endpoint verifies signature, loads session, checks expiry.
+4. Admin login via `POST /admin/login` — requires `is_admin = true`.
+5. Password recovery via time-limited single-use token.
 
-### 2. Creator Onboarding and Profile Management
+### 2. Video Upload & Processing
 
-1. Every user can act as a creator; there is no separate creator table or role.
-2. A creator updates their profile through `POST /api/profile_update`.
-3. Bank account details, blockchain wallet, preferred chain, WhatsApp number, and profile description are stored on the user record.
-4. The creator wallet must be present and valid before a buyer can start an X402 payment.
+1. Creator POSTs to `POST /api/upload` — extension whitelist + MIME check + size limit.
+2. Written to `*.part` file → atomic rename to prevent partial uploads.
+3. Video record created with `status = queued`, submitted to in-process worker.
+4. Worker generates fast-start MP4, then multi-rendition HLS (`240p/360p/480p`).
+5. On success: `hls_ready = true`, `processing_state = ready`, `hls_master` set.
 
-### 3. Video Upload and Processing
+### 3. Video Purchase — Wallet Path
 
-1. An authenticated creator sends a multipart form to `POST /api/upload` containing `title`, `price_cents`, and `file`.
-2. The backend validates the extension and size, writes the upload to a temporary `*.part` file, and then performs an atomic rename.
-3. Video metadata is created with the initial `queued` status.
-4. A job is submitted to the in-memory transcoding worker.
-5. The worker changes the status to `processing`, creates a fast-start MP4, and generates adaptive-bitrate HLS with FFmpeg.
-6. On success, the video is assigned `hls_ready = true` and `processing_state = 'ready'`. On failure, its status becomes `error` and the cause is stored in `last_error`.
-7. The creator can update the title, description, and price through `POST /api/video_update`.
+1. Buyer opens `watch.html?video_id=X` (optionally with `?ref=AFFILIATE_USERNAME`).
+2. `GET /api/pay/all_options` returns wallet balance, x402 tokens, fiat providers in one call.
+3. Buyer selects Wallet tab → `POST /api/wallet/pay` with `{ video_id, ref_code }`.
+4. Atomic DB transaction: debit buyer, credit creator (90%), create ledger rows, insert purchase + allowlist.
+5. If `ref_code` is set and affiliate program is active: commission deducted from creator, credited to affiliate.
 
-> **Operational note:** the transcode queue currently resides in the application process memory. Queued jobs do not survive a process restart, although video metadata and the last recorded status remain in PostgreSQL.
+### 4. Video Purchase — X402 Path
 
-### 4. Discovery and Manual Access
+1. `POST /api/pay/x402/start` — invoice created, signed with admin ECDSA key, `affiliate_ref` stored.
+2. MetaMask executes `payNativeSigned` / `payERC20Signed` on-chain.
+3. `POST /api/pay/x402/confirm` — receipt verified, `Paid` event decoded, invoice updated.
+4. Purchase + allowlist inserted; affiliate commission processed.
 
-1. The marketplace loads its catalog through `GET /api/videos`.
-2. A creator retrieves their own videos through `GET /api/my_videos`.
-3. A creator can search for users through `GET /api/user_lookup`.
-4. A creator grants manual access through `POST /api/allow`.
-5. The backend confirms that the requester owns the video and then adds the `(video_id, username)` pair to the allowlist.
+### 5. Video Purchase — Fiat Path
 
-### 5. PPV Purchase with X402
+1. `POST /api/pay/:provider/start` — `fiat_invoices` row pre-inserted, `affiliate_ref` stored, provider checkout URL returned.
+2. Buyer pays on provider's hosted page.
+3. Provider webhook → `POST /api/pay/:provider/webhook` — signature verified, access granted.
+4. Affiliate commission processed after access is confirmed.
 
-1. A viewer selects a video and requests payment options through `GET /api/pay/options?video_id=...`.
-2. The backend loads the video price, creator wallet, and active payment tokens from the database.
-3. The viewer selects a chain and token, then sends `POST /api/pay/x402/start`.
-4. The backend creates a unique invoice, calculates the token amount in its smallest unit (`wei`), stores the invoice hash, sets an expiration time, and signs the smart-contract payment payload.
-5. The viewer's wallet calls the X402 contract with the payload. The contract transfers and splits the funds between the creator and administrator, then emits a `Paid` event.
-6. Access can be finalized through either of two paths:
-   * **HTTP confirmation** — the frontend sends the transaction hash to `POST /api/pay/x402/confirm`; the backend reads the RPC receipt and validates the contract address, event, invoice hash, video ID, and payment amount.
-   * **Optional watcher** — when the `x402-watcher` feature and `WATCHER_ENABLE=1` are enabled, the backend listens for `Paid` events over WebSocket.
-7. The invoice is updated to `paid` or `underpaid`.
-8. A full payment creates a purchase record and adds the viewer to the allowlist idempotently.
+### 6. Affiliate Program
 
-> **Playback authorization source:** viewing access currently depends on video ownership or the presence of the viewer's username in `allowlist`. The `purchases` table acts as the purchase ledger and audit trail; a successful payment also writes to `allowlist` to unlock playback.
+1. Creator configures commission % via `POST /api/affiliate/settings` (0–90%).
+2. Affiliate gets referral link from `GET /api/affiliate/link?video_id=X`.
+3. Buyer arrives via `?ref=AFFILIATE_USERNAME`; referral notice shown in payment panel.
+4. On purchase: `commission_cents = price * commission_pct / 100` moved from creator → affiliate wallet.
+5. Affiliate sees earnings in `GET /api/affiliate/earnings`.
 
-### 6. Playback and Content Protection
+→ Full details: [AFFILIATE.md](AFFILIATE.md)
 
-1. A viewer requests playback through `GET /api/request_play?video_id=...`.
-2. The backend validates the session and checks whether the viewer owns the video or appears in the allowlist.
-3. The backend resolves the source file, creates a temporary HLS session directory, and generates a watermark containing the username and timestamp.
-4. FFmpeg creates a session-specific HLS stream with a moving watermark.
-5. The backend returns the `/hls/:session/master.m3u8` playlist URL.
-6. Playlists and segments are streamed with `Cache-Control: no-store` and validated path and file names.
+### 7. Playback & Content Protection
 
-### 7. Fiat Payment with Provider Plugins
+1. `GET /api/request_play?video_id=X` — session + ownership/allowlist check.
+2. Per-viewer HLS session created with moving username+timestamp watermark via FFmpeg.
+3. Segments streamed via `GET /hls/:session/:file` with `Cache-Control: no-store`.
 
-1. A buyer selects a fiat provider (Stripe, PayPal, Midtrans, or Xendit) and starts a checkout via `POST /api/pay/:provider/start`.
-2. The backend pre-inserts a `fiat_invoices` row with status `pending` and returns the payment URL (checkout page or invoice URL).
-3. The buyer completes payment on the provider's hosted page.
-4. The provider sends a webhook to `POST /api/pay/:provider/webhook` with payment notification.
-5. The backend verifies the webhook signature (HMAC for Stripe, signature-verify API for PayPal, SHA-512 for Midtrans, callback token for Xendit).
-6. On verified payment, the backend updates `fiat_invoices` to `paid`, inserts a `purchases` row, and inserts an `allowlist` row granting permanent access.
-7. For Xendit, the backend automatically calls the Xendit Disbursements API to transfer 90% of the payment to the creator's bank account.
+### 8. Wallet Operations
 
-### 8. Administrator Monitoring
+1. **Deposit**: user submits amount → admin approves → balance credited.
+2. **Withdrawal**: balance held immediately → admin marks paid or rejects (auto-refund).
+3. **P2P Transfer**: instant, atomic, both parties get ledger rows.
+4. All operations append to `wallet_transactions` for full audit trail.
 
-1. An administrator logs in with an account whose `is_admin` flag is enabled.
-2. The `GET /admin/data` endpoint shows raw records for users, sessions, videos, allowlists, purchases, and password resets.
-3. The `GET /admin/payments` endpoint shows fiat invoice monitoring with filter by provider and status.
-4. The admin can trigger disburse for paid invoices via `POST /admin/payments/:uid/disburse`.
-5. SMTP settings for email notifications are managed via `GET/POST /admin/smtp`.
-6. Admin can change their own password via `POST /admin/change_password`.
-7. The `/setup_admin` endpoint can create or promote the initial administrator when a bootstrap token is configured.
+→ Full details: [WALLET.md](WALLET.md)
+
+### 9. Admin Operations
+
+- `GET /admin/data` — users, sessions, videos, purchases, allowlists
+- `GET /admin/payments` — fiat invoices with filter/disburse
+- `GET /admin/wallet/transactions` — all wallet operations with approve/reject
+- `GET /admin/affiliate/commissions` — full commission ledger
+- `GET/POST /admin/smtp` — email configuration
 
 ---
 
 ## 🧭 Business Process-to-Code Mapping
 
-### Mapping Summary
-
-| Business process | HTTP route / trigger | Primary implementation | Primary effects |
-|---|---|---|---|
-| User registration | `POST /auth/register` | `src/handlers/auth_user.rs::post_register` | Inserts a user with a password hash. |
-| User login/logout | `POST /auth/login`, `POST /auth/logout` | `src/handlers/auth_user.rs`, `src/sessions.rs` | Creates or removes the session and signed cookie. |
-| Administrator login/logout | `POST /admin/login`, `POST /admin/logout` | `src/handlers/auth_admin.rs`, `src/sessions.rs` | Validates `is_admin` and manages the session. |
-| Forgot/reset password | `POST /auth/forgot`, `POST /auth/reset` | `src/handlers/password.rs`, `src/handlers/auth_user.rs` | Creates a reset token, replaces the password hash, and marks the token as used. |
-| User change password | `POST /api/change_password` | `src/handlers/auth_user.rs::change_password` | Verifies current password, hashes new password, sends email notification. |
-| Admin change password | `POST /admin/change_password` | `src/handlers/auth_admin.rs::admin_change_password` | Same flow as user change password but requires admin session. |
-| Fiat invoice creation | `POST /api/pay/:provider/start` | `src/handlers/payment_plugins.rs::create_payment_invoice` | Pre-inserts `fiat_invoices`, calls plugin, returns payment URL. |
-| Fiat payment webhook | `POST /api/pay/:provider/webhook` | `src/handlers/payment_plugins.rs::handle_webhook` | Verifies webhook, marks invoice paid, inserts purchase and allowlist. |
-| Admin payment monitor | `GET /admin/payments` | `src/handlers/admin.rs::admin_payments` | Filtered list of fiat invoices with totals. |
-| Admin disburse | `POST /admin/payments/:uid/disburse` | `src/handlers/admin.rs::admin_disburse` | Xendit: calls API; others: marks manual. |
-| SMTP settings | `GET/POST /admin/smtp` | `src/handlers/admin.rs::admin_smtp_get/save` | Reads/saves smtp_settings row, optionally sends test email. |
-| Creator profile | `GET /api/profile`, `POST /api/profile_update` | `src/handlers/users.rs` | Reads or updates profile, contact, bank, and wallet details. |
-| Marketplace browsing | `GET /api/videos` | `src/handlers/video.rs::list_videos` | Joins video data with creator profile data. |
-| Video upload | `POST /api/upload` | `src/handlers/upload.rs::upload_video` | Writes the file, inserts video metadata, and enqueues a job. |
-| Video transcoding | Internal trigger after upload | `src/worker.rs`, `src/ffmpeg.rs` | Updates processing status and produces ABR HLS media. |
-| Video management | `GET /api/my_videos`, `POST /api/video_update` | `src/handlers/video.rs` | Reads creator-owned videos and updates metadata or price. |
-| Manual access grant | `GET /api/user_lookup`, `POST /api/allow` | `src/handlers/video.rs` | Validates ownership and inserts an allowlist entry. |
-| Payment options | `GET /api/pay/options` | `src/handlers/pay.rs::pay_options` | Reads the price, creator wallet, and active tokens. |
-| X402 invoice creation | `POST /api/pay/x402/start` | `src/handlers/pay.rs::x402_start` | Inserts an invoice and creates the payment signature. |
-| Payment confirmation | `POST /api/pay/x402/confirm` | `src/handlers/pay.rs::x402_confirm` | Verifies the receipt/event, updates the invoice, and inserts purchase and allowlist records. |
-| Asynchronous payment event | `Paid` event over WSS | `src/services/x402_watcher.rs` | Matches the invoice hash and unlocks access. |
-| Playback authorization | `GET /api/request_play` | `src/handlers/stream.rs`, `src/handlers/video.rs::user_has_view_access` | Checks ownership/allowlist access and generates watermarked HLS. |
-| HLS delivery | `GET /hls/:session/:file` | `src/handlers/stream.rs::serve_hls` | Streams a playlist or segment from the session directory. |
-| Administrator monitoring | `GET /admin/data` | `src/handlers/admin.rs::admin_data` | Reads operational records and entity counts. |
-
-### Upload-to-Ready Flow
-
-```mermaid
-sequenceDiagram
-    actor Creator
-    participant API as Axum API
-    participant DB as PostgreSQL
-    participant FS as File Storage
-    participant Worker as Transcode Worker
-    participant FFmpeg
-
-    Creator->>API: POST /api/upload
-    API->>API: Verifikasi signed session
-    API->>FS: Tulis .part dan atomic rename
-    API->>DB: INSERT videos (queued)
-    API->>Worker: enqueue TranscodeJob
-    Worker->>DB: UPDATE status = processing
-    Worker->>FFmpeg: faststart + HLS ABR
-    FFmpeg->>FS: media/<video_id>/master.m3u8 + segments
-    alt berhasil
-        Worker->>DB: UPDATE hls_ready=true, status=ready
-    else gagal
-        Worker->>DB: UPDATE status=error, last_error
-    end
-```
-
-### Flow Pembayaran sampai Unlock
-
-```mermaid
-sequenceDiagram
-    actor Viewer
-    participant API as Axum API
-    participant DB as PostgreSQL
-    participant Wallet
-    participant X402 as X402Splitter
-    participant RPC as Blockchain RPC
-
-    Viewer->>API: GET /api/pay/options
-    API->>DB: Read video, creator wallet, pay_tokens
-    Viewer->>API: POST /api/pay/x402/start
-    API->>DB: INSERT x402_invoices (pending)
-    API-->>Viewer: Invoice hash, amount, deadline, signature
-    Viewer->>Wallet: Approve/send transaction
-    Wallet->>X402: payNative/payERC20
-    X402-->>RPC: Emit Paid event
-    Viewer->>API: POST /api/pay/x402/confirm (tx_hash)
-    API->>RPC: eth_getTransactionReceipt
-    API->>API: Validate contract, event, invoice, video, amount
-    API->>DB: UPDATE invoice paid/underpaid
-    alt pembayaran cukup
-        API->>DB: INSERT purchases
-        API->>DB: INSERT allowlist
-        API-->>Viewer: Access unlocked
-    else kurang bayar
-        API-->>Viewer: missing_wei
-    end
-```
-
-### Flow Playback
-
-```mermaid
-flowchart LR
-    A[Viewer request_play] --> B{Session valid?}
-    B -- No --> X[401 Unauthorized]
-    B -- Yes --> C{Owner or included in allowlist?}
-    C -- No --> Y[403 Forbidden]
-    C -- Yes --> D[Resolve source video]
-    D --> E[Create HLS session and username watermark]
-    E --> F[FFmpeg overlays watermark onto HLS]
-    F --> G[Return playlist URL]
-    G --> H[serve_hls streams playlist and segments]
-```
+| Business Process | Route | Source File |
+|-----------------|-------|-------------|
+| User register/login | `POST /auth/register`, `/auth/login` | `src/handlers/auth_user.rs` |
+| Admin login | `POST /admin/login` | `src/handlers/auth_admin.rs` |
+| Password recovery | `POST /auth/forgot` | `src/handlers/auth_user.rs` |
+| Creator profile | `GET/POST /api/profile` | `src/handlers/users.rs` |
+| Video upload | `POST /api/upload` | `src/handlers/upload.rs` |
+| Video transcoding | Worker internal | `src/worker.rs`, `src/ffmpeg.rs` |
+| Marketplace browse | `GET /api/videos` | `src/handlers/video.rs` |
+| Manual access grant | `POST /api/allow` | `src/handlers/video.rs` |
+| All payment options | `GET /api/pay/all_options` | `src/handlers/pay.rs` |
+| X402 invoice | `POST /api/pay/x402/start` | `src/handlers/pay.rs` |
+| X402 confirm | `POST /api/pay/x402/confirm` | `src/handlers/pay.rs` |
+| Fiat invoice | `POST /api/pay/:provider/start` | `src/handlers/payment_plugins.rs` |
+| Fiat webhook | `POST /api/pay/:provider/webhook` | `src/handlers/payment_plugins.rs` |
+| Wallet balance | `GET /api/wallet/balance` | `src/handlers/wallet.rs` |
+| Wallet deposit | `POST /api/wallet/deposit` | `src/handlers/wallet.rs` |
+| Wallet withdraw | `POST /api/wallet/withdraw` | `src/handlers/wallet.rs` |
+| Wallet transfer | `POST /api/wallet/transfer` | `src/handlers/wallet.rs` |
+| Wallet pay video | `POST /api/wallet/pay` | `src/handlers/wallet.rs` |
+| Affiliate settings | `GET/POST /api/affiliate/settings` | `src/handlers/affiliate.rs` |
+| Affiliate link | `GET /api/affiliate/link` | `src/handlers/affiliate.rs` |
+| Affiliate earnings | `GET /api/affiliate/earnings` | `src/handlers/affiliate.rs` |
+| Affiliate commission | Internal helper | `src/commission.rs` |
+| Playback auth | `GET /api/request_play` | `src/handlers/stream.rs` |
+| HLS delivery | `GET /hls/:session/:file` | `src/handlers/stream.rs` |
+| Admin wallet | `/admin/wallet/transactions/*` | `src/handlers/admin.rs` |
+| Admin affiliate | `GET /admin/affiliate/commissions` | `src/handlers/affiliate.rs` |
+| Admin payments | `GET /admin/payments` | `src/handlers/admin.rs` |
 
 ---
 
-## 🗄️ Business Process-to-Database Mapping
+## 🗄️ Database Schema
 
-### Entities and Responsibilities
+### Migration Files
 
-| Table | Business role | Written by | Read by / important relationships |
-|---|---|---|---|
-| `users` | User/admin identity, creator profile, and payment destination. | Registration, administrator setup, profile update, password reset. | Authentication, video catalog, payments, watermarking, and administrator dashboard. Referenced by sessions, videos, purchases, resets, and invoices. |
-| `sessions` | Server-side login sessions with a TTL and administrator flag. | User/admin login; removed on logout or expiration. | Every protected endpoint through `sessions::current_user_id`. |
-| `password_resets` | Single-use password recovery tokens. | Forgot-password and reset-password flows. | Token, expiration, and `used` status validation. |
-| `videos` | PPV products containing ownership, title, description, price, source file, and HLS status. | Upload handler, transcode worker, video update handler. | Marketplace, creator dashboard, access checks, payments, playback, and administrator dashboard. |
-| `allowlist` | Playback permission source for each `(video_id, username)` pair. | Manual grants, X402 confirmation, or watcher. | Playback authorization and creator dashboard viewer lists. |
-| `purchases` | Ledger of user purchases for videos. | X402 confirmation or watcher. | Auditing and administrator dashboard; not read directly for playback authorization. |
-| `pay_tokens` | Master data for supported payment tokens and chains. | Migrations, seed data, or database operations. | Payment options and token validation during invoice creation. |
-| `x402_invoices` | On-chain payment lifecycle from quote to paid/underpaid. | Payment start, payment confirmation, and watcher. | Invoice matching, amount validation, transaction auditing, and access unlocking. |
-| `pay_tokens_compat` | Compatibility view for legacy and current token column names. | Created by a migration. | Preserves compatibility for queries or integrations that still use the `erc20` alias. |
+| Migration | Content |
+|-----------|---------|
+| `sql/001–012` | Core: users, sessions, videos, allowlist, purchases, profile |
+| `migrations/013–024` | X402: pay_tokens, x402_invoices, compatibility view |
+| `migrations/025` | Fiat plugin: fiat_invoices |
+| `migrations/026` | Payment plugin schema |
+| `migrations/027` | SMTP settings |
+| `migrations/028_wallet.sql` | `users.balance_cents`, `wallet_transactions` |
+| `migrations/029_affiliate.sql` | `affiliate_settings`, `affiliate_commissions`, `affiliate_ref` on invoices |
 
-### Primary Data Relationships
+### Tables Overview
+
+| Table | Role |
+|-------|------|
+| `users` | Identity, profile, wallet balance (`balance_cents`) |
+| `sessions` | Server-side signed sessions with TTL |
+| `password_resets` | Single-use recovery tokens |
+| `videos` | PPV products — price, ownership, HLS state |
+| `allowlist` | `(video_id, username)` playback permission |
+| `purchases` | Purchase audit ledger |
+| `pay_tokens` | Supported crypto tokens/chains |
+| `x402_invoices` | On-chain invoice lifecycle + `affiliate_ref` |
+| `fiat_invoices` | Fiat invoice lifecycle + `affiliate_ref` |
+| `smtp_settings` | Email server configuration |
+| `wallet_transactions` | Immutable wallet ledger (deposit/withdraw/transfer/payment) |
+| `affiliate_settings` | Per-video affiliate commission config |
+| `affiliate_commissions` | Commission audit log |
+
+### Entity Relationships
 
 ```mermaid
 erDiagram
-    USERS ||--o{ SESSIONS : has
-    USERS ||--o{ PASSWORD_RESETS : requests
     USERS ||--o{ VIDEOS : owns
-    USERS ||--o{ PURCHASES : buys
+    USERS ||--o{ WALLET_TRANSACTIONS : has
+    USERS ||--o{ AFFILIATE_COMMISSIONS : earns
+    VIDEOS ||--o{ AFFILIATE_SETTINGS : has
+    VIDEOS ||--o{ X402_INVOICES : billed_for
+    VIDEOS ||--o{ FIAT_INVOICES : billed_for
     VIDEOS ||--o{ PURCHASES : purchased_as
     VIDEOS ||--o{ ALLOWLIST : grants
-    USERS ||--o{ X402_INVOICES : buyer
-    USERS ||--o{ X402_INVOICES : creator
-    VIDEOS ||--o{ X402_INVOICES : billed_for
-
-    USERS {
-        text id PK
-        text username UK
-        text email UK
-        text password_hash
-        int is_admin
-        text wallet_account
-        bigint wallet_chain_id
-    }
-    VIDEOS {
-        text id PK
-        text owner_id FK
-        text title
-        bigint price_cents
-        text filename
-        boolean hls_ready
-        text processing_state
-        text hls_master
-    }
-    ALLOWLIST {
-        text video_id
-        text username
-    }
-    PURCHASES {
-        bigint id PK
-        text user_id FK
-        text video_id FK
-        text created_at
-    }
-    X402_INVOICES {
-        bigint id PK
-        text invoice_uid UK
-        text invoice_uid_hash
-        text user_id FK
-        text video_id FK
-        text creator_id FK
-        bigint chain_id
-        text token_symbol
-        numeric required_amount_wei
-        numeric paid_amount_wei
-        text status
-        text tx_hash
-    }
 ```
-
-### Status and Transition Mapping
-
-| Entity | Status | Meaning and transition |
-|---|---|---|
-| `videos.processing_state` | `queued` | The upload and metadata are stored, and the job is waiting for a worker. |
-| `videos.processing_state` | `processing` | The worker is running fast-start processing and transcoding. |
-| `videos.processing_state` | `ready` | HLS generation succeeded; `hls_ready=true` and `hls_master` are set. |
-| `videos.processing_state` | `error` | Job enqueueing or transcoding failed; details are stored in `last_error`. |
-| `x402_invoices.status` | `pending` | The invoice exists and is waiting for payment or confirmation. |
-| `x402_invoices.status` | `paid` | A valid event satisfies the required amount; purchase and allowlist records are created. |
-| `x402_invoices.status` | `underpaid` | A valid event paid less than `required_amount_wei`; access remains locked. |
-| `x402_invoices.status` | `expired` / `cancelled` | Schema-supported lifecycle states for expired or cancelled invoices. |
-
-### Source of Truth by Requirement
-
-| Requirement | Source of truth |
-|---|---|
-| Creator identity and profile | `users` |
-| Login status | `sessions` plus the signed `ppv_session` cookie |
-| Content price and ownership | `videos` |
-| Transcode readiness | `videos.hls_ready`, `videos.processing_state`, `videos.hls_master` |
-| Playback permission | Ownership through `videos.owner_id` **or** a matching entry in `allowlist` |
-| Purchase history | `purchases` |
-| Crypto payment status and proof | `x402_invoices` |
-| Available payment tokens | `pay_tokens` |
-| Original video file | Configured upload/storage directory |
-| Worker-generated HLS | `media_dir/<video_id>/` |
-| Per-viewer watermarked HLS | `hls_root/<session>/` |
-
-### Migration Order
-
-The core database migrations are stored in `sql/001_*.sql` through `sql/012_*.sql`, while X402 additions are stored in `migrations/013_*.sql` and later files. Run:
-
-```bash
-make migrate
-```
-
-This target applies every file in `sql/` and then `migrations/` in version order. The application also runs SQLx migrations from `sql/` during startup, but deployments that use X402 must still run `make migrate` so the `pay_tokens` and `x402_invoices` schemas are available.
 
 ---
 
 ## 🧱 Project Structure
 
 ```
-ppv_stream/
-.
-├── Cargo.lock
+ppv_stream_rust/
+├── contracts/                    # Solidity X402Splitter smart contract
+│   └── contracts/X402Splitter.sol
+├── migrations/                   # Numbered SQL migrations (013–029)
+│   ├── 028_wallet.sql
+│   └── 029_affiliate.sql
+├── public/                       # Frontend HTML + JS
+│   ├── admin/
+│   │   ├── dashboard.html
+│   │   ├── login.html
+│   │   └── wallet.html           # Admin wallet management
+│   ├── auth/
+│   ├── affiliate.html            # Affiliate dashboard
+│   ├── wallet.html               # User wallet UI
+│   ├── watch.html                # 3-tab payment panel + HLS player
+│   └── styles.css
+├── sql/                          # Core schema migrations (001–012)
+├── src/
+│   ├── commission.rs             # Affiliate commission helper (standalone)
+│   ├── config.rs                 # Environment-based configuration
+│   ├── db.rs                     # PostgreSQL pool setup
+│   ├── email.rs                  # SMTP notifications
+│   ├── ffmpeg.rs                 # FFmpeg/FFprobe wrappers
+│   ├── sessions.rs               # HMAC-signed session cookies
+│   ├── validators.rs             # Input validation utilities
+│   ├── worker.rs                 # In-process transcode queue
+│   ├── handlers/
+│   │   ├── admin.rs              # Admin data + wallet admin endpoints
+│   │   ├── affiliate.rs          # Affiliate settings, earnings, admin view
+│   │   ├── auth_admin.rs         # Admin login/logout/change-password
+│   │   ├── auth_user.rs          # User register/login/logout/forgot-password
+│   │   ├── kurs.rs               # Exchange rate (USD/IDR)
+│   │   ├── me.rs                 # /api/me — current user info
+│   │   ├── pay.rs                # X402 + all_options endpoints
+│   │   ├── payment_plugins.rs    # Fiat invoice create/confirm/webhook
+│   │   ├── setup.rs              # Admin bootstrap
+│   │   ├── stream.rs             # HLS playback + watermark
+│   │   ├── upload.rs             # Video upload
+│   │   ├── users.rs              # Profile CRUD + public profiles
+│   │   ├── video.rs              # Video list/update/allowlist
+│   │   └── wallet.rs             # Wallet balance/deposit/withdraw/transfer/pay
+│   ├── plugins/
+│   │   ├── payment/              # Payment plugin registry
+│   │   │   └── providers/        # stripe, paypal, midtrans, xendit, x402
+│   │   └── storage/              # Storage plugin registry
+│   └── services/
+│       └── x402_watcher.rs       # Optional WebSocket blockchain event watcher
 ├── Cargo.toml
-├── Dockerfile
-├── Makefile
-├── README.md
-├── a
-├── contracts
-│   ├── Dockerfile
-│   ├── contracts
-│   │   └── X402Splitter.sol
-│   ├── guidance_smartcontract_deployment
-│   ├── hardhat.config.js
-│   ├── package.json
-│   └── scripts
-│       ├── check_balance.js
-│       ├── deploy_x402.js
-│       └── estimate_gas_cost.js
 ├── docker-compose.yml
-├── migrations
-│   ├── 013_tokens.sql
-│   ├── 014_x402_invoice.sql
-│   ├── 015_users_wallet_chain.sql
-│   ├── 016_purchases_fk_video.sql
-│   ├── 017_allowlist_idx_username.sql
-│   ├── 018_invoice_uid_hash.sql
-│   ├── 019_x402_core.sql
-│   ├── 020_x402_invoice_hash.sql
-│   ├── 021_pay_tokens.sql
-│   ├── 022_pay_tokens_rename_erc20.sql
-│   ├── 023_x402_underpay_and_quote.sql
-│   └── 024_pay_tokens_compat_view.sql
-├── public
-│   ├── admin
-│   │   ├── dashboard.html
-│   │   └── login.html
-│   ├── auth
-│   │   ├── forgot_password.html
-│   │   ├── login.html
-│   │   ├── register.html
-│   │   └── reset_password.html
-│   ├── browse.html
-│   ├── dashboard.html
-│   ├── index.html
-│   ├── styles.css
-│   └── watch.html
-├── sql
-│   ├── 001_init.sql
-│   ├── 002_admins.sql
-│   ├── 003_password_resets.sql
-│   ├── 004_sessions.sql
-│   ├── 005_allowlist.sql
-│   ├── 006_indexes.sql
-│   ├── 007_perf_and_fk.sql
-│   ├── 008_price_cents_bigint.sql
-│   ├── 009_users_username_unique.sql
-│   ├── 010_videos_hls.sql
-│   ├── 011_videos_description.sql
-│   └── 012_user_profile.sql
-├── src
-│   ├── a
-│   ├── auth.rs
-│   ├── bin
-│   │   └── seed_dummy.rs
-│   ├── bootstrap.rs
-│   ├── config.rs
-│   ├── db.rs
-│   ├── email.rs
-│   ├── ffmpeg.rs
-│   ├── handlers
-│   │   ├── admin.rs
-│   │   ├── auth_admin.rs
-│   │   ├── auth_user.rs
-│   │   ├── kurs.rs
-│   │   ├── me.rs
-│   │   ├── mod.rs
-│   │   ├── pages.rs
-│   │   ├── password.rs
-│   │   ├── pay.rs
-│   │   ├── setup.rs
-│   │   ├── stream.rs
-│   │   ├── upload.rs
-│   │   ├── users.rs
-│   │   └── video.rs
-│   ├── hls.rs
-│   ├── main.rs
-│   ├── middleware.rs
-│   ├── models.rs
-│   ├── schema.sql
-│   ├── services
-│   │   └── x402_watcher.rs
-│   ├── sessions.rs
-│   ├── token.rs
-│   ├── util.rs
-│   ├── validators.rs
-│   └── worker.rs
-
-13 directories, 74 files
+├── Makefile
+└── *.md                          # Documentation (see Documentation Index above)
 ```
 
 ---
@@ -628,131 +321,109 @@ ppv_stream/
 ## ⚙️ Quick Start
 
 ```bash
-# 1️⃣ Build and start database
+# 1. Start PostgreSQL
 make db-up
+
+# 2. Run all migrations
 make migrate
 
-# 2️⃣ Build Rust app (release)
-make build 
-
-# 3️⃣ Run application
+# 3. Build and run
+make build
 make run
+
+# 4. Seed test data (optional)
 make seed
 ```
 
-The service will start on **http://localhost:8080**
+The server starts at **http://localhost:8080**
 
 ---
 
-## 👤 Default User Accounts (for testing)
+## 👤 Default Test Accounts
 
-| No | Username | Email | Password |
-|----|----------|-------|----------|
-| 1 | user01 | user01@example.com | Passw0rd01! |
-| 2 | user02 | user02@example.com | Passw0rd02! |
-| 3 | user03 | user03@example.com | Passw0rd03! |
-| 4 | user04 | user04@example.com | Passw0rd04! |
-| 5 | user05 | user05@example.com | Passw0rd05! |
-| 6 | user06 | user06@example.com | Passw0rd06! |
-| 7 | user07 | user07@example.com | Passw0rd07! |
-| 8 | user08 | user08@example.com | Passw0rd08! |
-| 9 | user09 | user09@example.com | Passw0rd09! |
-| 10 | user10 | user10@example.com | Passw0rd10! |
+| Username | Email | Password |
+|----------|-------|----------|
+| user01 | user01@example.com | Passw0rd01! |
+| user02 | user02@example.com | Passw0rd02! |
+| … | … | … |
+| user10 | user10@example.com | Passw0rd10! |
 
 ---
 
-## 🗃️ Database Schema
+## 📦 Tech Stack
 
-The database schema includes:
-- **Core tables**: `users`, `sessions`, `password_resets`, `videos`, `allowlist`, `purchases`
-- **Crypto payment tables**: `pay_tokens`, `x402_invoices`, `pay_tokens_compat` (view)
-- **Fiat payment tables**: `fiat_invoices` (migration `026_fiat_invoices.sql`)
-- **System config tables**: `smtp_settings` (migration `027_smtp_settings.sql`)
-
-See **Business Process-to-Database Mapping** above for each table's responsibilities, relationships, statuses, and source-of-truth rules.
+| Layer | Technology |
+|-------|-----------|
+| Backend | Rust + Axum + SQLx |
+| Database | PostgreSQL |
+| Frontend | HTML + Vanilla JS (Bootstrap 5) |
+| Media | FFmpeg — HLS transcoding + forensic watermarking |
+| Payments | X402 (EVM smart contract) + Stripe + PayPal + Midtrans + Xendit |
+| Sessions | HMAC-SHA256 signed cookies via tower-cookies |
+| Storage | Plugin: local disk or S3-compatible |
 
 ---
 
 ## 🔐 Architecture Overview
 
 ```
-┌───────────────┐
-│ User Browser  │
-│ (HTML + JS)   │
-└──────┬────────┘
-       │ HTTP
-       ▼
-┌───────────────────────┐
-│ Rust Backend (Axum)   │
-│  - Auth (user/admin)  │
-│  - Upload MP4         │
-│  - Allowlist / Buy    │
-│  - Request HLS Token  │
-│  - Serve HLS Segments │
-└────────┬──────────────┘
-         │
-         ▼
-   ┌──────────────┐
-   │ PostgreSQL   │
-   │ (users,      │
-   │  videos,     │
-   │  purchases,  │
-   │  allowlist)  │
-   └──────────────┘
-         │
-         ▼
-   ┌──────────────┐
-   │ File Storage │
-   │  - /storage/ │
-   │  - /hls/     │
-   └──────────────┘
+┌─────────────────────────────────────────────┐
+│            User Browser                     │
+│  watch.html — 3-tab payment panel           │
+│  wallet.html — balance + history            │
+│  affiliate.html — earnings + links          │
+└──────────────────┬──────────────────────────┘
+                   │ HTTP/JSON
+                   ▼
+┌─────────────────────────────────────────────┐
+│           Rust Backend (Axum)               │
+│  Auth · Upload · Stream · Pay               │
+│  Wallet · Affiliate · Commission            │
+│  Payment plugins (stripe/paypal/midtrans/   │
+│  xendit/x402) · Storage plugins             │
+└──────────┬──────────────────┬───────────────┘
+           │                  │
+           ▼                  ▼
+  ┌──────────────┐   ┌──────────────────────┐
+  │  PostgreSQL  │   │  File Storage        │
+  │  13 tables   │   │  /storage/ /media/   │
+  │  wallet +    │   │  /hls/ (per-viewer)  │
+  │  affiliate   │   └──────────────────────┘
+  └──────────────┘
+           │
+           ▼
+  ┌──────────────────────┐
+  │  EVM Blockchain      │
+  │  X402Splitter.sol    │
+  │  (optional)          │
+  └──────────────────────┘
 ```
-
----
-
-## 📦 Tech Stack
-
-- **Backend:** Rust + Axum + SQLx
-- **Database:** PostgreSQL
-- **Frontend:** HTML, CSS, JavaScript
-- **Media:** FFmpeg (HLS + watermarking)
-- **Session:** tower-cookies
 
 ---
 
 ## 💡 License
 
-Apache 2.0 license
+Apache 2.0
 
 ---
 
 ## 🧠 Project Metadata
 
 ```
-=============================================================================
 Project : PPV Stream — Secure Pay-Per-View Video Platform
 Author  : Kukuh Tripamungkas Wicaksono (Kukuh TW)
 Email   : kukuhtw@gmail.com
 WhatsApp: https://wa.me/628129893706
 LinkedIn: https://id.linkedin.com/in/kukuhtw
 GitHub  : https://github.com/kukuhtw/ppv_stream_rust
-=============================================================================
 ```
-
-### 📜 Description
-
-PPV Stream is a secure Rust-based Pay-Per-View (PPV) video streaming platform. It allows independent creators to upload, sell, and stream encrypted videos with dynamic watermarking to prevent piracy. Built with Rust (Axum), PostgreSQL, and FFmpeg (HLS transcoding), it provides fast, safe, and transparent streaming.
-
-### ✨ Tagline
-
-**"Fair streaming for creators, secure content for viewers, and freedom for everyone."**
 
 ---
 
 <p align="center">
-  © 2025 <b>Kukuh Tripamungkas Wicaksono</b><br>
-  📧 <a href="mailto:kukuhtw@gmail.com">kukuhtw@gmail.com</a> | 
-  💬 <a href="https://wa.me/628129893706">WhatsApp</a> | 
-  🔗 <a href="https://id.linkedin.com/in/kukuhtw">LinkedIn</a> | 
+  © 2025–2026 <b>Kukuh Tripamungkas Wicaksono</b><br>
+  📧 <a href="mailto:kukuhtw@gmail.com">kukuhtw@gmail.com</a> |
+  💬 <a href="https://wa.me/628129893706">WhatsApp</a> |
+  🔗 <a href="https://id.linkedin.com/in/kukuhtw">LinkedIn</a> |
   💻 <a href="https://github.com/kukuhtw/ppv_stream_rust">GitHub</a>
 </p>

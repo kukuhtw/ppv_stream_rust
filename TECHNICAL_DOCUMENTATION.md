@@ -1,8 +1,10 @@
 # PPV Stream Rust Technical Documentation
 
+→ [README.md](README.md) | [WALLET.md](WALLET.md) | [AFFILIATE.md](AFFILIATE.md) | [PAYMENT.md](PAYMENT.md) | [PAYMENT_PLUGIN_ARCHITECTURE.md](PAYMENT_PLUGIN_ARCHITECTURE.md)
+
 ## 1. Purpose
 
-This document explains the Rust codebase of the PPV Stream platform, including the purpose of each source file, every important function, module dependencies, runtime flow, database interaction, video processing, authentication, payment, and streaming behavior.
+This document explains the Rust codebase of the PPV Stream platform, including the purpose of each source file, every important function, module dependencies, runtime flow, database interaction, video processing, authentication, payment, streaming, wallet, and affiliate behavior.
 
 The application is a Rust based pay per view video platform built around:
 
@@ -14,6 +16,8 @@ The application is a Rust based pay per view video platform built around:
 * Argon2 for password hashing
 * HMAC signed cookies for session integrity
 * Ethereum compatible x402 payment flows
+* Internal wallet ledger (pure database, no blockchain)
+* Affiliate commission system
 * Optional blockchain event watching
 
 ## 2. High Level Architecture
@@ -59,48 +63,50 @@ flowchart LR
 
 ```text
 src/
-├── main.rs
+├── main.rs                   ← composition root; all routers and state wired here
+├── commission.rs             ← affiliate commission helper (all payment paths use this)
 ├── config.rs
 ├── db.rs
 ├── email.rs                  ← SMTP email (lettre); send_reset, send_password_changed, send_test
 ├── ffmpeg.rs
-├── sessions.rs
+├── sessions.rs               ← HMAC-SHA256 signed session cookies
 ├── validators.rs
-├── worker.rs
-├── auth.rs                   (legacy)
-├── bootstrap.rs              (legacy)
-├── hls.rs                    (legacy)
-├── token.rs                  (legacy)
+├── worker.rs                 ← in-process transcode queue with Semaphore
 ├── handlers/
 │   ├── mod.rs
-│   ├── admin.rs              ← admin_data, admin_payments, admin_disburse, admin_smtp_get/save
+│   ├── admin.rs              ← admin_data, admin_payments, admin_disburse, admin_smtp
+│   │                            admin_wallet_transactions, admin_wallet_approve/complete/reject
+│   ├── affiliate.rs          ← affiliate_settings_get/save, affiliate_link, affiliate_earnings
+│   │                            affiliate_program_info, admin_affiliate_commissions
 │   ├── auth_admin.rs         ← post_admin_login/logout, admin_change_password
 │   ├── auth_user.rs          ← post_register/login/logout/forgot/reset, change_password
-│   ├── kurs.rs
-│   ├── me.rs
-│   ├── pay.rs                ← x402 payment handlers
-│   ├── payment_plugins.rs    ← fiat plugin handlers: create_invoice, handle_webhook
-│   ├── setup.rs
-│   ├── stream.rs
-│   ├── upload.rs
-│   ├── users.rs
-│   └── video.rs
+│   ├── kurs.rs               ← USD/IDR exchange rate
+│   ├── me.rs                 ← GET /api/me (current user info)
+│   ├── pay.rs                ← x402 payment + all_options endpoint
+│   ├── payment_plugins.rs    ← fiat plugin handlers + affiliate commission on webhook
+│   ├── setup.rs              ← admin bootstrap
+│   ├── stream.rs             ← HLS playback + watermark generation
+│   ├── upload.rs             ← video upload with atomic write
+│   ├── users.rs              ← profile CRUD + public profiles
+│   ├── video.rs              ← video list/update/allowlist
+│   └── wallet.rs             ← balance/deposit/withdraw/transfer/pay + commission call
 ├── plugins/
 │   ├── mod.rs
-│   └── payment/
-│       ├── mod.rs
-│       ├── models.rs
-│       ├── traits.rs
-│       ├── registry.rs
-│       └── providers/
-│           ├── mod.rs
-│           ├── x402.rs
-│           ├── stripe.rs     ← Checkout Sessions + HMAC-SHA256 webhook
-│           ├── paypal.rs     ← Orders v2 + verify-webhook-signature
-│           ├── midtrans.rs   ← Snap API + SHA-512 webhook
-│           └── xendit.rs     ← Invoice API + callback token + auto-disburse
+│   ├── payment/
+│   │   ├── mod.rs
+│   │   ├── models.rs
+│   │   ├── traits.rs         ← PaymentPlugin trait
+│   │   ├── registry.rs       ← PaymentPluginRegistry
+│   │   └── providers/
+│   │       ├── x402.rs
+│   │       ├── stripe.rs     ← Checkout Sessions + HMAC-SHA256 webhook
+│   │       ├── paypal.rs     ← Orders v2 + verify-webhook-signature
+│   │       ├── midtrans.rs   ← Snap API + SHA-512 webhook
+│   │       └── xendit.rs     ← Invoice API + callback token + auto-disburse
+│   └── storage/
+│       └── ...               ← local / S3 storage plugin
 ├── services/
-│   └── x402_watcher.rs
+│   └── x402_watcher.rs       ← optional WebSocket blockchain event listener
 └── bin/
     └── seed_dummy.rs
 ```

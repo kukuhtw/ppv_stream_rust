@@ -3,6 +3,8 @@
 > Internal fiat wallet for PPV Stream Rust.  
 > Pure database ledger — no blockchain, no third-party payment processor required.
 
+→ [README.md](README.md) | [AFFILIATE.md](AFFILIATE.md) | [PAYMENT.md](PAYMENT.md) | [ADMIN_AUTHENTICATION.md](ADMIN_AUTHENTICATION.md)
+
 ---
 
 ## Table of Contents
@@ -576,3 +578,26 @@ Internal  → User Transfers → Atomic swap   → No admin needed → Instant
 ```
 
 The wallet is a **trust-based internal ledger**. Its strength is simplicity — no API keys, no webhook callbacks, no third-party dependencies. Its operational cost is manual admin effort for every deposit and withdrawal. For platforms with a moderate transaction volume and a trusted admin, this is the most cost-effective and controllable model available.
+
+---
+
+## Wallet and Affiliate Commissions
+
+The wallet is also used to pay **affiliate commissions**. When a buyer purchases a video through a referral link (`?ref=USERNAME`), the commission is:
+1. Deducted from the **creator's wallet balance** (`transfer_out`)
+2. Credited to the **affiliate's wallet balance** (`transfer_in`)
+3. Recorded in `affiliate_commissions` for audit
+
+This is handled by `src/commission.rs` and runs as a best-effort step after the main purchase completes. If the creator's balance is insufficient, the commission is skipped — the purchase still succeeds.
+
+→ Full affiliate documentation: [AFFILIATE.md](AFFILIATE.md)
+
+---
+
+## Related Documentation
+
+- [README.md](README.md) — platform overview and quick start
+- [AFFILIATE.md](AFFILIATE.md) — affiliate commission system (funded from creator wallet)
+- [PAYMENT.md](PAYMENT.md) — all payment methods including wallet video purchase
+- [ADMIN_AUTHENTICATION.md](ADMIN_AUTHENTICATION.md) — admin wallet management
+- [TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md) — `src/handlers/wallet.rs` internals

@@ -1,13 +1,31 @@
 # Payment System — How It Works
 
+→ [README.md](README.md) | [WALLET.md](WALLET.md) | [AFFILIATE.md](AFFILIATE.md) | [PAYMENT_PLUGIN_ARCHITECTURE.md](PAYMENT_PLUGIN_ARCHITECTURE.md)
+
 ## Overview
 
 This platform is a **Pay-Per-View (PPV) streaming service**. Buyers pay directly to access a specific video. Revenue is automatically split between the **creator (owner)** and the **platform admin** at the moment of payment.
 
-Two payment paths are available:
+**Three payment paths** are available, all shown in a unified tab panel on `watch.html`:
 
-1. **x402 (on-chain crypto)** — primary; funds split on-chain via smart contract, instant.
-2. **Fiat payment plugins** — Stripe, PayPal, Midtrans, Xendit; all fully implemented with webhook receivers and automatic DB access grants.
+1. **Internal Wallet** — instant, no crypto wallet needed; balance funded via deposit.
+2. **X402 (on-chain crypto)** — MetaMask; funds split on-chain via smart contract.
+3. **Fiat payment plugins** — Stripe, PayPal, Midtrans, Xendit; redirect-based checkout with webhooks.
+
+All three paths support **affiliate referral tracking** via `?ref=USERNAME` in the watch URL.
+
+---
+
+## Payment Methods
+
+| Provider | Status | Currency | Auto-disburse |
+|---|---|---|---|
+| **Internal Wallet** | ✅ Fully implemented | USD cents (ledger) | ✅ Instant (creator balance credited) |
+| **x402 (Crypto / EVM)** | ✅ Fully implemented | MEGA, MATIC, ETH, USDC (ERC-20) | ✅ On-chain instant |
+| **Stripe** | ✅ Implemented | USD, EUR, IDR | ❌ Needs Stripe Connect |
+| **PayPal** | ✅ Implemented | USD, EUR, IDR | ❌ Needs Payouts API |
+| **Midtrans** | ✅ Implemented | IDR | ❌ No payout API |
+| **Xendit** | ✅ Implemented | IDR, PHP, USD | ✅ Auto-disburse to bank |
 
 ---
 
@@ -22,6 +40,34 @@ Two payment paths are available:
 | **Xendit** | ✅ Implemented | IDR, PHP, USD | ✅ Auto-disburse to bank (BCA, BNI, BRI, Mandiri, etc.) |
 
 The active providers are controlled by the `PAYMENT_PLUGINS` environment variable (comma-separated list). The default is controlled by `PAYMENT_DEFAULT_PROVIDER`.
+
+---
+
+---
+
+## Wallet Payment Flow
+
+The internal wallet is the simplest path — no crypto wallet, no redirect, no waiting for webhooks.
+
+```
+Buyer selects "Wallet" tab on watch.html
+    │
+    ▼
+POST /api/wallet/pay  { video_id, ref_code }
+    │  - Verifies buyer is not owner, not already purchased
+    │  - Checks buyer balance ≥ price_cents
+    │  - Atomic DB transaction:
+    │      → Deduct price_cents from buyer.balance_cents
+    │      → Credit creator.balance_cents × CREATOR_SPLIT_BP / 10000
+    │      → Insert wallet_transactions rows for buyer and creator
+    │      → INSERT purchases + INSERT allowlist
+    │  - After commit: process affiliate commission if ref_code is set
+    │
+    ▼
+Buyer gets immediate access. Page reloads → video streams ✅
+```
+
+→ Full wallet documentation: [WALLET.md](WALLET.md)
 
 ---
 
@@ -264,14 +310,40 @@ Disburse: `POST /admin/payments/:invoice_uid/disburse`
 
 ---
 
+## Affiliate Commission Integration
+
+All three payment paths propagate the `?ref=USERNAME` referral code:
+
+| Path | How ref is captured | When commission is paid |
+|------|---------------------|------------------------|
+| Wallet | `ref_code` in POST body | Immediately after purchase commits |
+| X402 | `ref_code` in start body → stored as `x402_invoices.affiliate_ref` | After `x402/confirm` grants access |
+| Fiat | `affiliate_ref` in start body → stored as `fiat_invoices.affiliate_ref` | After provider webhook confirms payment |
+
+Commission is `price_cents × commission_pct / 100`, deducted from creator's wallet balance and credited to affiliate's wallet balance. Requires `affiliate_settings.is_enabled = true` for the video.
+
+→ Full affiliate documentation: [AFFILIATE.md](AFFILIATE.md)
+
+---
+
 ## Summary
 
 ```
-x402: Buyer → Smart contract → Creator gets 0.9X instantly, Admin gets 0.1X
-Fiat: Buyer → Provider hosted page → Webhook → Backend grants access → Admin triggers disburse
+Wallet: Buyer balance → Creator balance (instant, atomic)
+X402:   Buyer → Smart contract → Creator gets 0.9X instantly, Admin gets 0.1X
+Fiat:   Buyer → Provider hosted page → Webhook → Backend grants access → Admin triggers disburse
 ```
 
-- **Revenue share: 90% creator / 10% admin** — enforced in smart contract (x402) or admin-triggered disburse (fiat)
+- **Revenue share: 90% creator / 10% admin** — enforced in smart contract (x402), creator wallet credit (wallet), or admin-triggered disburse (fiat)
 - **Access: permanent** — stored in `allowlist` table
-- **Xendit only**: auto-disburse to creator's bank via Xendit API on webhook receipt
-- **All others**: admin manually transfers via provider dashboard, then clicks Disburse in admin panel
+- **Affiliate commission** — creator-funded; paid after every confirmed sale
+
+---
+
+## Related Documentation
+
+- [README.md](README.md) — platform overview
+- [WALLET.md](WALLET.md) — internal wallet system
+- [AFFILIATE.md](AFFILIATE.md) — affiliate and commission system
+- [PAYMENT_PLUGIN_ARCHITECTURE.md](PAYMENT_PLUGIN_ARCHITECTURE.md) — fiat plugin internals
+- [TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md) — code-level reference
