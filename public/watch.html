@@ -283,9 +283,9 @@ async function bindLockedState() {
     if (info && profile.ok && profile.profile) {
       const p = profile.profile;
       info.innerHTML = `
-        Creator payout profile:
-        ${p.bank_account ? `<div>Bank: <code>${esc(p.bank_account)}</code></div>` : ''}
-        ${p.whatsapp ? `<div>WhatsApp: <code>${esc(p.whatsapp)}</code></div>` : ''}
+        Creator profile:
+        <div>Username: <code>${esc(p.username)}</code></div>
+        ${p.profile_desc ? `<div>About creator: ${esc(p.profile_desc)}</div>` : ''}
       `;
     }
   } catch {}

@@ -194,11 +194,11 @@ pub async fn search_chat_users(
     let pattern = format!("%{}%", needle);
     let rows = sqlx::query(
         r#"
-        SELECT id, username, COALESCE(email, '') AS email
+        SELECT id, username
         FROM users
         WHERE is_admin = 0
           AND id <> $1
-          AND (username ILIKE $2 OR email ILIKE $2)
+          AND username ILIKE $2
         ORDER BY username
         LIMIT 20
         "#,
@@ -215,7 +215,7 @@ pub async fn search_chat_users(
             json!({
                 "id": r.try_get::<String, _>("id").unwrap_or_default(),
                 "username": r.try_get::<String, _>("username").unwrap_or_default(),
-                "email": r.try_get::<String, _>("email").unwrap_or_default(),
+                "email": "",
                 "can_start_direct": !is_admin,
             })
         })
@@ -376,8 +376,7 @@ pub async fn list_conversations(
               cc.created_at::text AS created_at,
               cc.last_message_at::text AS last_message_at,
               u.id AS support_user_id,
-              COALESCE(u.username, 'User') AS support_username,
-              COALESCE(u.email, '') AS support_email
+              COALESCE(u.username, 'User') AS support_username
             FROM chat_conversations cc
             JOIN users u ON u.id = cc.support_user_id
             WHERE cc.conversation_type = 'admin_support'
@@ -396,8 +395,7 @@ pub async fn list_conversations(
               cc.created_at::text AS created_at,
               cc.last_message_at::text AS last_message_at,
               other.id AS other_user_id,
-              COALESCE(other.username, 'User') AS other_username,
-              COALESCE(other.email, '') AS other_email
+              COALESCE(other.username, 'User') AS other_username
             FROM chat_conversations cc
             LEFT JOIN users other
               ON other.id = CASE
@@ -467,13 +465,12 @@ pub async fn list_conversations(
                 let support_username = r
                     .try_get::<String, _>("support_username")
                     .unwrap_or_else(|_| "User".to_string());
-                let support_email = r.try_get::<String, _>("support_email").unwrap_or_default();
                 (
                     format!("Support: {}", support_username),
                     Some(ChatUserSummary {
                         id: support_id,
                         username: support_username,
-                        email: support_email,
+                        email: String::new(),
                     }),
                 )
             } else {
@@ -484,13 +481,12 @@ pub async fn list_conversations(
             let other_username = r
                 .try_get::<String, _>("other_username")
                 .unwrap_or_else(|_| "User".to_string());
-            let other_email = r.try_get::<String, _>("other_email").unwrap_or_default();
             (
                 other_username.clone(),
                 Some(ChatUserSummary {
                     id: other_id,
                     username: other_username,
-                    email: other_email,
+                    email: String::new(),
                 }),
             )
         };

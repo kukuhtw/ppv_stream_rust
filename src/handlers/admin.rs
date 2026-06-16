@@ -62,7 +62,7 @@ pub async fn admin_data(
     // ---- Ambil data per tabel ----
     // users
     let users = sqlx::query(
-        r#"SELECT id, username, email, is_admin, created_at
+        r#"SELECT id, username, is_admin, created_at
            FROM users
            ORDER BY created_at DESC
            LIMIT $1"#,
@@ -122,7 +122,7 @@ pub async fn admin_data(
 
     // password_resets
     let resets = sqlx::query(
-        r#"SELECT id, user_id, token, expires_at, used, created_at
+        r#"SELECT id, user_id, expires_at, used, created_at
            FROM password_resets
            ORDER BY created_at DESC
            LIMIT $1"#,
@@ -179,23 +179,27 @@ pub async fn admin_data(
 "#);
 
     // users
-    html.push_str(&format!(r#"
+    html.push_str(&format!(
+        r#"
 <div class="card"><h2>users <span class="caps">(total: {})</span></h2>
 <table>
-  <thead><tr><th>id</th><th>username</th><th>email</th><th>is_admin</th><th>created_at</th></tr></thead>
+  <thead><tr><th>id</th><th>username</th><th>is_admin</th><th>created_at</th></tr></thead>
   <tbody>
-"#, total_users));
+"#,
+        total_users
+    ));
 
     for r in &users {
         let id: String = r.get("id");
         let username: String = r.get("username");
-        let email: Option<String> = r.try_get("email").ok();
         let is_admin: i32 = r.get("is_admin");
         let created_at: String = r.get("created_at");
         html.push_str(&format!(
-            "<tr><td class='mono'>{}</td><td>{}</td><td>{}</td><td>{}</td><td class='mono'>{}</td></tr>",
-            esc(&id), esc(&username), esc(email.as_deref().unwrap_or("")),
-            is_admin, esc(&created_at)
+            "<tr><td class='mono'>{}</td><td>{}</td><td>{}</td><td class='mono'>{}</td></tr>",
+            esc(&id),
+            esc(&username),
+            is_admin,
+            esc(&created_at)
         ));
     }
     html.push_str("</tbody></table></div>");
@@ -214,9 +218,14 @@ pub async fn admin_data(
         let is_admin: i32 = r.get("is_admin");
         let created_at: String = r.get("created_at");
         let expires_at: String = r.get("expires_at");
+        let redacted_id = if id.len() > 8 {
+            format!("{}...", &id[..8])
+        } else {
+            id.clone()
+        };
         html.push_str(&format!(
             "<tr><td class='mono'>{}</td><td class='mono'>{}</td><td>{}</td><td class='mono'>{}</td><td class='mono'>{}</td></tr>",
-            esc(&id), esc(user_id.as_deref().unwrap_or("")),
+            esc(&redacted_id), esc(user_id.as_deref().unwrap_or("")),
             is_admin, esc(&created_at), esc(&expires_at)
         ));
     }
@@ -300,13 +309,12 @@ pub async fn admin_data(
     for r in &resets {
         let id: i32 = r.get("id"); // SERIAL
         let user_id: String = r.get("user_id");
-        let token: String = r.get("token");
         let expires_at: String = r.get("expires_at");
         let used: i32 = r.get("used");
         let created_at: String = r.get("created_at");
         html.push_str(&format!(
             "<tr><td class='mono'>{}</td><td class='mono'>{}</td><td class='mono'>{}</td><td class='mono'>{}</td><td>{}</td><td class='mono'>{}</td></tr>",
-            id, esc(&user_id), esc(&token), esc(&expires_at), used, esc(&created_at)
+            id, esc(&user_id), "[redacted]", esc(&expires_at), used, esc(&created_at)
         ));
     }
     html.push_str("</tbody></table></div>");
@@ -349,7 +357,6 @@ pub async fn admin_payments(
             fi.amount,
             fi.currency,
             fi.payment_url,
-            fi.buyer_email,
             fi.created_at::TEXT    AS created_at,
             fi.paid_at::TEXT       AS paid_at,
             fi.disbursed_at::TEXT  AS disbursed_at,
@@ -395,7 +402,6 @@ pub async fn admin_payments(
                 "amount":           r.try_get::<i64,   _>("amount").unwrap_or(0),
                 "currency":         r.try_get::<String, _>("currency").unwrap_or_default(),
                 "payment_url":      r.try_get::<Option<String>, _>("payment_url").unwrap_or(None),
-                "buyer_email":      r.try_get::<Option<String>, _>("buyer_email").unwrap_or(None),
                 "created_at":       r.try_get::<Option<String>, _>("created_at").unwrap_or(None),
                 "paid_at":          r.try_get::<Option<String>, _>("paid_at").unwrap_or(None),
                 "disbursed_at":     r.try_get::<Option<String>, _>("disbursed_at").unwrap_or(None),
@@ -564,7 +570,8 @@ pub async fn admin_smtp_get(State(st): State<AdminState>, cookies: Cookies) -> i
                 "host":       r.try_get::<String,  _>("host").unwrap_or_default(),
                 "port":       r.try_get::<i32,     _>("port").unwrap_or(587),
                 "username":   r.try_get::<String,  _>("username").unwrap_or_default(),
-                "password":   r.try_get::<String,  _>("password").unwrap_or_default(),
+                "password":   "",
+                "has_password": r.try_get::<String, _>("password").map(|v| !v.is_empty()).unwrap_or(false),
                 "from_email": r.try_get::<String,  _>("from_email").unwrap_or_default(),
                 "from_name":  r.try_get::<String,  _>("from_name").unwrap_or_else(|_| "PPV Stream".into()),
                 "use_tls":    r.try_get::<bool,    _>("use_tls").unwrap_or(true),
@@ -751,6 +758,19 @@ pub async fn admin_smtp_save(
         Err(resp) => return resp,
     };
 
+    let existing_password =
+        sqlx::query_scalar::<_, String>("SELECT password FROM smtp_settings WHERE id = 1")
+            .fetch_optional(&st.pool)
+            .await
+            .ok()
+            .flatten()
+            .unwrap_or_default();
+    let password_to_save = if p.password.is_empty() {
+        existing_password
+    } else {
+        p.password.clone()
+    };
+
     let res = sqlx::query(
         r#"INSERT INTO smtp_settings (id, host, port, username, password, from_email, from_name, use_tls, enabled, updated_at)
            VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, now())
@@ -761,7 +781,7 @@ pub async fn admin_smtp_save(
     .bind(&p.host)
     .bind(p.port)
     .bind(&p.username)
-    .bind(&p.password)
+    .bind(&password_to_save)
     .bind(&p.from_email)
     .bind(&p.from_name)
     .bind(p.use_tls)
@@ -792,7 +812,7 @@ pub async fn admin_smtp_save(
                 host: p.host.clone(),
                 port: p.port as u16,
                 username: p.username.clone(),
-                password: p.password.clone(),
+                password: password_to_save.clone(),
                 from_email: p.from_email.clone(),
                 from_name: p.from_name.clone(),
                 use_tls: p.use_tls,
@@ -849,7 +869,7 @@ pub async fn admin_wallet_transactions(
     let sql = format!(
         r#"SELECT wt.id, wt.txn_type, wt.amount_cents, wt.balance_after, wt.status,
                   wt.note, wt.admin_note, wt.created_at::TEXT AS created_at,
-                  u.username, u.email,
+                  u.username,
                   u2.username AS ref_username
            FROM wallet_transactions wt
            JOIN users u  ON u.id  = wt.user_id
@@ -877,7 +897,6 @@ pub async fn admin_wallet_transactions(
                 "admin_note":    r.try_get::<Option<String>, _>("admin_note").unwrap_or(None),
                 "created_at":    r.try_get::<Option<String>, _>("created_at").unwrap_or(None),
                 "username":      r.try_get::<String,         _>("username").unwrap_or_default(),
-                "email":         r.try_get::<String,         _>("email").unwrap_or_default(),
                 "ref_username":  r.try_get::<Option<String>, _>("ref_username").unwrap_or(None),
             })
         })

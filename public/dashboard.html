@@ -529,7 +529,7 @@ async function searchChatUsers() {
     }
     box.innerHTML = users.map(u => `<button type="button" class="list-group-item list-group-item-action" data-chat-user="${esc(u.id)}">
       <div class="fw-semibold">${esc(u.username)}</div>
-      <div class="text-body-secondary">${esc(u.email)}</div>
+      <div class="text-body-secondary">Direct chat</div>
     </button>`).join('');
   } catch {
     box.innerHTML = '<div class="text-danger small">Search failed.</div>';

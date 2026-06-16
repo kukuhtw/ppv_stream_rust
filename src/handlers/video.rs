@@ -177,18 +177,11 @@ pub async fn user_lookup(
         };
     }
     if let Some(e) = qs.email.as_deref().filter(|s| !s.is_empty()) {
-        let row = sqlx::query(r#"SELECT id, username FROM users WHERE email = $1 LIMIT 1"#)
-            .bind(e)
-            .fetch_optional(&st.pool)
-            .await
-            .unwrap_or(None);
-        return match row {
-            Some(r) => Json(serde_json::json!({"ok": true, "user": {
-                "id": r.try_get::<String,_>("id").unwrap_or_default(),
-                "username": r.try_get::<String,_>("username").unwrap_or_default(),
-            }})),
-            None => Json(serde_json::json!({"ok": true, "user": null})),
-        };
+        let _ = e;
+        return Json(serde_json::json!({
+            "ok": false,
+            "error": "email lookup is disabled"
+        }));
     }
     if let Some(q) = qs.q.as_deref().filter(|s| !s.is_empty()) {
         let pattern = format!("%{}%", q);
@@ -196,7 +189,7 @@ pub async fn user_lookup(
             r#"
             SELECT id, username
             FROM users
-            WHERE username ILIKE $1 OR email ILIKE $1
+            WHERE username ILIKE $1
             ORDER BY username
             LIMIT 20
             "#,

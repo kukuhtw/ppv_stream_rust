@@ -147,6 +147,7 @@
           <div class="col-md-6">
             <label for="smtpPass" class="form-label">Password</label>
             <input id="smtpPass" type="password" class="form-control">
+            <div class="form-text">Leave blank to keep the current stored password.</div>
           </div>
           <div class="col-md-6">
             <label for="smtpFromEmail" class="form-label">From Email</label>
@@ -340,7 +341,8 @@ async function loadSmtpSettings() {
     document.getElementById('smtpPort').value = j.smtp.port || 587;
     document.getElementById('smtpTls').value = String(!!j.smtp.use_tls);
     document.getElementById('smtpUser').value = j.smtp.username || '';
-    document.getElementById('smtpPass').value = j.smtp.password || '';
+    document.getElementById('smtpPass').value = '';
+    document.getElementById('smtpPass').placeholder = j.smtp.has_password ? 'Stored password is already set' : 'No password stored yet';
     document.getElementById('smtpFromEmail').value = j.smtp.from_email || '';
     document.getElementById('smtpFromName').value = j.smtp.from_name || 'PPV Stream';
     document.getElementById('smtpEnabled').value = String(!!j.smtp.enabled);

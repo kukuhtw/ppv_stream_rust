@@ -205,8 +205,8 @@ async function openAdminConversation(conversationId, preserveScroll = false) {
   adminChatState.activeConversationId = conversationId;
   renderAdminChatConversations();
   document.getElementById('adminChatTitle').textContent = convo?.title || 'Support';
-  document.getElementById('adminChatMeta').textContent = convo?.counterpart?.email
-    ? `User email: ${convo.counterpart.email}`
+  document.getElementById('adminChatMeta').textContent = convo?.counterpart?.username
+    ? `Support thread with ${convo.counterpart.username}.`
     : 'All support messages are stored in the database.';
   setAdminChatComposerEnabled(true);
   const box = document.getElementById('adminChatMessages');

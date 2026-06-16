@@ -27,11 +27,6 @@ pub struct UsersState {
 pub struct PublicProfile {
     pub id: String,
     pub username: String,
-    pub email: String,
-    pub bank_account: Option<String>,
-    pub wallet_account: Option<String>,
-    pub wallet_chain_id: Option<i64>,
-    pub whatsapp: Option<String>,
     pub profile_desc: String,
 }
 
@@ -185,8 +180,7 @@ pub async fn public_profile(
 
     let row = sqlx::query!(
         r#"
-        SELECT id, username, email,
-               bank_account, wallet_account, wallet_chain_id, whatsapp,
+        SELECT id, username,
                COALESCE(profile_desc,'') AS profile_desc
         FROM users
         WHERE ($1::text IS NOT NULL AND id = $1)
@@ -210,11 +204,6 @@ pub async fn public_profile(
             "profile": PublicProfile{
                 id: u.id,
                 username: u.username,
-                email: u.email,
-                bank_account: u.bank_account,
-                wallet_account: u.wallet_account,
-                wallet_chain_id: u.wallet_chain_id, // diekspos untuk publik juga (opsional)
-                whatsapp: u.whatsapp,
                 profile_desc: u.profile_desc.unwrap_or_default(),
             }
         }))
