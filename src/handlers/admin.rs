@@ -1513,6 +1513,8 @@ pub async fn admin_storage_migrations_start(
     let cfg = st.cfg.clone();
     let job_id_clone = job_id.clone();
     let backend_for_log = settings.backend.clone();
+    let resume_for_log = resume_from_job_id.clone();
+    let backend_for_spawn = backend_for_log.clone();
     tokio::spawn(async move {
         let outcome = run_storage_migration_job(
             pool.clone(),
@@ -1540,7 +1542,7 @@ pub async fn admin_storage_migrations_start(
             warn!(
                 action = "admin_storage_migration_failed",
                 job_id = %job_id_clone,
-                backend = %backend_for_log,
+                backend = %backend_for_spawn,
                 error = %e,
                 "storage migration failed"
             );
@@ -1548,7 +1550,7 @@ pub async fn admin_storage_migrations_start(
             info!(
                 action = "admin_storage_migration_completed",
                 job_id = %job_id_clone,
-                backend = %backend_for_log,
+                backend = %backend_for_spawn,
                 "storage migration finished"
             );
         }
@@ -1563,14 +1565,14 @@ pub async fn admin_storage_migrations_start(
         backend = %backend_for_log,
         include_uploads = p.include_uploads,
         include_media = p.include_media,
-        resumed_from_job_id = ?resume_from_job_id,
+        resumed_from_job_id = ?resume_for_log,
         "storage migration started"
     );
 
     Json(json!({
         "ok": true,
         "job_id": job_id,
-        "resumed_from_job_id": resume_from_job_id,
+        "resumed_from_job_id": resume_for_log,
         "message": "Storage migration started in the background."
     }))
 }
