@@ -13,6 +13,7 @@ use super::{
     },
     traits::PaymentPlugin,
 };
+use crate::payment_settings::{load_payment_settings, PaymentSettings};
 
 #[derive(Clone, Default)]
 pub struct PaymentPluginRegistry {
@@ -56,6 +57,66 @@ impl PaymentPluginRegistry {
         }
 
         registry.default_provider = default_provider.or_else(|| registry.names().first().cloned());
+        registry
+    }
+
+    pub async fn from_runtime_with_pool(pool: PgPool) -> Self {
+        let settings = load_payment_settings(&pool).await;
+        Self::from_settings(Some(pool), settings)
+    }
+
+    pub fn capabilities_from_env_with_pool(
+        pool: Option<PgPool>,
+    ) -> Vec<super::models::PaymentPluginCapability> {
+        let plugins: Vec<Arc<dyn PaymentPlugin>> = vec![
+            Arc::new(PaypalPaymentPlugin::from_env()),
+            Arc::new(StripePaymentPlugin::from_env()),
+            Arc::new(MidtransPaymentPlugin::from_env()),
+            Arc::new(XenditPaymentPlugin::from_env()),
+            Arc::new(X402PaymentPlugin::from_env_with_pool(pool)),
+        ];
+
+        plugins
+            .into_iter()
+            .map(|plugin| plugin.capability())
+            .collect()
+    }
+
+    pub fn from_all_env_known_with_pool(pool: Option<PgPool>) -> Self {
+        let mut registry = Self::new();
+        registry.register(Arc::new(PaypalPaymentPlugin::from_env()));
+        registry.register(Arc::new(StripePaymentPlugin::from_env()));
+        registry.register(Arc::new(MidtransPaymentPlugin::from_env()));
+        registry.register(Arc::new(XenditPaymentPlugin::from_env()));
+        registry.register(Arc::new(X402PaymentPlugin::from_env_with_pool(pool)));
+        registry.default_provider = registry.names().first().cloned();
+        registry
+    }
+
+    fn from_settings(pool: Option<PgPool>, settings: PaymentSettings) -> Self {
+        let mut registry = Self::new();
+
+        if settings.paypal_enabled {
+            registry.register(Arc::new(PaypalPaymentPlugin::from_env()));
+        }
+        if settings.stripe_enabled {
+            registry.register(Arc::new(StripePaymentPlugin::from_env()));
+        }
+        if settings.midtrans_enabled {
+            registry.register(Arc::new(MidtransPaymentPlugin::from_env()));
+        }
+        if settings.xendit_enabled {
+            registry.register(Arc::new(XenditPaymentPlugin::from_env()));
+        }
+        if settings.x402_enabled {
+            registry.register(Arc::new(X402PaymentPlugin::from_env_with_pool(pool)));
+        }
+
+        registry.default_provider = settings
+            .default_provider
+            .filter(|provider| registry.plugins.contains_key(provider))
+            .or_else(|| registry.names().first().cloned());
+
         registry
     }
 

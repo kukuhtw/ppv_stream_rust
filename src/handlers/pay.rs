@@ -35,6 +35,7 @@ use uuid::Uuid;
 
 use crate::commission;
 use crate::handlers::video::VideoState;
+use crate::payment_settings::load_payment_settings;
 use crate::sessions;
 
 /// Returns the available payment configuration for one video.
@@ -177,6 +178,11 @@ pub async fn x402_start(
     cookies: Cookies,
     Json(body): Json<StartPayReq>,
 ) -> impl IntoResponse {
+    let payment_settings = load_payment_settings(&st.pool).await;
+    if !payment_settings.x402_enabled {
+        return Json(json!({"ok": false, "error": "x402 payment is currently disabled by admin"}));
+    }
+
     // Authenticate the buyer from the signed session cookie.
     let (buyer_id, _) = match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await {
         Some(value) => value,
@@ -887,6 +893,7 @@ pub async fn all_options(
     cookies: Cookies,
     Query(q): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
+    let payment_settings = load_payment_settings(&st.pool).await;
     let video_id = q.get("video_id").cloned().unwrap_or_default();
     if video_id.is_empty() {
         return Json(json!({"ok": false, "error": "video_id required"}));
@@ -957,12 +964,19 @@ pub async fn all_options(
         .collect();
 
     // Fiat providers from env (admin-configured)
-    let fiat_providers: Vec<String> = std::env::var("PAYMENT_PLUGINS")
-        .unwrap_or_default()
-        .split(',')
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty() && s != "x402")
-        .collect();
+    let mut fiat_providers: Vec<String> = Vec::new();
+    if payment_settings.paypal_enabled {
+        fiat_providers.push("paypal".to_string());
+    }
+    if payment_settings.stripe_enabled {
+        fiat_providers.push("stripe".to_string());
+    }
+    if payment_settings.midtrans_enabled {
+        fiat_providers.push("midtrans".to_string());
+    }
+    if payment_settings.xendit_enabled {
+        fiat_providers.push("xendit".to_string());
+    }
 
     let cents_display =
         |c: i64| -> String { format!("${}.{:02}", c / 100, (c % 100).unsigned_abs()) };
@@ -975,12 +989,13 @@ pub async fn all_options(
         "is_owner":        is_owner,
         "already_purchased": already_purchased,
         "wallet": {
+            "available":       payment_settings.wallet_payment_enabled,
             "balance_cents":   wallet_balance,
             "balance_display": wallet_balance.map(|b| cents_display(b)),
-            "can_afford":      wallet_balance.map(|b| b >= price_cents && !is_owner),
+            "can_afford":      wallet_balance.map(|b| payment_settings.wallet_payment_enabled && b >= price_cents && !is_owner),
         },
         "x402": {
-            "available": !token_list.is_empty(),
+            "available": payment_settings.x402_enabled && !token_list.is_empty(),
             "tokens":    token_list,
         },
         "fiat": {

@@ -12,6 +12,7 @@ mod db;
 mod email;
 mod ffmpeg;
 mod handlers;
+mod payment_settings;
 mod plugins;
 mod sessions;
 mod validators;
@@ -40,9 +41,9 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
     use crate::handlers::pay;
     use crate::handlers::{
         admin::{
-            admin_data, admin_disburse, admin_payments, admin_smtp_get, admin_smtp_save,
-            admin_wallet_approve, admin_wallet_complete, admin_wallet_reject,
-            admin_wallet_transactions, AdminState,
+            admin_data, admin_disburse, admin_payment_settings_get, admin_payment_settings_save,
+            admin_payments, admin_smtp_get, admin_smtp_save, admin_wallet_approve,
+            admin_wallet_complete, admin_wallet_reject, admin_wallet_transactions, AdminState,
         },
         affiliate::{
             admin_affiliate_commissions, affiliate_earnings, affiliate_link,
@@ -104,6 +105,10 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
         .route("/admin/data", get(admin_data))
         .route("/admin/payments", get(admin_payments))
         .route("/admin/payments/:uid/disburse", post(admin_disburse))
+        .route(
+            "/admin/payment_settings",
+            get(admin_payment_settings_get).post(admin_payment_settings_save),
+        )
         .route("/admin/smtp", get(admin_smtp_get).post(admin_smtp_save))
         .with_state(AdminState { pool: pool.clone() });
 
@@ -182,7 +187,6 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
         .route("/api/pay/:provider/confirm", post(confirm_payment))
         .route("/api/pay/:provider/webhook", post(handle_webhook))
         .with_state(PaymentPluginState {
-            registry: payment_plugins.clone(),
             pool: pool.clone(),
             cfg: cfg.clone(),
         });

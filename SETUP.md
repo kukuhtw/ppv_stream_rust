@@ -156,20 +156,92 @@ Install:
 - FFmpeg
 - `psql` command-line client
 
-Recommended Rust installation:
+### Installation commands for non-Docker setup
 
-```bash
-rustup default stable
-rustup update
+Use the commands that match your operating system.
+
+#### Windows
+
+Install Rust:
+
+```powershell
+winget install Rustlang.Rust.MSVC
 ```
 
-Check your tools:
+Install PostgreSQL:
+
+```powershell
+winget install PostgreSQL.PostgreSQL.16
+```
+
+Install FFmpeg:
+
+```powershell
+winget install Gyan.FFmpeg
+```
+
+Alternative package manager:
+
+```powershell
+choco install rust postgresql16 ffmpeg -y
+```
+
+After PostgreSQL installation, make sure these commands are available in your `PATH`:
+
+```powershell
+psql --version
+pg_isready --version
+```
+
+If `psql` is not found, add the PostgreSQL `bin` folder to your `PATH`, for example:
+
+```text
+C:\Program Files\PostgreSQL\16\bin
+```
+
+#### Ubuntu / Debian
+
+```bash
+sudo apt update
+sudo apt install -y curl build-essential pkg-config libssl-dev ffmpeg postgresql postgresql-contrib
+curl https://sh.rustup.rs -sSf | sh -s -- -y
+source "$HOME/.cargo/env"
+```
+
+#### Fedora / RHEL
+
+```bash
+sudo dnf install -y curl gcc gcc-c++ make openssl-devel ffmpeg postgresql-server postgresql
+curl https://sh.rustup.rs -sSf | sh -s -- -y
+source "$HOME/.cargo/env"
+```
+
+#### macOS
+
+Install Homebrew if needed, then:
+
+```bash
+brew update
+brew install rust postgresql@16 ffmpeg
+brew services start postgresql@16
+```
+
+### Verify all required tools
+
+After installation, confirm everything is available:
 
 ```bash
 rustc --version
 cargo --version
 psql --version
 ffmpeg -version
+```
+
+Recommended Rust installation:
+
+```bash
+rustup default stable
+rustup update
 ```
 
 ---
@@ -311,6 +383,59 @@ cd ppv_stream_rust
 
 ### Step 2: Install PostgreSQL and create a database
 
+Install the required runtime tools first if they are not already installed.
+
+Windows:
+
+```powershell
+winget install Rustlang.Rust.MSVC
+winget install PostgreSQL.PostgreSQL.16
+winget install Gyan.FFmpeg
+```
+
+Ubuntu / Debian:
+
+```bash
+sudo apt update
+sudo apt install -y curl build-essential pkg-config libssl-dev ffmpeg postgresql postgresql-contrib
+curl https://sh.rustup.rs -sSf | sh -s -- -y
+source "$HOME/.cargo/env"
+```
+
+macOS:
+
+```bash
+brew update
+brew install rust postgresql@16 ffmpeg
+brew services start postgresql@16
+```
+
+Then start PostgreSQL.
+
+Ubuntu / Debian:
+
+```bash
+sudo systemctl enable postgresql
+sudo systemctl start postgresql
+```
+
+Fedora / RHEL:
+
+```bash
+sudo postgresql-setup --initdb
+sudo systemctl enable postgresql
+sudo systemctl start postgresql
+```
+
+Windows:
+
+```powershell
+Get-Service *postgres*
+Start-Service postgresql-x64-16
+```
+
+Create the database role and database.
+
 Create the database and user:
 
 ```sql
@@ -323,6 +448,14 @@ Grant privileges if needed:
 ```sql
 GRANT ALL PRIVILEGES ON DATABASE ppv_stream TO ppv;
 ```
+
+On Linux/macOS, one common way to run the SQL is:
+
+```bash
+sudo -u postgres psql
+```
+
+On Windows, open `psql` as the `postgres` superuser or use pgAdmin.
 
 ### Step 3: Create `.env`
 
@@ -429,7 +562,201 @@ http://localhost:8080/public/admin/login.html
 
 ---
 
-## 7. First-Time Verification Checklist
+## 7. X402 Blockchain Payment Setup
+
+This section explains how to enable the on-chain payment flow used by the `x402` provider.
+
+If you only want wallet payments or fiat payments first, you can skip this section and come back later.
+
+### 7.1 What X402 needs
+
+To enable blockchain payments, you need:
+
+- a deployed `X402Splitter` smart contract
+- an admin wallet address
+- a backend signing private key
+- an HTTP RPC endpoint
+- a WebSocket RPC endpoint for the optional watcher
+- `PAYMENT_PLUGINS` configured to include `x402`
+
+Relevant project references:
+
+- `contracts/contracts/X402Splitter.sol`
+- `contracts/guidance_smartcontract_deployment`
+- `PAYMENT.md`
+
+### 7.2 Install contract deployment dependencies
+
+The smart contract workspace uses Node.js and Hardhat.
+
+Install Node.js 20 or later, then in the `contracts` directory:
+
+```bash
+cd contracts
+npm install
+```
+
+For CI or reproducible environments:
+
+```bash
+npm ci
+```
+
+Check the toolchain:
+
+```bash
+node --version
+npm --version
+npx hardhat --version
+```
+
+### 7.3 Prepare contract deployment environment
+
+Create a contract-local `.env` file:
+
+```bash
+cd contracts
+cp .env.example .env
+```
+
+Set at least:
+
+```env
+PRIVATE_KEY=0xYOUR_DEPLOYER_PRIVATE_KEY
+ADMIN_WALLET=0xYOUR_ADMIN_WALLET
+AMOY_RPC_HTTP=https://polygon-amoy-bor.publicnode.com
+AMOY_CHAIN_ID=80002
+POLYGONSCAN_API_KEY=YOUR_POLYGONSCAN_API_KEY
+CONFIRMATIONS=2
+AUTO_VERIFY=true
+```
+
+Notes:
+
+- `PRIVATE_KEY` is the wallet that pays gas for deployment.
+- `ADMIN_WALLET` or `X402_ADMIN_WALLET` is the wallet that receives the platform share.
+- For safe testing, start with Polygon Amoy testnet.
+
+### 7.4 Deploy the X402 contract without Docker
+
+From the `contracts` directory:
+
+```bash
+npx hardhat compile
+npx hardhat test
+npx hardhat run --network polygonAmoyTestnet scripts/estimate_gas_cost.js
+npx hardhat run --network polygonAmoyTestnet scripts/deploy_x402.js
+```
+
+After deployment, check the generated metadata file:
+
+```text
+contracts/deployed.json
+```
+
+It should contain the deployed contract address and deployment transaction details.
+
+### 7.5 Deploy the X402 contract with Docker
+
+From the project root:
+
+```bash
+docker compose run --rm x402-deployer npx hardhat run --network polygonAmoyTestnet scripts/deploy_x402.js
+```
+
+To estimate gas first:
+
+```bash
+docker compose run --rm x402-deployer npx hardhat run --network polygonAmoyTestnet scripts/estimate_gas_cost.js
+```
+
+### 7.6 Configure the Rust app for X402
+
+After you have a deployed contract address, update the main application `.env`:
+
+```env
+PAYMENT_PLUGINS=x402
+PAYMENT_DEFAULT_PROVIDER=x402
+
+X402_CONTRACT_ADDRESS=0xDEPLOYED_CONTRACT_ADDRESS
+X402_ADMIN_WALLET=0xYOUR_ADMIN_WALLET
+X402_ADMIN_PRIVKEY=0xBACKEND_AUTHORIZATION_SIGNER_PRIVATE_KEY
+X402_RPC_HTTP=https://YOUR_AMOY_HTTP_RPC
+X402_RPC_WSS=wss://YOUR_AMOY_WEBSOCKET_RPC
+X402_CHAIN_ID=80002
+X402_DEADLINE_SECS=900
+CREATOR_SPLIT_BP=9000
+```
+
+Important:
+
+- `X402_ADMIN_PRIVKEY` is required by the backend to sign invoices.
+- `X402_RPC_HTTP` is required by `POST /api/pay/x402/confirm`.
+- `X402_RPC_WSS` is used by the optional watcher.
+- `CREATOR_SPLIT_BP=9000` means creators receive 90%.
+
+### 7.7 Restart the application
+
+Docker:
+
+```bash
+make run-all
+```
+
+Non-Docker:
+
+```bash
+cargo run
+```
+
+### 7.8 Enable the watcher
+
+The project supports an optional blockchain watcher.
+
+In `.env`:
+
+```env
+WATCHER_ENABLE=1
+```
+
+For Docker Compose, there is also a `watcher` service and the main app can run the watcher in-process when enabled.
+
+Use this only after `X402_RPC_WSS` and `X402_CONTRACT_ADDRESS` are correctly set.
+
+### 7.9 Creator profile requirement
+
+For x402 payments to succeed, the creator must set a valid EVM wallet in the dashboard profile.
+
+Without a creator wallet address:
+
+- the backend cannot issue a valid invoice for that video
+- x402 checkout will fail for that video
+
+### 7.10 Smoke test for X402
+
+Use this checklist:
+
+1. Start the app with `PAYMENT_PLUGINS=x402`.
+2. Log in as a creator and set a valid EVM wallet in the profile page.
+3. Upload or use an existing paid video.
+4. Open the video watch page as another user.
+5. Confirm the crypto payment option appears.
+6. Start the x402 payment flow.
+7. Confirm the invoice is created.
+8. Complete the wallet transaction in MetaMask.
+9. Confirm `POST /api/pay/x402/confirm` succeeds.
+10. Refresh the watch page and confirm access is granted.
+
+### 7.11 Security notes
+
+- Never commit `PRIVATE_KEY` or `X402_ADMIN_PRIVKEY`.
+- Use a dedicated deployer wallet.
+- For production, prefer separating the deployer wallet from the admin wallet.
+- Validate the deployed contract address before exposing real payment flow to users.
+
+---
+
+## 8. First-Time Verification Checklist
 
 After the app starts, verify these pages:
 
@@ -461,7 +788,7 @@ Expected result:
 
 ---
 
-## 8. Running With Local File Storage
+## 9. Running With Local File Storage
 
 The easiest storage mode is local storage.
 
@@ -478,34 +805,18 @@ This means:
 - processed media is stored locally
 - no S3-compatible credentials are needed
 
-Recommended for development:
-
-- keep `STORAGE_BACKEND=local`
-- add S3/MinIO/R2/B2 only when you actually need cloud storage
-
 ---
 
-## 9. Running With Optional Payment Providers
+## 10. Fiat Payment Provider Setup
 
-You can start the app without payment provider credentials if you only want to test:
+Fiat providers are optional and can be enabled one by one.
 
-- registration
-- login
-- profile
-- upload
-- wallet UI
-- affiliate UI
-- chat UI
-- admin UI
-
-If you want to enable payment providers, add the correct env vars and list them in:
+Use `PAYMENT_PLUGINS` as a comma-separated list, for example:
 
 ```env
-PAYMENT_PLUGINS=stripe,paypal,midtrans,xendit,x402
+PAYMENT_PLUGINS=stripe,paypal,midtrans,xendit
 PAYMENT_DEFAULT_PROVIDER=stripe
 ```
-
-Only include the providers you have configured.
 
 ### Stripe
 
@@ -540,28 +851,34 @@ XENDIT_SECRET_KEY=...
 XENDIT_WEBHOOK_TOKEN=...
 ```
 
-### X402
-
-```env
-X402_CONTRACT_ADDRESS=0x...
-X402_ADMIN_WALLET=0x...
-X402_ADMIN_PRIVKEY=0x...
-X402_RPC_HTTP=https://...
-X402_RPC_WSS=wss://...
-X402_CHAIN_ID=80002
-X402_DEADLINE_SECS=900
-```
-
-If you need the smart contract deployment flow, also see:
-
-- `contracts/guidance_smartcontract_deployment`
-- `make deployx402`
-- `make estimatex402`
-- `make checkx402`
+After updating provider credentials, restart the app.
 
 ---
 
-## 10. Useful Docker Commands
+## 11. Recommended Setup Order
+
+If you want the smoothest path, use this order:
+
+1. Start with Docker or local PostgreSQL.
+2. Run all database migrations.
+3. Start the Rust app.
+4. Bootstrap the admin account.
+5. Verify registration, login, upload, and playback.
+6. Enable local storage first.
+7. Enable wallet payments.
+8. Enable x402 testnet payments.
+9. Enable one fiat provider at a time.
+
+This keeps troubleshooting simple because you add one subsystem at a time.
+
+Recommended for development:
+
+- keep `STORAGE_BACKEND=local`
+- add S3/MinIO/R2/B2 only when you actually need cloud storage
+
+---
+
+## 12. Useful Docker Commands
 
 Start DB only:
 
@@ -625,7 +942,7 @@ make sh
 
 ---
 
-## 11. Common Problems and Fixes
+## 13. Common Problems and Fixes
 
 ### Problem: `cargo build` or Docker build fails with SQLx database errors
 
@@ -689,7 +1006,7 @@ DATABASE_URL=postgres://ppv:secret@db:5432/ppv_stream
 
 ---
 
-## 12. Recommended Development Flow
+## 14. Recommended Development Flow
 
 If you want the smoothest local experience, use this order:
 
@@ -718,7 +1035,7 @@ If you want the smoothest local experience, use this order:
 
 ---
 
-## 13. Next Documents to Read
+## 15. Next Documents to Read
 
 After setup, these are the best follow-up documents:
 
@@ -728,4 +1045,3 @@ After setup, these are the best follow-up documents:
 - [AFFILIATE.md](AFFILIATE.md)
 - [WALLET.md](WALLET.md)
 - [ADMIN_AUTHENTICATION.md](ADMIN_AUTHENTICATION.md)
-

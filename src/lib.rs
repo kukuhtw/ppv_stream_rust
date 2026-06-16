@@ -7,3 +7,4 @@
 // forcing the existing HTTP payment flow to migrate immediately.
 
 pub mod plugins;
+pub mod payment_settings;

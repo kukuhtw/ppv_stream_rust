@@ -24,6 +24,7 @@ use tower_cookies::Cookies;
 
 use crate::commission;
 use crate::config::Config;
+use crate::payment_settings::load_payment_settings;
 use crate::sessions;
 
 pub const MIN_DEPOSIT_CENTS: i64 = 1_000; // $10
@@ -308,6 +309,13 @@ pub async fn wallet_transfer(
     cookies: Cookies,
     Json(p): Json<TransferPayload>,
 ) -> impl IntoResponse {
+    let payment_settings = load_payment_settings(&st.pool).await;
+    if !payment_settings.wallet_transfer_enabled {
+        return Json(
+            json!({"ok": false, "error": "wallet transfer is currently disabled by admin"}),
+        );
+    }
+
     let (uid, _) = match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await {
         Some(v) => v,
         None => return Json(json!({"ok": false, "error": "not logged in"})),
@@ -444,6 +452,13 @@ pub async fn wallet_pay_video(
     cookies: Cookies,
     Json(p): Json<WalletPayPayload>,
 ) -> impl IntoResponse {
+    let payment_settings = load_payment_settings(&st.pool).await;
+    if !payment_settings.wallet_payment_enabled {
+        return Json(
+            json!({"ok": false, "error": "wallet payment is currently disabled by admin"}),
+        );
+    }
+
     let (uid, _) = match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await {
         Some(v) => v,
         None => return Json(json!({"ok": false, "error": "not logged in"})),

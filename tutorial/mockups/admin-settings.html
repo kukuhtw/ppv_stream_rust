@@ -35,7 +35,7 @@
 
 <div class="container py-4 pb-5">
   <h1 class="mb-1 fs-4 fw-bold">Settings</h1>
-  <p class="text-body-secondary small mb-4">Configure platform appearance, SMTP, and admin credentials.</p>
+  <p class="text-body-secondary small mb-4">Configure platform appearance, payment methods, SMTP, and admin credentials.</p>
 
   <!-- Platform Branding -->
   <div class="card shadow-sm mb-4 annotated">
@@ -57,9 +57,57 @@
     </div>
   </div>
 
+  <!-- Payment Methods -->
+  <div class="card shadow-sm mb-4 annotated">
+    <span class="callout" style="top:-18px;left:0">② Payment methods — toggle providers directly from the dashboard without editing .env secrets</span>
+    <div class="card-header fw-semibold">Payment Methods</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <div class="border rounded p-3 h-100">
+            <div class="fw-semibold mb-2">Internal Wallet</div>
+            <div class="form-check form-switch mb-2">
+              <input class="form-check-input" type="checkbox" checked>
+              <label class="form-check-label">Enable wallet payment for video checkout</label>
+            </div>
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" checked>
+              <label class="form-check-label">Enable user-to-user wallet transfer</label>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="border rounded p-3 h-100">
+            <div class="fw-semibold mb-2">Default Provider</div>
+            <select class="form-select">
+              <option>Stripe</option>
+              <option>PayPal</option>
+              <option>Xendit</option>
+              <option>Midtrans</option>
+              <option>x402</option>
+            </select>
+          </div>
+        </div>
+        <div class="col-12">
+          <table class="table table-bordered align-middle mb-0">
+            <thead class="table-light"><tr><th>Provider</th><th>Enabled</th><th>Status</th><th>Missing Env</th></tr></thead>
+            <tbody>
+              <tr><td class="fw-semibold">Stripe</td><td><input type="checkbox" checked></td><td><span class="badge text-bg-success">Configured</span></td><td class="text-success">Complete</td></tr>
+              <tr><td class="fw-semibold">PayPal</td><td><input type="checkbox" checked></td><td><span class="badge text-bg-success">Configured</span></td><td class="text-success">Complete</td></tr>
+              <tr><td class="fw-semibold">Midtrans</td><td><input type="checkbox"></td><td><span class="badge text-bg-warning text-dark">Incomplete env</span></td><td>MIDTRANS_SERVER_KEY, MIDTRANS_CLIENT_KEY</td></tr>
+              <tr><td class="fw-semibold">Xendit</td><td><input type="checkbox" checked></td><td><span class="badge text-bg-success">Configured</span></td><td class="text-success">Complete</td></tr>
+              <tr><td class="fw-semibold">Blockchain x402</td><td><input type="checkbox" checked></td><td><span class="badge text-bg-success">Configured</span></td><td class="text-success">Complete</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="col-12"><button class="btn btn-primary">Save Payment Settings</button></div>
+      </div>
+    </div>
+  </div>
+
   <!-- SMTP -->
   <div class="card shadow-sm mb-4 annotated">
-    <span class="callout" style="top:-18px;left:0">② SMTP settings — read-only from .env; send test email to verify</span>
+    <span class="callout" style="top:-18px;left:0">③ SMTP settings — read-only from .env; send test email to verify</span>
     <div class="card-header fw-semibold">SMTP / Email Settings</div>
     <div class="card-body">
       <p class="text-body-secondary small mb-3">SMTP is configured in <code>.env</code>. Use the test button to verify the current config.</p>
@@ -83,7 +131,7 @@
 
   <!-- Exchange rate -->
   <div class="card shadow-sm mb-4 annotated">
-    <span class="callout" style="top:-18px;left:0">③ USD → IDR exchange rate — used for fiat price display</span>
+    <span class="callout" style="top:-18px;left:0">④ USD → IDR exchange rate — used for fiat price display</span>
     <div class="card-header fw-semibold">USD → IDR Exchange Rate</div>
     <div class="card-body">
       <div class="row g-3">
@@ -95,7 +143,7 @@
 
   <!-- Admin password -->
   <div class="card shadow-sm mb-4 annotated">
-    <span class="callout" style="top:-18px;left:0">④ Change Admin Password — requires current password verification</span>
+    <span class="callout" style="top:-18px;left:0">⑤ Change Admin Password — requires current password verification</span>
     <div class="card-header fw-semibold">Change Admin Password</div>
     <div class="card-body">
       <div class="row g-3">

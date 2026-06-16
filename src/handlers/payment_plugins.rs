@@ -14,6 +14,7 @@ use uuid::Uuid;
 
 use crate::commission;
 use crate::config::Config;
+use crate::payment_settings::load_payment_settings;
 use crate::plugins::payment::{
     models::{ConfirmPaymentRequest, CreateInvoiceRequest, PaymentStatus},
     PaymentPluginRegistry,
@@ -21,7 +22,6 @@ use crate::plugins::payment::{
 
 #[derive(Clone)]
 pub struct PaymentPluginState {
-    pub registry: PaymentPluginRegistry,
     pub pool: sqlx::PgPool,
     pub cfg: Config,
 }
@@ -36,7 +36,7 @@ pub struct CreateInvoicePayload {
     pub buyer_name: Option<String>,
     pub success_url: Option<String>,
     pub cancel_url: Option<String>,
-    pub affiliate_ref: Option<String>, // referral username for commission
+    pub affiliate_ref: Option<String>,
     #[serde(default)]
     pub metadata: std::collections::HashMap<String, String>,
 }
@@ -50,22 +50,46 @@ pub struct ConfirmPaymentPayload {
     pub signature_headers: std::collections::HashMap<String, String>,
 }
 
+async fn runtime_registry(state: &PaymentPluginState) -> PaymentPluginRegistry {
+    PaymentPluginRegistry::from_runtime_with_pool(state.pool.clone()).await
+}
+
+fn registry_for_existing_invoices(state: &PaymentPluginState) -> PaymentPluginRegistry {
+    PaymentPluginRegistry::from_all_env_known_with_pool(Some(state.pool.clone()))
+}
+
 // ---------------------------------------------------------------------------
 // List providers
 // ---------------------------------------------------------------------------
 
 pub async fn list_payment_plugins(State(state): State<PaymentPluginState>) -> impl IntoResponse {
-    let providers = state
-        .registry
-        .names()
-        .into_iter()
-        .filter_map(|name| state.registry.get(&name))
-        .map(|plugin| plugin.capability())
-        .collect::<Vec<_>>();
+    let settings = load_payment_settings(&state.pool).await;
+    let registry = runtime_registry(&state).await;
+    let providers =
+        PaymentPluginRegistry::capabilities_from_env_with_pool(Some(state.pool.clone()))
+            .into_iter()
+            .map(|capability| {
+                let provider_key = capability.provider.clone();
+                json!({
+                    "provider": capability.provider,
+                    "display_name": capability.display_name,
+                    "configured": capability.configured,
+                    "environment": capability.environment,
+                    "api_base_url": capability.api_base_url,
+                    "supports_redirect_checkout": capability.supports_redirect_checkout,
+                    "supports_webhook_confirmation": capability.supports_webhook_confirmation,
+                    "supports_manual_confirmation": capability.supports_manual_confirmation,
+                    "supported_currencies": capability.supported_currencies,
+                    "required_env": capability.required_env,
+                    "missing_env": capability.missing_env,
+                    "enabled": settings.is_provider_enabled(&provider_key),
+                })
+            })
+            .collect::<Vec<_>>();
 
     Json(json!({
         "ok": true,
-        "default_provider": state.registry.default_provider_name(),
+        "default_provider": registry.default_provider_name(),
         "providers": providers
     }))
 }
@@ -78,10 +102,11 @@ pub async fn create_default_payment_invoice(
     State(state): State<PaymentPluginState>,
     Json(payload): Json<CreateInvoicePayload>,
 ) -> impl IntoResponse {
-    let Some(provider) = state.registry.default_provider_name() else {
+    let registry = runtime_registry(&state).await;
+    let Some(provider) = registry.default_provider_name() else {
         return Json(json!({"ok": false, "error": "default payment provider is not configured"}));
     };
-    create_invoice_with_provider(state, provider, payload).await
+    create_invoice_with_provider(state, registry, provider, payload).await
 }
 
 pub async fn create_payment_invoice(
@@ -89,21 +114,22 @@ pub async fn create_payment_invoice(
     Path(provider): Path<String>,
     Json(payload): Json<CreateInvoicePayload>,
 ) -> impl IntoResponse {
-    create_invoice_with_provider(state, provider, payload).await
+    let registry = runtime_registry(&state).await;
+    create_invoice_with_provider(state, registry, provider, payload).await
 }
 
 async fn create_invoice_with_provider(
     state: PaymentPluginState,
+    registry: PaymentPluginRegistry,
     provider: String,
     payload: CreateInvoicePayload,
 ) -> Json<serde_json::Value> {
-    let Some(plugin) = state.registry.get(&provider) else {
+    let Some(plugin) = registry.get(&provider) else {
         return Json(
             json!({"ok": false, "error": format!("payment provider not found: {provider}")}),
         );
     };
 
-    // Fetch video info (title + creator_id) for the fiat_invoices row
     let video_row = sqlx::query!(
         "SELECT title, owner_id AS creator_id FROM videos WHERE id = $1",
         payload.video_id
@@ -119,7 +145,6 @@ async fn create_invoice_with_provider(
 
     let invoice_uid = Uuid::new_v4().to_string();
 
-    // Pre-insert the invoice so we can update it with provider_ref + payment_url after creation
     let insert_result = sqlx::query!(
         r#"INSERT INTO fiat_invoices
            (invoice_uid, provider, user_id, video_id, creator_id, amount, currency, buyer_email)
@@ -140,7 +165,6 @@ async fn create_invoice_with_provider(
         return Json(json!({"ok": false, "error": format!("db insert error: {e}")}));
     }
 
-    // Store affiliate_ref using a runtime query (new column — avoids sqlx macro cache issue)
     if let Some(ref_username) = payload.affiliate_ref.as_deref().filter(|s| !s.is_empty()) {
         let _ = sqlx::query("UPDATE fiat_invoices SET affiliate_ref = $1 WHERE invoice_uid = $2")
             .bind(ref_username)
@@ -149,7 +173,6 @@ async fn create_invoice_with_provider(
             .await;
     }
 
-    // Inject uid and title into metadata so the plugin can embed them in provider requests
     let mut metadata = payload.metadata;
     metadata.insert("invoice_uid".into(), invoice_uid.clone());
     metadata.insert("video_title".into(), video_title);
@@ -168,7 +191,6 @@ async fn create_invoice_with_provider(
 
     match plugin.create_invoice(request).await {
         Ok(invoice) => {
-            // Update fiat_invoices with the provider's reference ID and redirect URL
             let provider_ref = invoice.raw["order_id"]
                 .as_str()
                 .or_else(|| invoice.raw["xendit_invoice_id"].as_str())
@@ -187,7 +209,6 @@ async fn create_invoice_with_provider(
             Json(json!({"ok": true, "provider": provider, "invoice": invoice}))
         }
         Err(e) => {
-            // Clean up the pending row if the provider call failed
             let _ = sqlx::query!(
                 "DELETE FROM fiat_invoices WHERE invoice_uid = $1",
                 invoice_uid
@@ -200,17 +221,18 @@ async fn create_invoice_with_provider(
 }
 
 // ---------------------------------------------------------------------------
-// Manual confirm (frontend polling — only for providers that support it)
+// Manual confirm
 // ---------------------------------------------------------------------------
 
 pub async fn confirm_default_payment(
     State(state): State<PaymentPluginState>,
     Json(payload): Json<ConfirmPaymentPayload>,
 ) -> impl IntoResponse {
-    let Some(provider) = state.registry.default_provider_name() else {
+    let registry = runtime_registry(&state).await;
+    let Some(provider) = registry.default_provider_name() else {
         return Json(json!({"ok": false, "error": "default payment provider is not configured"}));
     };
-    confirm_payment_with_provider(state, provider, payload).await
+    confirm_payment_with_provider(state, registry, provider, payload).await
 }
 
 pub async fn confirm_payment(
@@ -218,15 +240,17 @@ pub async fn confirm_payment(
     Path(provider): Path<String>,
     Json(payload): Json<ConfirmPaymentPayload>,
 ) -> impl IntoResponse {
-    confirm_payment_with_provider(state, provider, payload).await
+    let registry = registry_for_existing_invoices(&state);
+    confirm_payment_with_provider(state, registry, provider, payload).await
 }
 
 async fn confirm_payment_with_provider(
     state: PaymentPluginState,
+    registry: PaymentPluginRegistry,
     provider: String,
     payload: ConfirmPaymentPayload,
 ) -> Json<serde_json::Value> {
-    let Some(plugin) = state.registry.get(&provider) else {
+    let Some(plugin) = registry.get(&provider) else {
         return Json(
             json!({"ok": false, "error": format!("payment provider not found: {provider}")}),
         );
@@ -247,7 +271,7 @@ async fn confirm_payment_with_provider(
 }
 
 // ---------------------------------------------------------------------------
-// Webhook handler — called by payment providers, not by the frontend
+// Webhook handler
 // ---------------------------------------------------------------------------
 
 pub async fn handle_webhook(
@@ -256,19 +280,18 @@ pub async fn handle_webhook(
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
-    let Some(plugin) = state.registry.get(&provider) else {
+    let registry = registry_for_existing_invoices(&state);
+    let Some(plugin) = registry.get(&provider) else {
         return Json(
             json!({"ok": false, "error": format!("payment provider not found: {provider}")}),
         );
     };
 
-    // Encode raw bytes as base64 so Stripe's plugin can HMAC-verify the exact bytes received
     let raw_b64 = B64.encode(&body);
     let parsed: serde_json::Value = serde_json::from_slice(&body).unwrap_or_default();
     let mut payload = parsed;
     payload["__raw__"] = json!(raw_b64);
 
-    // Collect headers into a lowercase HashMap for uniform access in plugins
     let mut sig_headers = std::collections::HashMap::<String, String>::new();
     for (k, v) in headers.iter() {
         if let Ok(val) = v.to_str() {
@@ -278,7 +301,7 @@ pub async fn handle_webhook(
 
     let request = ConfirmPaymentRequest {
         provider: provider.clone(),
-        invoice_id: String::new(), // determined from payload by the plugin
+        invoice_id: String::new(),
         transaction_id: None,
         webhook_payload: Some(payload),
         signature_headers: sig_headers,
@@ -300,10 +323,8 @@ pub async fn handle_webhook(
         }));
     }
 
-    // ---- Grant access ----
     let invoice_uid = &result.invoice_id;
 
-    // Single JOIN fetches invoice + buyer username + creator bank_account in one round trip
     let inv = sqlx::query!(
         r#"SELECT fi.user_id, fi.video_id, fi.creator_id, fi.amount, fi.currency,
                   buyer.username  AS buyer_username,
@@ -331,7 +352,6 @@ pub async fn handle_webhook(
 
     let username = inv.buyer_username.clone();
 
-    // Mark invoice paid
     let _ = sqlx::query!(
         r#"UPDATE fiat_invoices
            SET status = 'paid', paid_at = now(),
@@ -343,7 +363,6 @@ pub async fn handle_webhook(
     .execute(&state.pool)
     .await;
 
-    // Insert purchase record
     let _ = sqlx::query!(
         r#"INSERT INTO purchases (user_id, video_id, created_at)
            VALUES ($1, $2, NOW())
@@ -354,7 +373,6 @@ pub async fn handle_webhook(
     .execute(&state.pool)
     .await;
 
-    // Grant streaming access
     let _ = sqlx::query!(
         r#"INSERT INTO allowlist (video_id, username)
            VALUES ($1, $2)
@@ -371,44 +389,37 @@ pub async fn handle_webhook(
         inv.video_id
     );
 
-    // ---- Affiliate commission (best-effort) ----
-    {
-        let aff_ref: Option<String> =
-            sqlx::query("SELECT affiliate_ref FROM fiat_invoices WHERE invoice_uid = $1 LIMIT 1")
-                .bind(invoice_uid)
-                .fetch_optional(&state.pool)
-                .await
-                .ok()
-                .flatten()
-                .and_then(|r: sqlx::postgres::PgRow| {
-                    use sqlx::Row as _;
-                    r.try_get::<Option<String>, _>("affiliate_ref")
-                        .ok()
-                        .flatten()
-                });
-
-        if let Some(ref_username) = aff_ref.as_deref().filter(|s| !s.is_empty()) {
-            if let Err(e) = commission::process_affiliate_commission(
-                &state.pool,
-                &inv.video_id,
-                &inv.user_id,
-                &inv.creator_id,
-                inv.amount,
-                ref_username,
-                &provider,
-                Some(invoice_uid),
-            )
+    let aff_ref: Option<String> =
+        sqlx::query("SELECT affiliate_ref FROM fiat_invoices WHERE invoice_uid = $1 LIMIT 1")
+            .bind(invoice_uid)
+            .fetch_optional(&state.pool)
             .await
-            {
-                tracing::warn!("fiat affiliate commission skipped: {e}");
-            }
+            .ok()
+            .flatten()
+            .and_then(|r: sqlx::postgres::PgRow| {
+                use sqlx::Row as _;
+                r.try_get::<Option<String>, _>("affiliate_ref")
+                    .ok()
+                    .flatten()
+            });
+
+    if let Some(ref_username) = aff_ref.as_deref().filter(|s| !s.is_empty()) {
+        if let Err(e) = commission::process_affiliate_commission(
+            &state.pool,
+            &inv.video_id,
+            &inv.user_id,
+            &inv.creator_id,
+            inv.amount,
+            ref_username,
+            &provider,
+            Some(invoice_uid),
+        )
+        .await
+        {
+            tracing::warn!("fiat affiliate commission skipped: {e}");
         }
     }
 
-    // ---- Xendit auto-disburse ----
-    // Only possible for Xendit and only when the creator has a bank_account set.
-    // Instantiate a fresh plugin from env to access the disburse_to_creator() method
-    // (avoid trait-object downcast complexity).
     if provider == "xendit" {
         use crate::plugins::payment::providers::xendit::XenditPaymentPlugin;
 
@@ -419,12 +430,12 @@ pub async fn handle_webhook(
                     Ok(disburse_resp) => {
                         let disburse_ref = disburse_resp["id"].as_str().unwrap_or("").to_string();
                         let _ = sqlx::query!(
-                                "UPDATE fiat_invoices SET disbursed_at = now(), disburse_ref = $1 WHERE invoice_uid = $2",
-                                disburse_ref,
-                                invoice_uid,
-                            )
-                            .execute(&state.pool)
-                            .await;
+                            "UPDATE fiat_invoices SET disbursed_at = now(), disburse_ref = $1 WHERE invoice_uid = $2",
+                            disburse_ref,
+                            invoice_uid,
+                        )
+                        .execute(&state.pool)
+                        .await;
                         tracing::info!("xendit: disbursed {disburse_ref} for uid={invoice_uid}");
                     }
                     Err(e) => {
@@ -433,7 +444,7 @@ pub async fn handle_webhook(
                 }
             }
         }
-    } // if provider == "xendit"
+    }
 
     Json(json!({
         "ok": true,

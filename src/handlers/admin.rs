@@ -1,4 +1,6 @@
 // src/handlers/admin.rs
+use crate::payment_settings::load_payment_settings;
+use crate::plugins::payment::PaymentPluginRegistry;
 use axum::{
     extract::{Path, Query, State},
     response::{Html, IntoResponse},
@@ -549,6 +551,128 @@ pub struct SmtpSavePayload {
     pub enabled: bool,
     /// Optional: send a test email to this address after saving
     pub test_email: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct PaymentSettingsSavePayload {
+    pub wallet_payment_enabled: bool,
+    pub wallet_transfer_enabled: bool,
+    pub paypal_enabled: bool,
+    pub stripe_enabled: bool,
+    pub xendit_enabled: bool,
+    pub midtrans_enabled: bool,
+    pub x402_enabled: bool,
+    pub default_provider: Option<String>,
+}
+
+pub async fn admin_payment_settings_get(State(st): State<AdminState>) -> impl IntoResponse {
+    let settings = load_payment_settings(&st.pool).await;
+    let capabilities =
+        PaymentPluginRegistry::capabilities_from_env_with_pool(Some(st.pool.clone()));
+
+    Json(json!({
+        "ok": true,
+        "settings": settings,
+        "providers": capabilities.into_iter().map(|capability| {
+            let provider_key = capability.provider.clone();
+            json!({
+                "provider": capability.provider,
+                "display_name": capability.display_name,
+                "configured": capability.configured,
+                "environment": capability.environment,
+                "api_base_url": capability.api_base_url,
+                "required_env": capability.required_env,
+                "missing_env": capability.missing_env,
+                "enabled": settings.is_provider_enabled(&provider_key),
+            })
+        }).collect::<Vec<_>>()
+    }))
+}
+
+pub async fn admin_payment_settings_save(
+    State(st): State<AdminState>,
+    Json(p): Json<PaymentSettingsSavePayload>,
+) -> impl IntoResponse {
+    let capabilities =
+        PaymentPluginRegistry::capabilities_from_env_with_pool(Some(st.pool.clone()));
+    let configured = capabilities
+        .into_iter()
+        .map(|cap| (cap.provider, cap.configured))
+        .collect::<std::collections::HashMap<_, _>>();
+
+    let requested = [
+        ("paypal", p.paypal_enabled),
+        ("stripe", p.stripe_enabled),
+        ("xendit", p.xendit_enabled),
+        ("midtrans", p.midtrans_enabled),
+        ("x402", p.x402_enabled),
+    ];
+
+    for (provider, enabled) in requested {
+        if enabled && !configured.get(provider).copied().unwrap_or(false) {
+            return Json(json!({
+                "ok": false,
+                "error": format!("{provider} cannot be enabled because its environment variables are incomplete")
+            }));
+        }
+    }
+
+    let default_provider = p
+        .default_provider
+        .as_deref()
+        .map(|value| value.trim().to_ascii_lowercase())
+        .filter(|value| !value.is_empty());
+
+    if let Some(provider) = default_provider.as_deref() {
+        let enabled = match provider {
+            "paypal" => p.paypal_enabled,
+            "stripe" => p.stripe_enabled,
+            "xendit" => p.xendit_enabled,
+            "midtrans" => p.midtrans_enabled,
+            "x402" => p.x402_enabled,
+            _ => false,
+        };
+        if !enabled {
+            return Json(json!({
+                "ok": false,
+                "error": "default provider must also be enabled"
+            }));
+        }
+    }
+
+    let res = sqlx::query(
+        r#"INSERT INTO payment_settings
+              (id, wallet_payment_enabled, wallet_transfer_enabled, paypal_enabled,
+               stripe_enabled, xendit_enabled, midtrans_enabled, x402_enabled,
+               default_provider, updated_at)
+           VALUES
+              (TRUE, $1, $2, $3, $4, $5, $6, $7, $8, NOW())
+           ON CONFLICT (id) DO UPDATE
+             SET wallet_payment_enabled = $1,
+                 wallet_transfer_enabled = $2,
+                 paypal_enabled = $3,
+                 stripe_enabled = $4,
+                 xendit_enabled = $5,
+                 midtrans_enabled = $6,
+                 x402_enabled = $7,
+                 default_provider = $8,
+                 updated_at = NOW()"#,
+    )
+    .bind(p.wallet_payment_enabled)
+    .bind(p.wallet_transfer_enabled)
+    .bind(p.paypal_enabled)
+    .bind(p.stripe_enabled)
+    .bind(p.xendit_enabled)
+    .bind(p.midtrans_enabled)
+    .bind(p.x402_enabled)
+    .bind(default_provider.as_deref())
+    .execute(&st.pool)
+    .await;
+
+    match res {
+        Ok(_) => Json(json!({"ok": true, "message": "Payment settings saved."})),
+        Err(e) => Json(json!({"ok": false, "error": format!("db: {e}")})),
+    }
 }
 
 pub async fn admin_smtp_save(
