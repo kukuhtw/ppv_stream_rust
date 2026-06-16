@@ -1,5 +1,7 @@
 # Data Flow Guide
 
+-> [README.md](/c:/rust/github_ppv_stream_rust/ppv_stream_rust/README.md) | [ERD.md](/c:/rust/github_ppv_stream_rust/ppv_stream_rust/ERD.md) | [TECHNICAL_DOCUMENTATION.md](/c:/rust/github_ppv_stream_rust/ppv_stream_rust/TECHNICAL_DOCUMENTATION.md)
+
 This document explains how data moves through the PPV Stream application from account creation to login, purchase, access entitlement, disbursement, affiliate payout, chat, and playback.
 
 It is written as a narrative operational guide rather than a pure schema reference.

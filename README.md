@@ -20,6 +20,8 @@
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Detailed cloud deployment guide for Docker and non-Docker setups on DigitalOcean, Google Cloud, Azure, plus Cloudflare and Vercel guidance |
 | [SECURITY.md](SECURITY.md) | Security model, hardening notes, production security recommendations, and remaining security work |
 | [GLOSSARY.md](GLOSSARY.md) | Comprehensive English glossary of business, payment, streaming, security, and technical terms used across the repo |
+| [ERD.md](ERD.md) | Comprehensive entity-relationship explanation with Mermaid ERD, table-by-table column dictionary, and business invariants |
+| [DATA_FLOW.md](DATA_FLOW.md) | Narrative end-to-end data flow guide from registration and login through purchase, disbursement, affiliate payout, chat, and playback |
 | [VISION.md](VISION.md) | Inspiration — the problems we solve and the creator economy we're building |
 | [WALLET.md](WALLET.md) | Internal fiat wallet — business flows, DB design, API reference |
 | [AFFILIATE.md](AFFILIATE.md) | Affiliate system — referral links, commission flows, security model |

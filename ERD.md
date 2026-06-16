@@ -1,5 +1,7 @@
 # ERD Explanation
 
+-> [README.md](/c:/rust/github_ppv_stream_rust/ppv_stream_rust/README.md) | [DATA_FLOW.md](/c:/rust/github_ppv_stream_rust/ppv_stream_rust/DATA_FLOW.md) | [TECHNICAL_DOCUMENTATION.md](/c:/rust/github_ppv_stream_rust/ppv_stream_rust/TECHNICAL_DOCUMENTATION.md)
+
 This document explains the database structure of the PPV Stream repository in detail.
 It covers the core entities, payment entities, wallet and affiliate entities, chat entities, and operational tables used by the application.
 
