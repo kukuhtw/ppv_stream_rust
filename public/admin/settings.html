@@ -1,316 +1,272 @@
-<!-- public/admin/settings.html -->
 <!doctype html>
-<html lang="id">
+<html lang="en" data-bs-theme="dark">
 <head>
   <meta charset="utf-8">
-  <title>Admin — Pengaturan SMTP</title>
+  <title>Admin Settings — PPV Stream</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/public/styles.css">
+  <script src="/public/theme.js"></script>
 </head>
-<body class="bg-light">
+<body>
 
-<nav class="navbar navbar-expand-md navbar-dark bg-danger shadow-sm">
-  <div class="container-fluid">
-    <a class="navbar-brand fw-bold" href="/public/admin/dashboard.html">Admin Panel</a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
+<nav class="navbar navbar-expand-md bg-danger shadow-sm">
+  <div class="container">
+    <a class="navbar-brand fw-bold text-white" href="/public/admin/dashboard.html" data-platform="brand">🎬 PPV Stream</a>
+    <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#adminNav">
       <span class="navbar-toggler-icon"></span>
     </button>
-    <div class="collapse navbar-collapse" id="navMenu">
-      <ul class="navbar-nav ms-auto">
-        <li class="nav-item"><a class="nav-link text-white" href="/public/admin/dashboard.html">Dashboard</a></li>
-        <li class="nav-item"><a class="nav-link text-white" href="/public/admin/payments.html">Pembayaran</a></li>
-        <li class="nav-item"><a class="nav-link text-white active" href="/public/admin/settings.html">Pengaturan</a></li>
-        <li class="nav-item"><a class="nav-link text-white" href="/admin/data">Raw Data</a></li>
-        <li class="nav-item"><a class="nav-link text-white" href="/browse">Browse Site</a></li>
+    <div class="collapse navbar-collapse" id="adminNav">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link text-white-50" href="/public/admin/dashboard.html">Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link text-white-50" href="/public/admin/payments.html">Payments</a></li>
+        <li class="nav-item"><a class="nav-link text-white-50" href="/public/admin/wallet.html">Wallets</a></li>
+        <li class="nav-item"><a class="nav-link text-white fw-semibold active" href="/public/admin/settings.html">Settings</a></li>
       </ul>
+      <div class="d-flex align-items-center gap-2 mt-2 mt-md-0">
+        <span class="badge bg-light text-danger fw-semibold">ADMIN</span>
+        <button class="btn btn-sm btn-outline-light" onclick="toggleTheme()" id="themeToggle">☀️</button>
+        <button id="logoutBtn" class="btn btn-sm btn-outline-light">Logout</button>
+      </div>
     </div>
   </div>
 </nav>
 
-<div class="container py-4" style="max-width: 680px;">
-  <h4 class="mb-4">Pengaturan Email (SMTP)</h4>
+<div class="container py-4 pb-5">
+  <h1 class="mb-1 fs-4 fw-bold">Settings</h1>
+  <p class="text-body-secondary small mb-4">Configure platform appearance, SMTP, and admin credentials.</p>
 
-  <div id="alert" class="d-none mb-3"></div>
-
-  <div class="card shadow-sm">
+  <!-- Platform branding (localStorage) -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header fw-semibold">Platform Name &amp; Tagline</div>
     <div class="card-body">
+      <p class="text-body-secondary small mb-3">
+        These settings are saved locally in this browser and applied to all pages via <code>theme.js</code>.
+        They are not stored in the database — each admin browser must save them.
+      </p>
+      <div id="brandAlert" class="d-none mb-3"></div>
+      <form id="brandForm">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label for="brandName" class="form-label">Platform Name</label>
+            <input id="brandName" name="name" class="form-control" required maxlength="60" placeholder="PPV Stream">
+          </div>
+          <div class="col-md-6">
+            <label for="brandTagline" class="form-label">Tagline</label>
+            <input id="brandTagline" name="tagline" class="form-control" maxlength="120" placeholder="Pay-Per-View Streaming Platform">
+          </div>
+          <div class="col-12">
+            <button class="btn btn-primary" type="submit">Save Branding</button>
+            <button class="btn btn-outline-secondary ms-2" type="button" onclick="resetBranding()">Reset to Default</button>
+          </div>
+        </div>
+      </form>
+      <div class="mt-3 p-3 rounded border small">
+        Preview: <strong data-platform="brand">🎬 PPV Stream</strong> — <span data-platform="tagline">Pay-Per-View Streaming Platform</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- SMTP -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header fw-semibold">SMTP / Email Settings</div>
+    <div class="card-body">
+      <p class="text-body-secondary small mb-3">
+        SMTP settings are configured in the server's <code>.env</code> file and require a server restart to take effect.
+        The form below sends a test email to verify the current configuration.
+      </p>
+      <div id="smtpAlert" class="d-none mb-3"></div>
       <form id="smtpForm">
         <div class="row g-3">
-
-          <div class="col-12">
-            <div class="form-check form-switch">
-              <input class="form-check-input" type="checkbox" id="smtpEnabled" name="enabled">
-              <label class="form-check-label fw-semibold" for="smtpEnabled">Aktifkan pengiriman email</label>
-            </div>
-            <div class="form-text">Jika dimatikan, email hanya dicatat di log server.</div>
+          <div class="col-md-6">
+            <label for="smtpHost" class="form-label">SMTP Host</label>
+            <input id="smtpHost" name="smtp_host" class="form-control" placeholder="smtp.gmail.com" readonly disabled>
+            <div class="form-text">Read from server .env (SMTP_HOST)</div>
           </div>
-
-          <div class="col-md-8">
-            <label for="smtpHost" class="form-label">SMTP Host <span class="text-danger">*</span></label>
-            <input id="smtpHost" name="host" type="text" class="form-control"
-                   placeholder="smtp.gmail.com / smtp.mailgun.org">
-          </div>
-          <div class="col-md-4">
+          <div class="col-md-3">
             <label for="smtpPort" class="form-label">Port</label>
-            <input id="smtpPort" name="port" type="number" class="form-control" value="587" min="1" max="65535">
+            <input id="smtpPort" name="smtp_port" type="number" class="form-control" placeholder="587" readonly disabled>
           </div>
-
-          <div class="col-md-6">
-            <label for="smtpUser" class="form-label">Username / Email</label>
-            <input id="smtpUser" name="username" type="text" class="form-control"
-                   placeholder="noreply@yourdomain.com" autocomplete="username">
+          <div class="col-md-3">
+            <label for="smtpSec" class="form-label">Security</label>
+            <input id="smtpSec" name="smtp_security" class="form-control" placeholder="STARTTLS" readonly disabled>
           </div>
           <div class="col-md-6">
-            <label for="smtpPass" class="form-label">Password / App Password</label>
-            <div class="input-group">
-              <input id="smtpPass" name="password" type="password" class="form-control"
-                     autocomplete="current-password" placeholder="••••••••">
-              <button class="btn btn-outline-secondary" type="button"
-                      onclick="togglePass()">Lihat</button>
+            <label for="smtpUser" class="form-label">Username</label>
+            <input id="smtpUser" name="smtp_user" class="form-control" placeholder="your@email.com" readonly disabled>
+          </div>
+          <div class="col-md-6">
+            <label for="smtpFrom" class="form-label">From Address</label>
+            <input id="smtpFrom" name="smtp_from" class="form-control" placeholder="noreply@yourplatform.com" readonly disabled>
+          </div>
+          <div class="col-12">
+            <label for="testEmail" class="form-label">Send Test Email To</label>
+            <div class="input-group" style="max-width:400px">
+              <input id="testEmail" type="email" class="form-control" placeholder="admin@example.com">
+              <button class="btn btn-outline-secondary" type="button" onclick="sendTestEmail()">Send Test</button>
             </div>
           </div>
+        </div>
+      </form>
+    </div>
+  </div>
 
-          <div class="col-md-8">
-            <label for="smtpFrom" class="form-label">From Email <span class="text-danger">*</span></label>
-            <input id="smtpFrom" name="from_email" type="email" class="form-control"
-                   placeholder="noreply@yourdomain.com">
+  <!-- Exchange rate -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header fw-semibold">USD → IDR Exchange Rate</div>
+    <div class="card-body">
+      <div id="kursAlert" class="d-none mb-3"></div>
+      <form id="kursForm">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label for="kursRate" class="form-label">Rate (1 USD = ? IDR)</label>
+            <input id="kursRate" name="usd_to_idr" type="number" min="1" step="1" class="form-control" required placeholder="e.g. 17000">
+          </div>
+          <div class="col-12">
+            <button class="btn btn-primary" type="submit">Update Rate</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Admin password -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header fw-semibold">Change Admin Password</div>
+    <div class="card-body">
+      <div id="adminPwAlert" class="d-none mb-3"></div>
+      <form id="adminPwForm" autocomplete="off">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label for="apCurrent" class="form-label">Current Password</label>
+            <div class="input-group">
+              <input id="apCurrent" name="current_password" type="password" class="form-control" required>
+              <button class="btn btn-outline-secondary" type="button" data-toggle-pass="apCurrent">Show</button>
+            </div>
           </div>
           <div class="col-md-4">
-            <label for="smtpFromName" class="form-label">From Name</label>
-            <input id="smtpFromName" name="from_name" type="text" class="form-control"
-                   value="PPV Stream">
-          </div>
-
-          <div class="col-12">
-            <div class="form-check form-switch">
-              <input class="form-check-input" type="checkbox" id="smtpTls" name="use_tls" checked>
-              <label class="form-check-label" for="smtpTls">
-                Gunakan TLS (port 465) — matikan jika pakai STARTTLS (port 587)
-              </label>
-            </div>
-          </div>
-
-          <div class="col-12 border-top pt-3">
-            <label for="testEmail" class="form-label fw-semibold">Test Email</label>
+            <label for="apNew" class="form-label">New Password</label>
             <div class="input-group">
-              <input id="testEmail" type="email" class="form-control"
-                     placeholder="Kirim test email ke alamat ini (opsional)">
-              <button class="btn btn-outline-info" type="button" onclick="sendTest()">Kirim Test</button>
+              <input id="apNew" name="new_password" type="password" class="form-control" required minlength="8">
+              <button class="btn btn-outline-secondary" type="button" data-toggle-pass="apNew">Show</button>
             </div>
-            <div class="form-text">Menggunakan konfigurasi di atas, disimpan dulu sebelum kirim.</div>
           </div>
-
-        </div><!-- /row -->
-
-        <div class="mt-4 d-flex gap-2">
-          <button type="submit" class="btn btn-danger px-4">Simpan Pengaturan</button>
-          <button type="button" class="btn btn-outline-secondary" onclick="loadSettings()">Reset</button>
+          <div class="col-md-4">
+            <label for="apConfirm" class="form-label">Confirm New Password</label>
+            <input id="apConfirm" type="password" class="form-control" required>
+          </div>
+          <div class="col-12">
+            <button class="btn btn-warning" type="submit">Update Admin Password</button>
+          </div>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- Ganti Password Admin -->
-  <div class="card mt-4 shadow-sm">
-    <div class="card-header fw-semibold">Ganti Password Admin</div>
-    <div class="card-body">
-      <div id="pwAlert" class="d-none mb-3"></div>
-      <form id="changePassForm">
-        <div class="row g-3">
-          <div class="col-12">
-            <label for="cpCurrent" class="form-label">Password Sekarang <span class="text-danger">*</span></label>
-            <div class="input-group">
-              <input id="cpCurrent" type="password" class="form-control" autocomplete="current-password" placeholder="Password saat ini">
-              <button class="btn btn-outline-secondary" type="button" data-toggle-pass="cpCurrent">Lihat</button>
-            </div>
-          </div>
-          <div class="col-md-6">
-            <label for="cpNew" class="form-label">Password Baru <span class="text-danger">*</span></label>
-            <div class="input-group">
-              <input id="cpNew" type="password" class="form-control" autocomplete="new-password" placeholder="Min. 8 karakter">
-              <button class="btn btn-outline-secondary" type="button" data-toggle-pass="cpNew">Lihat</button>
-            </div>
-          </div>
-          <div class="col-md-6">
-            <label for="cpConfirm" class="form-label">Konfirmasi Password Baru <span class="text-danger">*</span></label>
-            <div class="input-group">
-              <input id="cpConfirm" type="password" class="form-control" autocomplete="new-password" placeholder="Ulangi password baru">
-              <button class="btn btn-outline-secondary" type="button" data-toggle-pass="cpConfirm">Lihat</button>
-            </div>
-          </div>
-        </div>
-        <div class="mt-3">
-          <button type="submit" class="btn btn-warning px-4">Ubah Password</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <div class="card mt-4 shadow-sm">
-    <div class="card-header fw-semibold small">Panduan Konfigurasi</div>
-    <div class="card-body small text-muted">
-      <dl class="row mb-0">
-        <dt class="col-sm-4">Gmail</dt>
-        <dd class="col-sm-8">Host: <code>smtp.gmail.com</code>, Port: <code>587</code>, gunakan App Password (bukan password akun). Matikan TLS, gunakan STARTTLS.</dd>
-        <dt class="col-sm-4">Mailgun</dt>
-        <dd class="col-sm-8">Host: <code>smtp.mailgun.org</code>, Port: <code>587</code>, Username: alamat email Mailgun, Password: SMTP password dari dashboard.</dd>
-        <dt class="col-sm-4">Mailtrap (dev)</dt>
-        <dd class="col-sm-8">Host: <code>sandbox.smtp.mailtrap.io</code>, Port: <code>587</code>. Cocok untuk testing tanpa kirim email asli.</dd>
-        <dt class="col-sm-4">Brevo / Sendinblue</dt>
-        <dd class="col-sm-8">Host: <code>smtp-relay.brevo.com</code>, Port: <code>587</code>.</dd>
-      </dl>
-    </div>
-  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-function showAlert(type, msg) {
-  const el = document.getElementById('alert');
-  el.className = `alert alert-${type} alert-dismissible fade show`;
-  el.innerHTML = `${msg}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
-}
-
-function togglePass() {
-  const f = document.getElementById('smtpPass');
-  f.type = f.type === 'password' ? 'text' : 'password';
-}
-
-async function loadSettings() {
-  try {
-    const r = await fetch('/admin/smtp');
-    const j = await r.json();
-    if (!j.ok) return;
-    const s = j.smtp;
-    document.getElementById('smtpHost').value     = s.host       || '';
-    document.getElementById('smtpPort').value     = s.port       || 587;
-    document.getElementById('smtpUser').value     = s.username   || '';
-    document.getElementById('smtpPass').value     = s.password   || '';
-    document.getElementById('smtpFrom').value     = s.from_email || '';
-    document.getElementById('smtpFromName').value = s.from_name  || 'PPV Stream';
-    document.getElementById('smtpEnabled').checked = !!s.enabled;
-    document.getElementById('smtpTls').checked     = !!s.use_tls;
-  } catch (e) {
-    showAlert('warning', 'Gagal memuat pengaturan: ' + e.message);
-  }
-}
-
-function buildPayload(testEmail) {
-  return {
-    host:       document.getElementById('smtpHost').value.trim(),
-    port:       parseInt(document.getElementById('smtpPort').value) || 587,
-    username:   document.getElementById('smtpUser').value.trim(),
-    password:   document.getElementById('smtpPass').value,
-    from_email: document.getElementById('smtpFrom').value.trim(),
-    from_name:  document.getElementById('smtpFromName').value.trim() || 'PPV Stream',
-    use_tls:    document.getElementById('smtpTls').checked,
-    enabled:    document.getElementById('smtpEnabled').checked,
-    test_email: testEmail || null,
-  };
-}
-
-document.getElementById('smtpForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const btn = e.submitter;
-  btn.disabled = true;
-  btn.textContent = 'Menyimpan...';
-  try {
-    const r = await fetch('/admin/smtp', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(buildPayload(null)),
-    });
-    const j = await r.json();
-    if (j.ok) showAlert('success', 'Pengaturan berhasil disimpan.');
-    else      showAlert('danger', 'Gagal: ' + (j.error || 'unknown'));
-  } catch (e) {
-    showAlert('danger', 'Error: ' + e.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Simpan Pengaturan';
-  }
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  await fetch('/auth/logout', { method:'POST' }).catch(()=>{});
+  location.href = '/public/auth/login.html';
 });
 
-async function sendTest() {
-  const to = document.getElementById('testEmail').value.trim();
-  if (!to) { showAlert('warning', 'Isi dulu alamat email tujuan test.'); return; }
-  const btn = document.querySelector('button[onclick="sendTest()"]');
-  btn.disabled = true;
-  btn.textContent = 'Mengirim...';
-  try {
-    const r = await fetch('/admin/smtp', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(buildPayload(to)),
-    });
-    const j = await r.json();
-    if (j.test_sent)  showAlert('success', `Test email berhasil dikirim ke <b>${to}</b>!`);
-    else if (j.test_error) showAlert('danger', `Pengaturan tersimpan, tapi test gagal: ${j.test_error}`);
-    else if (j.ok)    showAlert('success', 'Tersimpan (test email tidak dikirim).');
-    else              showAlert('danger', 'Error: ' + (j.error || 'unknown'));
-  } catch (e) {
-    showAlert('danger', 'Error: ' + e.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Kirim Test';
-  }
-}
-
-loadSettings();
-
-// Toggle password visibility
+// ── password show/hide ──
 document.querySelectorAll('[data-toggle-pass]').forEach(btn => {
   btn.addEventListener('click', () => {
-    const f = document.getElementById(btn.dataset.togglePass);
-    f.type = f.type === 'password' ? 'text' : 'password';
+    const inp = document.getElementById(btn.dataset.togglePass);
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+    btn.textContent = inp.type === 'password' ? 'Show' : 'Hide';
   });
 });
 
-function showPwAlert(type, msg) {
-  const el = document.getElementById('pwAlert');
-  el.className = `alert alert-${type} alert-dismissible fade show`;
-  el.innerHTML = `${msg}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+// ── platform branding (localStorage) ──
+(function initBrand(){
+  const cfg = getPlatformConfig();
+  document.getElementById('brandName').value    = cfg.name    || 'PPV Stream';
+  document.getElementById('brandTagline').value = cfg.tagline || 'Pay-Per-View Streaming Platform';
+})();
+
+document.getElementById('brandForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const name    = document.getElementById('brandName').value.trim();
+  const tagline = document.getElementById('brandTagline').value.trim();
+  savePlatformConfig({ name, tagline });
+  applyPlatformConfig();
+  showAlert('brandAlert', 'success', 'Branding saved! All pages will now use these values.');
+});
+
+function resetBranding() {
+  savePlatformConfig({ name: 'PPV Stream', tagline: 'Pay-Per-View Streaming Platform' });
+  document.getElementById('brandName').value    = 'PPV Stream';
+  document.getElementById('brandTagline').value = 'Pay-Per-View Streaming Platform';
+  applyPlatformConfig();
+  showAlert('brandAlert', 'info', 'Branding reset to defaults.');
 }
 
-document.getElementById('changePassForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const cur     = document.getElementById('cpCurrent').value;
-  const nw      = document.getElementById('cpNew').value;
-  const confirm = document.getElementById('cpConfirm').value;
-
-  if (!cur || !nw || !confirm) {
-    return showPwAlert('warning', 'Semua field wajib diisi.');
-  }
-  if (nw.length < 8) {
-    return showPwAlert('warning', 'Password baru minimal 8 karakter.');
-  }
-  if (nw !== confirm) {
-    return showPwAlert('warning', 'Konfirmasi password tidak cocok.');
-  }
-
-  const btn = e.submitter;
-  btn.disabled = true;
-  btn.textContent = 'Memproses...';
+// ── SMTP status ──
+(async function initSmtp(){
   try {
-    const r = await fetch('/admin/change_password', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({current_password: cur, new_password: nw}),
-    });
-    const j = await r.json();
+    const j = await fetch('/api/admin/smtp_status').then(r=>r.json());
     if (j.ok) {
-      showPwAlert('success', 'Password berhasil diubah! Notifikasi email telah dikirim.');
-      document.getElementById('changePassForm').reset();
-    } else {
-      showPwAlert('danger', 'Gagal: ' + (j.error || 'Unknown error'));
+      document.getElementById('smtpHost').value = j.host || '';
+      document.getElementById('smtpPort').value = j.port || '';
+      document.getElementById('smtpSec').value  = j.security || '';
+      document.getElementById('smtpUser').value = j.user || '';
+      document.getElementById('smtpFrom').value = j.from || '';
     }
-  } catch (err) {
-    showPwAlert('danger', 'Error: ' + err.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Ubah Password';
-  }
+  } catch {}
+})();
+
+async function sendTestEmail() {
+  const to = document.getElementById('testEmail').value.trim();
+  if (!to) return alert('Enter a recipient email.');
+  try {
+    const j = await fetch('/api/admin/test_email', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams({ to }) }).then(r=>r.json());
+    showAlert('smtpAlert', j.ok ? 'success' : 'danger', j.ok ? `Test email sent to ${to}` : 'Failed: ' + (j.error||'unknown'));
+  } catch(e) { showAlert('smtpAlert', 'danger', 'Error: ' + e.message); }
+}
+
+// ── exchange rate ──
+(async function initKurs(){
+  try {
+    const j = await fetch('/api/kurs').then(r=>r.json());
+    if (j.usd_to_idr) document.getElementById('kursRate').value = j.usd_to_idr;
+  } catch {}
+})();
+
+document.getElementById('kursForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const rate = parseInt(document.getElementById('kursRate').value, 10);
+  try {
+    const j = await fetch('/api/admin/kurs', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams({ usd_to_idr: rate }) }).then(r=>r.json());
+    showAlert('kursAlert', j.ok ? 'success' : 'danger', j.ok ? 'Exchange rate updated!' : 'Failed: ' + (j.error||'unknown'));
+  } catch(e) { showAlert('kursAlert', 'danger', 'Error: ' + e.message); }
 });
+
+// ── admin password ──
+document.getElementById('adminPwForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const cur  = document.getElementById('apCurrent').value;
+  const nw   = document.getElementById('apNew').value;
+  const conf = document.getElementById('apConfirm').value;
+  if (nw !== conf) return showAlert('adminPwAlert', 'danger', 'Passwords do not match.');
+  if (nw.length < 8) return showAlert('adminPwAlert', 'danger', 'New password must be at least 8 characters.');
+  const btn = e.submitter; btn.disabled=true;
+  try {
+    const j = await fetch('/api/change_password', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ current_password: cur, new_password: nw }) }).then(r=>r.json());
+    showAlert('adminPwAlert', j.ok ? 'success' : 'danger', j.ok ? 'Admin password updated!' : 'Failed: ' + (j.error||'unknown'));
+    if (j.ok) e.target.reset();
+  } catch(e2) { showAlert('adminPwAlert', 'danger', 'Error: ' + e2.message); }
+  finally { btn.disabled=false; }
+});
+
+function showAlert(id, type, msg) {
+  const el = document.getElementById(id);
+  el.className = `alert alert-${type}`;
+  el.textContent = msg;
+}
 </script>
 </body>
 </html>

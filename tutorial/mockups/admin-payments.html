@@ -1,214 +1,145 @@
-<!-- MOCKUP: Admin Payments — static replica with dummy data -->
 <!doctype html>
-<html lang="id">
+<html lang="en" data-bs-theme="dark">
 <head>
   <meta charset="utf-8">
-  <title>[MOCKUP] Admin — Monitoring Pembayaran</title>
+  <title>[MOCKUP] Admin Payments</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    .badge-provider{font-size:.7rem;letter-spacing:.03em}
-    .amount-cell{white-space:nowrap;font-family:monospace}
-    .ts{font-size:.78rem;color:#666;white-space:nowrap}
-    .truncate{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .btn-disburse{min-width:90px}
-    .mockup-banner{background:#4a0000;color:#fca5a5;font-size:.8rem;text-align:center;padding:6px}
-    .ann{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#dc2626;color:#fff;font-size:.68rem;font-weight:700;vertical-align:middle;margin-left:4px}
+    .callout { position:absolute; background:#ffc107; color:#000; font-size:.7rem; font-weight:700; padding:2px 6px; border-radius:4px; white-space:nowrap; z-index:10; }
+    .annotated { position:relative; }
+    .mockup-banner { background:#dc3545; color:#fff; font-size:.75rem; padding:4px 12px; text-align:center; letter-spacing:.08em; }
+    .badge-x402   { background:#6f42c1; color:#fff; }
+    .badge-wallet { background:#0dcaf0; color:#000; }
+    .badge-fiat   { background:#198754; color:#fff; }
   </style>
 </head>
-<body class="bg-light">
-<div class="mockup-banner">🔍 STATIC MOCKUP (ADMIN) — tidak ada data nyata / no live data</div>
+<body>
+<div class="mockup-banner">TUTORIAL MOCKUP — Admin Payments</div>
 
-<nav class="navbar navbar-expand-md navbar-dark bg-danger shadow-sm">
-  <div class="container-fluid">
-    <a class="navbar-brand fw-bold" href="#">Admin Panel</a>
+<nav class="navbar navbar-expand-md bg-danger shadow-sm">
+  <div class="container">
+    <a class="navbar-brand fw-bold text-white" href="#">🎬 PPV Stream</a>
     <div class="collapse navbar-collapse show">
-      <ul class="navbar-nav ms-auto">
-        <li class="nav-item"><a class="nav-link text-white" href="#">Dashboard</a></li>
-        <li class="nav-item"><a class="nav-link text-white active fw-bold" href="#">Pembayaran</a></li>
-        <li class="nav-item"><a class="nav-link text-white" href="#">Pengaturan</a></li>
-        <li class="nav-item"><a class="nav-link text-white" href="#">Raw Data</a></li>
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link text-white-50" href="#">Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link text-white fw-semibold active" href="#">Payments</a></li>
+        <li class="nav-item"><a class="nav-link text-white-50" href="#">Wallets</a></li>
+        <li class="nav-item"><a class="nav-link text-white-50" href="#">Settings</a></li>
       </ul>
+      <div class="d-flex align-items-center gap-2">
+        <span class="badge bg-light text-danger fw-semibold">ADMIN</span>
+        <button class="btn btn-sm btn-outline-light">☀️</button>
+        <button class="btn btn-sm btn-outline-light">Logout</button>
+      </div>
     </div>
   </div>
 </nav>
 
-<div class="container-fluid py-4">
-  <div class="d-flex align-items-center mb-3 gap-2 flex-wrap">
-    <h4 class="mb-0 me-auto">Monitoring Pembayaran Fiat</h4>
-    <button class="btn btn-sm btn-outline-secondary">Refresh</button>
-  </div>
-
-  <!-- Status totals -->
-  <div class="d-flex gap-2 flex-wrap mb-3">
-    <span class="badge rounded-pill bg-secondary fs-6">Semua: 23 <span class="ann" title="Total all invoices">1</span></span>
-    <span class="badge rounded-pill bg-success fs-6">Paid: 16</span>
-    <span class="badge rounded-pill bg-warning text-dark fs-6">Pending: 4</span>
-    <span class="badge rounded-pill bg-danger fs-6">Failed: 3</span>
-  </div>
+<div class="container py-4 pb-5">
+  <h1 class="mb-1 fs-4 fw-bold">Payments</h1>
+  <p class="text-body-secondary small mb-4">Monitor fiat payments and process disbursements.</p>
 
   <!-- Filters -->
-  <div class="card shadow-sm mb-3">
-    <div class="card-body py-2">
-      <div class="row g-2 align-items-end">
-        <div class="col-auto">
-          <label class="form-label mb-0 small fw-semibold">Provider <span class="ann" title="Filter by payment provider">2</span></label>
-          <select class="form-select form-select-sm">
-            <option selected>Semua</option>
-            <option>Stripe</option>
-            <option>PayPal</option>
-            <option>Midtrans</option>
-            <option>Xendit</option>
-          </select>
-        </div>
-        <div class="col-auto">
-          <label class="form-label mb-0 small fw-semibold">Status <span class="ann" title="Filter by invoice status">3</span></label>
-          <select class="form-select form-select-sm">
-            <option selected>Semua</option>
-            <option>Pending</option>
-            <option>Paid</option>
-            <option>Failed</option>
-            <option>Expired</option>
-          </select>
-        </div>
-        <div class="col-auto">
-          <label class="form-label mb-0 small fw-semibold">Limit</label>
-          <select class="form-select form-select-sm">
-            <option>50</option>
-            <option selected>100</option>
-            <option>500</option>
-          </select>
-        </div>
-      </div>
+  <div class="row g-2 mb-3 annotated">
+    <span class="callout" style="top:-20px;left:0">① Filter toolbar — search by user/video/invoice, filter by status &amp; method</span>
+    <div class="col-12 col-md-4"><input class="form-control" placeholder="Search user, video, invoice…" value="eve"></div>
+    <div class="col-6 col-md-2">
+      <select class="form-select">
+        <option>All statuses</option>
+        <option selected>Pending</option>
+        <option>Completed</option>
+        <option>Rejected</option>
+      </select>
     </div>
+    <div class="col-6 col-md-2">
+      <select class="form-select">
+        <option selected>All methods</option>
+        <option>x402</option>
+        <option>Bank Transfer</option>
+        <option>QRIS</option>
+        <option>Wallet</option>
+      </select>
+    </div>
+    <div class="col-12 col-md-2"><button class="btn btn-outline-secondary w-100">↻ Refresh</button></div>
   </div>
 
-  <!-- Invoice table -->
-  <div class="card shadow-sm">
+  <!-- Table -->
+  <div class="card shadow-sm mb-4 annotated">
+    <span class="callout" style="top:-18px;left:0">② Payments table — all transactions; Process button on pending rows</span>
     <div class="card-body p-0">
-      <div class="table-responsive">
-        <table class="table table-sm table-hover table-bordered mb-0 align-middle">
-          <thead class="table-dark">
-            <tr>
-              <th>Invoice UID <span class="ann" title="Truncated — hover for full UID">4</span></th>
-              <th>Provider</th>
-              <th>Buyer</th>
-              <th>Video</th>
-              <th>Amount</th>
-              <th>Status</th>
-              <th>Dibuat</th>
-              <th>Dibayar</th>
-              <th>Disburse <span class="ann" title="Creator payout status">5</span></th>
-              <th>Aksi <span class="ann" title="Disburse button appears only when paid and not yet disbursed">6</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            <!-- Row 1: paid, disbursed auto (xendit) -->
-            <tr>
-              <td class="font-monospace small" title="inv_xnd_2026060001">inv_xnd_...</td>
-              <td><span class="badge badge-provider bg-success">xendit</span></td>
-              <td class="small">carol<br><span class="ts">carol@example.com</span></td>
-              <td class="small truncate" title="Advanced Rust Programming">Advanced Rust Prog...</td>
-              <td class="amount-cell">Rp 150.000</td>
-              <td><span class="badge bg-success">paid</span></td>
-              <td class="ts">10 Jun 2026 09:00</td>
-              <td class="ts">10 Jun 2026 09:05</td>
-              <td class="small"><span class="badge bg-success">Auto<br><small class="ts">10 Jun 10:00</small></span></td>
-              <td><button class="btn btn-sm btn-outline-secondary btn-disburse" disabled>Selesai</button></td>
-            </tr>
-            <!-- Row 2: paid, NOT disbursed (midtrans) -->
-            <tr class="table-warning">
-              <td class="font-monospace small">inv_mdt_...</td>
-              <td><span class="badge badge-provider bg-warning text-dark">midtrans</span></td>
-              <td class="small">dave<br><span class="ts">dave@example.com</span></td>
-              <td class="small truncate">System Design Master...</td>
-              <td class="amount-cell">Rp 200.000</td>
-              <td><span class="badge bg-success">paid</span></td>
-              <td class="ts">12 Jun 2026 14:30</td>
-              <td class="ts">12 Jun 2026 14:35</td>
-              <td class="small"><span class="badge bg-warning text-dark">Belum</span></td>
-              <td><button class="btn btn-sm btn-outline-success btn-disburse">Disburse</button></td>
-            </tr>
-            <!-- Row 3: paid, NOT disbursed (stripe) -->
-            <tr class="table-warning">
-              <td class="font-monospace small">inv_str_...</td>
-              <td><span class="badge badge-provider bg-primary">stripe</span></td>
-              <td class="small">eve<br><span class="ts">eve@example.com</span></td>
-              <td class="small truncate">Web3 for Beginners</td>
-              <td class="amount-cell">$10.00</td>
-              <td><span class="badge bg-success">paid</span></td>
-              <td class="ts">13 Jun 2026 11:00</td>
-              <td class="ts">13 Jun 2026 11:02</td>
-              <td class="small"><span class="badge bg-warning text-dark">Belum</span></td>
-              <td><button class="btn btn-sm btn-outline-success btn-disburse">Disburse</button></td>
-            </tr>
-            <!-- Row 4: pending -->
-            <tr>
-              <td class="font-monospace small">inv_ppl_...</td>
-              <td><span class="badge badge-provider bg-info text-dark">paypal</span></td>
-              <td class="small">frank<br><span class="ts">frank@example.com</span></td>
-              <td class="small truncate">Zero Trust Security</td>
-              <td class="amount-cell">$25.00</td>
-              <td><span class="badge bg-warning text-dark">pending</span></td>
-              <td class="ts">16 Jun 2026 08:00</td>
-              <td class="ts">—</td>
-              <td class="small">—</td>
-              <td><button class="btn btn-sm btn-outline-secondary btn-disburse" disabled>—</button></td>
-            </tr>
-            <!-- Row 5: failed -->
-            <tr class="table-danger">
-              <td class="font-monospace small">inv_str_...</td>
-              <td><span class="badge badge-provider bg-primary">stripe</span></td>
-              <td class="small">grace<br><span class="ts">grace@example.com</span></td>
-              <td class="small truncate">PostgreSQL Tuning</td>
-              <td class="amount-cell">$17.50</td>
-              <td><span class="badge bg-danger">failed</span></td>
-              <td class="ts">15 Jun 2026 20:00</td>
-              <td class="ts">—</td>
-              <td class="small">—</td>
-              <td><button class="btn btn-sm btn-outline-secondary btn-disburse" disabled>—</button></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <table class="table table-hover mb-0" style="font-size:.85rem">
+        <thead class="table-light">
+          <tr><th>Date</th><th>Invoice</th><th>User</th><th>Video</th><th>Amount</th><th>Method</th><th>Status</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="text-nowrap">2025-06-14 09:05</td>
+            <td class="font-monospace" style="font-size:.75rem">inv_abc123d…</td>
+            <td>eve</td>
+            <td>Design Fundamentals</td>
+            <td class="fw-semibold">$15.00</td>
+            <td><span class="badge badge-fiat">Bank</span></td>
+            <td><span class="badge bg-warning text-dark">pending</span></td>
+            <td><button class="btn btn-sm btn-outline-primary py-0 px-2">Process</button></td>
+          </tr>
+          <tr>
+            <td class="text-nowrap">2025-06-13 14:47</td>
+            <td class="font-monospace" style="font-size:.75rem">inv_xyz789a…</td>
+            <td>frank</td>
+            <td>Crypto Basics</td>
+            <td class="fw-semibold">$20.00</td>
+            <td><span class="badge badge-fiat">QRIS</span></td>
+            <td><span class="badge bg-warning text-dark">pending</span></td>
+            <td><button class="btn btn-sm btn-outline-primary py-0 px-2">Process</button></td>
+          </tr>
+          <tr>
+            <td class="text-nowrap">2025-06-12 10:00</td>
+            <td class="font-monospace" style="font-size:.75rem">inv_def456g…</td>
+            <td>dave</td>
+            <td>Rust Tutorial</td>
+            <td class="fw-semibold">$10.00</td>
+            <td><span class="badge badge-x402">x402</span></td>
+            <td><span class="badge bg-success">completed</span></td>
+            <td><span class="text-body-secondary">—</span></td>
+          </tr>
+          <tr>
+            <td class="text-nowrap">2025-06-10 08:15</td>
+            <td class="font-monospace" style="font-size:.75rem">inv_ghi789j…</td>
+            <td>grace</td>
+            <td>Marketing Mastery</td>
+            <td class="fw-semibold">$8.00</td>
+            <td><span class="badge badge-wallet">Wallet</span></td>
+            <td><span class="badge bg-danger">rejected</span></td>
+            <td><span class="text-body-secondary">—</span></td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
-  <p class="text-muted small mt-2">Menampilkan 5 dari 23 transaksi</p>
 
-  <!-- Disburse modal demo -->
-  <div class="card mt-4 border-success shadow-sm" style="max-width:460px">
-    <div class="card-header bg-success text-white fw-semibold">Contoh: Modal Konfirmasi Disburse <span class="ann" style="background:#fff;color:#dc2626" title="This modal appears when you click the Disburse button">7</span></div>
+  <!-- Modal mockup inline -->
+  <div class="card shadow-sm annotated" style="max-width:480px">
+    <span class="callout" style="top:-18px;left:0">③ Process modal — Approve (credit seller) or Reject</span>
+    <div class="card-header fw-semibold">Process Payment (modal example)</div>
     <div class="card-body">
-      <dl class="row small mb-2">
-        <dt class="col-4">Invoice</dt><dd class="col-8 font-monospace">inv_mdt_20...</dd>
-        <dt class="col-4">Provider</dt><dd class="col-8">midtrans</dd>
-        <dt class="col-4">Buyer</dt><dd class="col-8">dave</dd>
-        <dt class="col-4">Video</dt><dd class="col-8">System Design Masterclass</dd>
-        <dt class="col-4">Amount</dt><dd class="col-8">Rp 200.000</dd>
-      </dl>
-      <div class="alert alert-warning small mb-3">
-        <strong>Manual:</strong> Silakan transfer ke creator melalui dashboard Midtrans terlebih dahulu, lalu klik "Konfirmasi" di sini untuk menandai sebagai selesai.
+      <p class="text-body-secondary small mb-3">
+        Invoice: <code>inv_abc123def456</code><br>
+        User: <strong>eve</strong><br>
+        Amount: <strong>$15.00</strong><br>
+        Method: Bank Transfer
+      </p>
+      <div class="mb-3">
+        <label for="m1" class="form-label">Admin Note</label>
+        <input id="m1" class="form-control" value="Transfer confirmed via BCA ref #12345678">
       </div>
-      <div class="d-flex gap-2 justify-content-end">
-        <button class="btn btn-secondary btn-sm">Batal</button>
-        <button class="btn btn-success btn-sm">Tandai Sudah Disburse</button>
+      <div class="d-flex gap-2">
+        <button class="btn btn-success">✓ Approve</button>
+        <button class="btn btn-danger">✗ Reject</button>
+        <button class="btn btn-secondary">Cancel</button>
       </div>
     </div>
-  </div>
-
-  <!-- Legend -->
-  <div class="alert alert-light border mt-4">
-    <strong>Callout legend:</strong>
-    <span class="ann" style="background:#6b7280">1</span> Status totals &nbsp;
-    <span class="ann" style="background:#6b7280">2</span> Provider filter &nbsp;
-    <span class="ann" style="background:#6b7280">3</span> Status filter &nbsp;
-    <span class="ann" style="background:#6b7280">4</span> Truncated invoice UID &nbsp;
-    <span class="ann" style="background:#6b7280">5</span> Disburse column &nbsp;
-    <span class="ann" style="background:#6b7280">6</span> Action button (active only when paid &amp; undisbursed) &nbsp;
-    <span class="ann" style="background:#6b7280">7</span> Confirmation modal example
   </div>
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

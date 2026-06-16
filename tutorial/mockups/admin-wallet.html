@@ -1,238 +1,139 @@
-<!-- MOCKUP: Admin Wallet Management — static replica with dummy data -->
 <!doctype html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 <head>
   <meta charset="utf-8">
+  <title>[MOCKUP] Admin Wallet Management</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>[MOCKUP] Admin Wallet — PPV Stream</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:system-ui,-apple-system,sans-serif;background:#0a0a14;color:#e8e8e8;min-height:100vh}
-    a{color:#a78bfa;text-decoration:none}
-    .mockup-banner{background:#4a0000;color:#fca5a5;font-size:.8rem;text-align:center;padding:6px}
-    header{background:#12102a;border-bottom:1px solid #2a2a4a;padding:14px 24px;display:flex;align-items:center;gap:16px}
-    header h1{font-size:1.05rem;font-weight:600;color:#f472b6}
-    header nav{margin-left:auto;display:flex;gap:16px;font-size:.9rem}
-    .container{max-width:1200px;margin:28px auto;padding:0 16px}
-    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:26px}
-    .stat{background:#16162a;border:1px solid #2a2a4a;border-radius:10px;padding:16px 20px}
-    .stat .v{font-size:1.6rem;font-weight:700;color:#e0e7ff}
-    .stat .l{font-size:.78rem;color:#818cf8;margin-top:4px;text-transform:uppercase;letter-spacing:.06em}
-    .filters{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:18px;align-items:center}
-    .filters select{background:#16162a;border:1px solid #374151;color:#e8e8e8;border-radius:7px;padding:8px 12px;font-size:.85rem}
-    .btn{display:inline-flex;align-items:center;padding:8px 16px;border-radius:7px;font-size:.85rem;font-weight:600;cursor:pointer;border:none}
-    .btn-indigo{background:#6366f1;color:#fff}
-    .btn-green{background:#059669;color:#fff}
-    .btn-amber{background:#d97706;color:#000}
-    .btn-red{background:#dc2626;color:#fff}
-    .btn-sm{padding:5px 12px;font-size:.78rem}
-    table{width:100%;border-collapse:collapse;font-size:.81rem}
-    thead th{background:#12102a;color:#818cf8;text-align:left;padding:10px 12px;border-bottom:1px solid #2a2a4a;font-weight:500;text-transform:uppercase;font-size:.72rem;letter-spacing:.05em;white-space:nowrap}
-    tbody tr:hover{background:rgba(99,102,241,.05)}
-    td{padding:9px 12px;border-bottom:1px solid #1a1a2e;vertical-align:middle}
-    .mono{font-family:ui-monospace,monospace}
-    .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:.7rem;font-weight:700;text-transform:uppercase}
-    .b-yellow{background:#451a03;color:#fcd34d}
-    .b-green{background:#064e3b;color:#6ee7b7}
-    .b-red{background:#450a0a;color:#fca5a5}
-    .b-blue{background:#1e3a5f;color:#93c5fd}
-    .type-deposit{color:#34d399}
-    .type-withdrawal{color:#f87171}
-    .type-transfer_in{color:#60a5fa}
-    .type-transfer_out{color:#fb923c}
-    .card{background:#16162a;border:1px solid #2a2a4a;border-radius:12px;padding:22px;margin-bottom:24px}
-    .card-title{font-size:.82rem;text-transform:uppercase;letter-spacing:.07em;color:#6366f1;margin-bottom:16px;font-weight:600}
-    .action-row{display:flex;gap:8px;flex-wrap:wrap}
-    .modal-demo{background:#1a1a2e;border:1px solid #374151;border-radius:14px;padding:24px;max-width:400px;margin-top:16px}
-    .modal-demo h3{margin-bottom:12px;font-size:.95rem;color:#e0e7ff}
-    .modal-demo label{display:block;font-size:.8rem;color:#9ca3af;margin-bottom:4px;margin-top:10px}
-    .modal-demo textarea{width:100%;background:#0a0a14;border:1px solid #374151;color:#e8e8e8;border-radius:7px;padding:9px 12px;font-size:.88rem;resize:vertical;min-height:60px}
-    .modal-demo .btns{display:flex;gap:10px;margin-top:14px;justify-content:flex-end}
-    .ann{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#7c3aed;color:#fff;font-size:.68rem;font-weight:700;vertical-align:middle;margin-left:4px}
+    .callout { position:absolute; background:#ffc107; color:#000; font-size:.7rem; font-weight:700; padding:2px 6px; border-radius:4px; white-space:nowrap; z-index:10; }
+    .annotated { position:relative; }
+    .mockup-banner { background:#dc3545; color:#fff; font-size:.75rem; padding:4px 12px; text-align:center; letter-spacing:.08em; }
   </style>
 </head>
 <body>
-<div class="mockup-banner">🔍 STATIC MOCKUP (ADMIN) — tidak ada data nyata / no live data</div>
+<div class="mockup-banner">TUTORIAL MOCKUP — Admin Wallet Management</div>
 
-<header>
-  <h1>PPV Stream Admin › Wallet</h1>
-  <nav>
-    <a href="#">Users &amp; Data</a>
-    <a href="#">Fiat Payments</a>
-    <a href="#" style="color:#f472b6">Admin Wallet ← current</a>
-    <a href="#">Dashboard</a>
-  </nav>
-</header>
-
-<div class="container">
-
-  <!-- Stats row -->
-  <div class="stats">
-    <div class="stat">
-      <div class="v" style="color:#fcd34d">3</div>
-      <div class="l">Pending Deposits <span class="ann" title="Deposits waiting for admin approval">1</span></div>
-    </div>
-    <div class="stat">
-      <div class="v" style="color:#fcd34d">$350.00</div>
-      <div class="l">Total Pending Amount</div>
-    </div>
-    <div class="stat">
-      <div class="v" style="color:#f87171">1</div>
-      <div class="l">Pending Withdrawals <span class="ann" title="Withdrawals waiting for bank transfer">2</span></div>
-    </div>
-    <div class="stat">
-      <div class="v" style="color:#f87171">$200.00</div>
-      <div class="l">Withdrawal Amount</div>
-    </div>
-    <div class="stat">
-      <div class="v" style="color:#34d399">$12.750</div>
-      <div class="l">Total User Balances</div>
+<nav class="navbar navbar-expand-md bg-danger shadow-sm">
+  <div class="container">
+    <a class="navbar-brand fw-bold text-white" href="#">🎬 PPV Stream</a>
+    <div class="collapse navbar-collapse show">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link text-white-50" href="#">Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link text-white-50" href="#">Payments</a></li>
+        <li class="nav-item"><a class="nav-link text-white fw-semibold active" href="#">Wallets</a></li>
+        <li class="nav-item"><a class="nav-link text-white-50" href="#">Settings</a></li>
+      </ul>
+      <div class="d-flex align-items-center gap-2">
+        <span class="badge bg-light text-danger fw-semibold">ADMIN</span>
+        <button class="btn btn-sm btn-outline-light">☀️</button>
+        <button class="btn btn-sm btn-outline-light">Logout</button>
+      </div>
     </div>
   </div>
+</nav>
 
-  <!-- Filters -->
-  <div class="filters">
-    <select>
-      <option selected>All Types</option>
-      <option>deposit</option>
-      <option>withdrawal</option>
-      <option>transfer</option>
-      <option>purchase</option>
-      <option>sale</option>
-      <option>commission</option>
+<div class="container py-4 pb-5">
+  <h1 class="mb-1 fs-4 fw-bold">Wallet Management</h1>
+  <p class="text-body-secondary small mb-4">Review and process user deposit and withdrawal requests.</p>
+
+  <!-- Tabs -->
+  <ul class="nav nav-tabs mb-3 annotated">
+    <span class="callout" style="top:-20px;left:0">① Tabs — Withdrawal Requests / Deposit History / User Balances</span>
+    <li class="nav-item"><button class="nav-link active">Withdrawal Requests</button></li>
+    <li class="nav-item"><button class="nav-link">Deposit History</button></li>
+    <li class="nav-item"><button class="nav-link">User Balances</button></li>
+  </ul>
+
+  <!-- Withdrawals filter -->
+  <div class="d-flex gap-2 mb-3 annotated">
+    <span class="callout" style="top:-20px;left:0">② Filter by status — Pending / Completed / Rejected</span>
+    <select class="form-select" style="max-width:180px">
+      <option>All statuses</option>
+      <option selected>Pending</option>
+      <option>Completed</option>
+      <option>Rejected</option>
     </select>
-    <select>
-      <option selected>All Status</option>
-      <option>pending</option>
-      <option>completed</option>
-      <option>rejected</option>
-    </select>
-    <select>
-      <option>50</option>
-      <option selected>100</option>
-    </select>
-    <button class="btn btn-indigo btn-sm" style="font-size:.8rem">Refresh</button>
+    <button class="btn btn-outline-secondary">↻ Refresh</button>
   </div>
 
-  <!-- Transaction table -->
-  <table>
-    <thead>
-      <tr>
-        <th>ID</th>
-        <th>User <span class="ann" title="Which user made this transaction">3</span></th>
-        <th>Type</th>
-        <th>Amount</th>
-        <th>Notes <span class="ann" title="Bank transfer reference, or purpose note">4</span></th>
-        <th>Status</th>
-        <th>Date</th>
-        <th>Actions <span class="ann" title="Approve (deposit), Complete (withdrawal), or Reject any pending tx">5</span></th>
-      </tr>
-    </thead>
-    <tbody>
-      <!-- Pending deposit - approve button active -->
-      <tr>
-        <td class="mono" style="color:#818cf8">#1042</td>
-        <td><strong>alice</strong><br><span style="font-size:.75rem;color:#818cf8">alice@example.com</span></td>
-        <td><span class="type-deposit">deposit</span></td>
-        <td class="mono" style="color:#34d399">+$100.00</td>
-        <td style="font-size:.78rem;color:#9ca3af">BCA transfer ref 20260616001</td>
-        <td><span class="badge b-yellow">pending</span></td>
-        <td style="font-size:.75rem;color:#818cf8">16 Jun 2026 08:00</td>
-        <td>
-          <div class="action-row">
-            <button class="btn btn-green btn-sm">Approve</button>
-            <button class="btn btn-red btn-sm">Reject</button>
-          </div>
-        </td>
-      </tr>
-      <!-- Pending deposit 2 -->
-      <tr>
-        <td class="mono" style="color:#818cf8">#1041</td>
-        <td><strong>bob</strong><br><span style="font-size:.75rem;color:#818cf8">bob@example.com</span></td>
-        <td><span class="type-deposit">deposit</span></td>
-        <td class="mono" style="color:#34d399">+$200.00</td>
-        <td style="font-size:.78rem;color:#9ca3af">Mandiri 20260615 – user: bob</td>
-        <td><span class="badge b-yellow">pending</span></td>
-        <td style="font-size:.75rem;color:#818cf8">15 Jun 2026 14:20</td>
-        <td>
-          <div class="action-row">
-            <button class="btn btn-green btn-sm">Approve</button>
-            <button class="btn btn-red btn-sm">Reject</button>
-          </div>
-        </td>
-      </tr>
-      <!-- Pending withdrawal - complete/reject buttons -->
-      <tr>
-        <td class="mono" style="color:#818cf8">#1040</td>
-        <td><strong>carol</strong><br><span style="font-size:.75rem;color:#818cf8">carol@example.com</span></td>
-        <td><span class="type-withdrawal">withdrawal</span></td>
-        <td class="mono" style="color:#f87171">−$200.00</td>
-        <td style="font-size:.78rem;color:#9ca3af">Withdraw to BCA 9876543210 a/n Carol</td>
-        <td><span class="badge b-yellow">pending</span></td>
-        <td style="font-size:.75rem;color:#818cf8">14 Jun 2026 10:00</td>
-        <td>
-          <div class="action-row">
-            <button class="btn btn-amber btn-sm">Complete</button>
-            <button class="btn btn-red btn-sm">Reject</button>
-          </div>
-        </td>
-      </tr>
-      <!-- Completed deposit -->
-      <tr style="opacity:.75">
-        <td class="mono" style="color:#818cf8">#1039</td>
-        <td><strong>dave</strong></td>
-        <td><span class="type-deposit">deposit</span></td>
-        <td class="mono" style="color:#34d399">+$50.00</td>
-        <td style="font-size:.78rem;color:#9ca3af">BCA ref 20260613 ✓ confirmed</td>
-        <td><span class="badge b-green">completed</span></td>
-        <td style="font-size:.75rem;color:#818cf8">13 Jun 2026 11:30</td>
-        <td><span style="font-size:.75rem;color:#818cf8">—</span></td>
-      </tr>
-      <!-- Rejected withdrawal -->
-      <tr style="opacity:.75">
-        <td class="mono" style="color:#818cf8">#1038</td>
-        <td><strong>eve</strong></td>
-        <td><span class="type-withdrawal">withdrawal</span></td>
-        <td class="mono" style="color:#f87171">−$500.00</td>
-        <td style="font-size:.78rem;color:#9ca3af">Withdraw — insufficient verification</td>
-        <td><span class="badge b-red">rejected</span></td>
-        <td style="font-size:.75rem;color:#818cf8">12 Jun 2026 09:00</td>
-        <td><span style="font-size:.75rem;color:#818cf8">Balance refunded</span></td>
-      </tr>
-    </tbody>
-  </table>
-
-  <!-- Modal example -->
-  <div class="modal-demo">
-    <h3>Contoh: Modal Approve Deposit <span class="ann" title="This modal appears when you click Approve/Complete/Reject">6</span></h3>
-    <p style="font-size:.82rem;color:#9ca3af;margin-bottom:8px">
-      Approve deposit of <strong style="color:#34d399">$100.00</strong> for user <strong>alice</strong>?<br>
-      Note: BCA transfer ref 20260616001
-    </p>
-    <label>Admin Note (optional)</label>
-    <textarea placeholder="e.g. Verified via BCA mobile banking screenshot"></textarea>
-    <div class="btns">
-      <button class="btn btn-sm" style="background:#374151;color:#e8e8e8">Cancel</button>
-      <button class="btn btn-green btn-sm">✓ Approve &amp; Credit Balance</button>
+  <!-- Withdrawals table -->
+  <div class="card shadow-sm mb-4 annotated">
+    <span class="callout" style="top:-18px;left:0">③ Withdrawal requests — user, amount, destination; Process button on pending</span>
+    <div class="card-body p-0">
+      <table class="table table-hover mb-0" style="font-size:.85rem">
+        <thead class="table-light"><tr><th>Date</th><th>User</th><th>Amount</th><th>Method</th><th>Destination</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="text-nowrap">2025-06-15 11:00</td>
+            <td>alice</td>
+            <td class="fw-semibold">$50.00</td>
+            <td>bank</td>
+            <td class="text-body-secondary small" style="max-width:160px;overflow:hidden;text-overflow:ellipsis">BCA 1234567890 a/n Alice</td>
+            <td><span class="badge bg-warning text-dark">pending</span></td>
+            <td><button class="btn btn-sm btn-outline-primary py-0 px-2">Process</button></td>
+          </tr>
+          <tr>
+            <td class="text-nowrap">2025-06-14 16:30</td>
+            <td>bob</td>
+            <td class="fw-semibold">$25.00</td>
+            <td>crypto</td>
+            <td class="text-body-secondary small font-monospace" style="max-width:160px;overflow:hidden;text-overflow:ellipsis">0xAbCd…1234</td>
+            <td><span class="badge bg-warning text-dark">pending</span></td>
+            <td><button class="btn btn-sm btn-outline-primary py-0 px-2">Process</button></td>
+          </tr>
+          <tr>
+            <td class="text-nowrap">2025-06-13 09:15</td>
+            <td>carol</td>
+            <td class="fw-semibold">$100.00</td>
+            <td>bank</td>
+            <td class="text-body-secondary small">Mandiri 9876543210 a/n Carol</td>
+            <td><span class="badge bg-success">completed</span></td>
+            <td><span class="text-body-secondary">—</span></td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 
-  <!-- Legend -->
-  <div style="background:#16162a;border:1px solid #2a2a4a;border-radius:10px;padding:16px 20px;margin-top:24px;font-size:.82rem;color:#9ca3af">
-    <strong style="color:#c4b5fd">Callout legend:</strong>
-    <span class="ann">1</span> Pending deposits count &nbsp;
-    <span class="ann">2</span> Pending withdrawals count &nbsp;
-    <span class="ann">3</span> Which user &nbsp;
-    <span class="ann">4</span> Bank ref / notes &nbsp;
-    <span class="ann">5</span> Action buttons (pending rows only) &nbsp;
-    <span class="ann">6</span> Confirmation modal
-    <br><br>
-    <strong style="color:#c4b5fd">Button semantics:</strong><br>
-    🟢 <strong>Approve</strong> = credits user balance (for deposits)<br>
-    🟡 <strong>Complete</strong> = marks withdrawal paid (admin already sent bank transfer)<br>
-    🔴 <strong>Reject</strong> = cancels transaction; refunds held balance for withdrawals
+  <!-- Process modal inline -->
+  <div class="card shadow-sm mb-4 annotated" style="max-width:480px">
+    <span class="callout" style="top:-18px;left:0">④ Process modal — Complete (transfer done) or Reject</span>
+    <div class="card-header fw-semibold">Process Withdrawal (modal example)</div>
+    <div class="card-body">
+      <p class="text-body-secondary small mb-3">
+        User: <strong>alice</strong><br>
+        Amount: <strong>$50.00</strong><br>
+        Method: bank<br>
+        Destination: <code>BCA 1234567890 a/n Alice</code>
+      </p>
+      <div class="mb-3">
+        <label for="m1" class="form-label">Note</label>
+        <input id="m1" class="form-control" value="Transferred via BCA ref #87654321">
+      </div>
+      <div class="d-flex gap-2">
+        <button class="btn btn-success">✓ Complete</button>
+        <button class="btn btn-danger">✗ Reject</button>
+        <button class="btn btn-secondary">Cancel</button>
+      </div>
+    </div>
   </div>
 
+  <!-- User balances preview -->
+  <div class="card shadow-sm annotated">
+    <span class="callout" style="top:-18px;left:0">⑤ User Balances tab — search + total deposited / withdrawn per user</span>
+    <div class="card-header fw-semibold">User Balances (preview)</div>
+    <div class="card-body p-0">
+      <table class="table table-hover mb-0" style="font-size:.85rem">
+        <thead class="table-light"><tr><th>User</th><th>Balance</th><th>Total Deposited</th><th>Total Withdrawn</th></tr></thead>
+        <tbody>
+          <tr><td class="fw-semibold">alice</td><td class="fw-bold">$42.50</td><td class="text-success">$200.00</td><td class="text-warning">$157.50</td></tr>
+          <tr><td class="fw-semibold">bob</td><td class="fw-bold">$15.00</td><td class="text-success">$40.00</td><td class="text-warning">$25.00</td></tr>
+          <tr><td class="fw-semibold">carol</td><td class="fw-bold">$5.00</td><td class="text-success">$105.00</td><td class="text-warning">$100.00</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </div>
 </body>
 </html>

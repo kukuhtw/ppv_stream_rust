@@ -1,168 +1,108 @@
-<!-- MOCKUP: Watch / Payment Page — static replica with dummy data -->
 <!doctype html>
-<html lang="id">
+<html lang="en" data-bs-theme="dark">
 <head>
   <meta charset="utf-8">
-  <title>[MOCKUP] Watch — Advanced Rust Programming</title>
+  <title>[MOCKUP] Watch / Payment</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    .mockup-banner{background:#1e1b4b;color:#c4b5fd;font-size:.8rem;text-align:center;padding:6px}
-    .ann{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#7c3aed;color:#fff;font-size:.68rem;font-weight:700;vertical-align:middle;margin-left:4px}
-    .video-placeholder{background:#1a1a2e;border:2px dashed #4338ca;border-radius:8px;height:320px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#818cf8}
-    .tab-content>.tab-pane.show{display:block!important}
-    .payment-method-badge{font-size:.7rem;padding:2px 8px;border-radius:4px;font-weight:600}
+    .callout { position:absolute; background:#ffc107; color:#000; font-size:.7rem; font-weight:700; padding:2px 6px; border-radius:4px; white-space:nowrap; z-index:10; }
+    .annotated { position:relative; }
+    .mockup-banner { background:#0d6efd; color:#fff; font-size:.75rem; padding:4px 12px; text-align:center; letter-spacing:.08em; }
+    .locked-overlay { background:#000; display:flex; align-items:center; justify-content:center; min-height:280px; border-radius:.375rem; }
   </style>
 </head>
-<body class="bg-light">
-<div class="mockup-banner">🔍 STATIC MOCKUP — tidak ada data nyata / no live data, visual demo only</div>
+<body>
+<div class="mockup-banner">TUTORIAL MOCKUP — Watch / Payment Page</div>
 
-<nav class="navbar navbar-expand-md navbar-light bg-white shadow-sm">
+<nav class="navbar navbar-expand-md bg-body-tertiary shadow-sm border-bottom">
   <div class="container">
     <a class="navbar-brand fw-bold" href="#">🎬 PPV Stream</a>
     <div class="collapse navbar-collapse show">
       <ul class="navbar-nav me-auto">
         <li class="nav-item"><a class="nav-link" href="#">Browse</a></li>
         <li class="nav-item"><a class="nav-link" href="#">Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link" href="#">Wallet</a></li>
+        <li class="nav-item"><a class="nav-link" href="#">Affiliate</a></li>
       </ul>
-      <span class="badge bg-secondary">carol &lt;carol@example.com&gt;</span>
+      <div class="d-flex align-items-center gap-2">
+        <span class="badge bg-secondary">dave &lt;dave@example.com&gt;</span>
+        <button class="btn btn-sm btn-outline-secondary">☀️</button>
+        <button class="btn btn-sm btn-outline-danger">Logout</button>
+      </div>
     </div>
   </div>
 </nav>
 
-<div class="container py-4">
-  <div class="row g-4">
+<div class="container py-4 pb-5">
+  <div class="mb-3"><a href="#" class="text-body-secondary text-decoration-none small">← Back to Browse</a></div>
 
-    <!-- Left column: Video + info -->
-    <div class="col-12 col-lg-8">
+  <!-- Title area -->
+  <div class="annotated mb-1">
+    <span class="callout" style="top:-20px;left:0">① Video title, owner, price, and referral badge</span>
+    <h1 class="fs-4 fw-bold mb-1">Advanced Rust Tutorial</h1>
+    <p class="text-body-secondary small mb-3">
+      by <strong>alice</strong> &nbsp;•&nbsp;
+      <span class="fw-semibold text-primary">$10.00 (Rp 170.000)</span>
+      &nbsp;•&nbsp;
+      <span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">via alice</span>
+    </p>
+  </div>
 
-      <!-- Referral notice (shown because ?ref=bob in URL) -->
-      <div class="alert alert-info d-flex align-items-center mb-3 py-2 small">
-        🔗 Referred by <strong class="ms-1 me-1">@bob</strong>. They earn a commission when you purchase.
-        <span class="ann ms-auto" title="Referral notice — shown when ?ref= is in the URL">1</span>
-      </div>
+  <!-- Locked player -->
+  <div class="locked-overlay mb-4 shadow annotated">
+    <span class="callout" style="top:-18px;left:0">② Locked player — shown before payment</span>
+    <div class="text-center text-white p-4">
+      <div style="font-size:3rem">🔒</div>
+      <div class="mt-2 fw-semibold">This video requires payment to unlock</div>
+      <div class="text-secondary small">$10.00 · Rp 170.000</div>
+    </div>
+  </div>
 
-      <!-- Video player area (locked) -->
-      <div class="video-placeholder mb-3">
-        <div style="font-size:3rem">🔒</div>
-        <div style="margin-top:12px;font-size:1.1rem;font-weight:600">Purchase required to watch</div>
-        <div style="margin-top:6px;font-size:.85rem">Buy this video to get immediate HLS stream access</div>
-      </div>
+  <!-- Payment panel -->
+  <div class="card shadow-sm mb-4 annotated">
+    <span class="callout" style="top:-18px;left:0">③ Payment panel — 3 tabs: Wallet / Crypto (x402) / Bank Transfer</span>
+    <div class="card-header fw-semibold">Unlock This Video — $10.00</div>
+    <div class="card-body">
+      <ul class="nav nav-tabs mb-3">
+        <li class="nav-item"><button class="nav-link active">💳 Wallet</button></li>
+        <li class="nav-item"><button class="nav-link">⛓ Crypto (x402)</button></li>
+        <li class="nav-item"><button class="nav-link">🏦 Bank Transfer</button></li>
+      </ul>
 
-      <!-- Video info -->
-      <div class="card shadow-sm">
-        <div class="card-body">
-          <h4 class="fw-bold mb-1">Advanced Rust Programming <span class="ann" title="Video title and creator info">2</span></h4>
-          <p class="text-muted small mb-2">by <strong>alice</strong> &nbsp;•&nbsp; Uploaded 10 May 2026</p>
-          <p class="mb-3">Belajar ownership, lifetimes, async Rust dan lebih lagi dari praktisi berpengalaman. Kursus ini cocok untuk developer yang sudah familiar dengan bahasa lain dan ingin mendalami Rust.</p>
-          <hr>
-          <h6 class="fw-semibold mb-2">Creator Contact <span class="ann" title="Creator's contact info — filled in on Dashboard Profile section">3</span></h6>
-          <ul class="list-unstyled small text-muted">
-            <li>📱 WhatsApp: <strong>628123456789</strong></li>
-            <li>🏦 Bank: <strong>BCA 1234567890 a/n Alice Creator</strong></li>
-            <li>💬 Note: <em>Untuk konfirmasi transfer bank, hubungi WhatsApp dengan screenshot bukti transfer.</em></li>
-          </ul>
-        </div>
+      <!-- Wallet tab (shown) -->
+      <div class="annotated">
+        <span class="callout" style="top:-18px;left:0">④ Wallet tab — instant deduction from balance</span>
+        <p class="small text-body-secondary">Pay from your PPV Stream wallet balance. Fast and instant.</p>
+        <div class="mb-2 small">Balance: <strong>$42.50</strong></div>
+        <button class="btn btn-primary">Pay $10.00 from Wallet</button>
       </div>
     </div>
+  </div>
 
-    <!-- Right column: Payment panel -->
-    <div class="col-12 col-lg-4">
-      <div class="card shadow-sm" id="payPanel">
-        <div class="card-body">
-          <div class="d-flex align-items-center justify-content-between mb-3">
-            <h5 class="mb-0 fw-bold">Get Access</h5>
-            <span class="badge bg-primary fs-6">$15.00</span>
+  <!-- Unlocked player (reference) -->
+  <div class="card shadow-sm mb-4 annotated">
+    <span class="callout" style="top:-18px;left:0">⑤ After payment — HLS player loads automatically</span>
+    <div class="card-body p-0">
+      <div class="ratio ratio-16x9 bg-black rounded">
+        <div class="d-flex align-items-center justify-content-center text-white">
+          <div class="text-center">
+            <div style="font-size:2.5rem">▶</div>
+            <div class="small text-secondary mt-2">HLS video plays here (hls.js)</div>
           </div>
-
-          <!-- Referral badge inside payment panel -->
-          <div class="alert alert-info py-2 small mb-3">
-            🔗 Referred by <strong>@bob</strong>. They earn a commission when you purchase.
-          </div>
-
-          <!-- Payment tabs -->
-          <ul class="nav nav-tabs mb-3" id="payTabs">
-            <li class="nav-item">
-              <button class="nav-link active px-2 py-1 small" data-bs-toggle="tab" data-bs-target="#walletTab">
-                💳 Wallet <span class="ann" title="Pay instantly from your internal wallet balance">4</span>
-              </button>
-            </li>
-            <li class="nav-item">
-              <button class="nav-link px-2 py-1 small" data-bs-toggle="tab" data-bs-target="#cryptoTab">
-                ⛓ Crypto <span class="ann" title="Pay with MetaMask / EVM wallet via X402 contract">5</span>
-              </button>
-            </li>
-            <li class="nav-item">
-              <button class="nav-link px-2 py-1 small" data-bs-toggle="tab" data-bs-target="#fiatTab">
-                💰 Fiat <span class="ann" title="Pay with credit card or bank transfer via Stripe/PayPal/Midtrans/Xendit">6</span>
-              </button>
-            </li>
-          </ul>
-
-          <div class="tab-content">
-
-            <!-- Wallet tab -->
-            <div class="tab-pane fade show active" id="walletTab">
-              <div class="mb-3 p-3 bg-light rounded small">
-                <div class="d-flex justify-content-between">
-                  <span class="text-muted">Your balance</span>
-                  <span class="fw-bold text-success">$127.50</span>
-                </div>
-                <div class="d-flex justify-content-between mt-1">
-                  <span class="text-muted">Video price</span>
-                  <span>$15.00</span>
-                </div>
-                <div class="d-flex justify-content-between mt-1 border-top pt-1">
-                  <span class="text-muted">After purchase</span>
-                  <span class="fw-bold">$112.50</span>
-                </div>
-              </div>
-              <button class="btn btn-primary w-100">Pay $15.00 with Wallet</button>
-              <p class="text-muted small mt-2 mb-0 text-center">Access granted immediately after payment</p>
-            </div>
-
-            <!-- Crypto tab -->
-            <div class="tab-pane fade" id="cryptoTab">
-              <div class="mb-3 small text-muted">Pay with any EVM-compatible wallet (MetaMask, Rabby, etc.) on Polygon Amoy Testnet.</div>
-              <div class="mb-3 p-2 bg-light rounded small">
-                <div>Contract: <code class="small">0xe375...AE8A</code></div>
-                <div>Amount: <strong>$15.00 USDC</strong></div>
-                <div>Network: Polygon Amoy (chainId 80002)</div>
-              </div>
-              <button class="btn btn-outline-primary w-100">Connect Wallet &amp; Pay</button>
-            </div>
-
-            <!-- Fiat tab -->
-            <div class="tab-pane fade" id="fiatTab">
-              <div class="mb-3 small text-muted">Pay with credit card or bank transfer. Select your preferred gateway:</div>
-              <div class="d-grid gap-2">
-                <button class="btn btn-outline-primary btn-sm">💳 Stripe (card / USD)</button>
-                <button class="btn btn-outline-info btn-sm">🔵 PayPal</button>
-                <button class="btn btn-outline-warning btn-sm">🇮🇩 Midtrans (IDR)</button>
-                <button class="btn btn-outline-success btn-sm">🇮🇩 Xendit (IDR + auto-disburse)</button>
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-      <!-- Legend -->
-      <div class="card mt-3 shadow-sm">
-        <div class="card-body small text-muted">
-          <strong>Callout legend:</strong><br>
-          <span class="ann">1</span> Referral notice when ?ref= in URL<br>
-          <span class="ann">2</span> Video title &amp; creator<br>
-          <span class="ann">3</span> Creator contact for manual payment<br>
-          <span class="ann">4</span> Wallet payment (instant)<br>
-          <span class="ann">5</span> X402 crypto payment<br>
-          <span class="ann">6</span> Fiat payment gateways
         </div>
       </div>
     </div>
   </div>
-</div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Description -->
+  <div class="card shadow-sm annotated">
+    <span class="callout" style="top:-18px;left:0">⑥ Video description (if provided by creator)</span>
+    <div class="card-body">
+      <h6 class="fw-semibold mb-2">About this video</h6>
+      <p class="mb-0 small text-body-secondary">A deep dive into Rust async patterns including tokio, channels, and concurrency primitives. Suitable for intermediate Rust developers.</p>
+    </div>
+  </div>
+</div>
 </body>
 </html>

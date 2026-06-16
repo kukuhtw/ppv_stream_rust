@@ -1,273 +1,294 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 <head>
   <meta charset="utf-8">
+  <title>Admin Wallets — PPV Stream</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Admin Wallet – PPV Stream</title>
-  <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:system-ui,-apple-system,sans-serif;background:#0a0a14;color:#e8e8e8;min-height:100vh}
-    a{color:#a78bfa;text-decoration:none}a:hover{text-decoration:underline}
-
-    header{background:#12102a;border-bottom:1px solid #2a2a4a;padding:14px 24px;display:flex;align-items:center;gap:16px}
-    header h1{font-size:1.05rem;font-weight:600;color:#f472b6}
-    header nav{margin-left:auto;display:flex;gap:16px;font-size:.9rem}
-
-    .container{max-width:1200px;margin:28px auto;padding:0 16px}
-
-    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:26px}
-    .stat{background:#16162a;border:1px solid #2a2a4a;border-radius:10px;padding:16px 20px}
-    .stat .v{font-size:1.6rem;font-weight:700;color:#e0e7ff}
-    .stat .l{font-size:.78rem;color:#818cf8;margin-top:4px;text-transform:uppercase;letter-spacing:.06em}
-
-    .filters{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:18px;align-items:center}
-    .filters select,.filters input{background:#16162a;border:1px solid #374151;color:#e8e8e8;border-radius:7px;padding:8px 12px;font-size:.85rem}
-    .btn{display:inline-flex;align-items:center;padding:8px 16px;border-radius:7px;font-size:.85rem;font-weight:600;cursor:pointer;border:none;transition:opacity .15s}
-    .btn:hover{opacity:.82}
-    .btn-indigo{background:#6366f1;color:#fff}
-    .btn-green{background:#059669;color:#fff}
-    .btn-amber{background:#d97706;color:#000}
-    .btn-red{background:#dc2626;color:#fff}
-    .btn-sm{padding:5px 12px;font-size:.78rem}
-
-    table{width:100%;border-collapse:collapse;font-size:.81rem}
-    thead th{background:#12102a;color:#818cf8;text-align:left;padding:10px 12px;border-bottom:1px solid #2a2a4a;font-weight:500;text-transform:uppercase;font-size:.72rem;letter-spacing:.05em;white-space:nowrap}
-    tbody tr:hover{background:rgba(99,102,241,.05)}
-    td{padding:9px 12px;border-bottom:1px solid #1a1a2e;vertical-align:middle}
-    .mono{font-family:ui-monospace,monospace}
-
-    .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:.7rem;font-weight:700;text-transform:uppercase}
-    .b-yellow{background:#451a03;color:#fcd34d}
-    .b-green{background:#064e3b;color:#6ee7b7}
-    .b-red{background:#450a0a;color:#fca5a5}
-    .b-blue{background:#1e3a5f;color:#93c5fd}
-
-    .type-deposit{color:#34d399}
-    .type-withdrawal{color:#f87171}
-    .type-transfer_in{color:#60a5fa}
-    .type-transfer_out{color:#fb923c}
-
-    .card{background:#16162a;border:1px solid #2a2a4a;border-radius:12px;padding:22px;margin-bottom:24px}
-    .card-title{font-size:.82rem;text-transform:uppercase;letter-spacing:.07em;color:#6366f1;margin-bottom:16px;font-weight:600}
-
-    .action-row{display:flex;gap:8px;flex-wrap:wrap}
-
-    /* Modal */
-    .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:100;display:none}
-    .modal-bg.open{display:flex}
-    .modal{background:#1a1a2e;border:1px solid #374151;border-radius:14px;padding:28px;width:100%;max-width:420px}
-    .modal h3{margin-bottom:16px;font-size:1rem;color:#e0e7ff}
-    .modal label{display:block;font-size:.8rem;color:#9ca3af;margin-bottom:4px;margin-top:12px}
-    .modal input,.modal textarea{width:100%;background:#0a0a14;border:1px solid #374151;color:#e8e8e8;border-radius:7px;padding:9px 12px;font-size:.88rem}
-    .modal textarea{resize:vertical;min-height:70px}
-    .modal .btns{display:flex;gap:10px;margin-top:18px;justify-content:flex-end}
-    .msg{border-radius:7px;padding:9px 13px;font-size:.83rem;margin-top:10px;display:none}
-    .msg.ok{background:#064e3b;color:#6ee7b7;border:1px solid #065f46}
-    .msg.err{background:#450a0a;color:#fca5a5;border:1px solid #7f1d1d}
-    .msg.show{display:block}
-  </style>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/public/styles.css">
+  <script src="/public/theme.js"></script>
 </head>
 <body>
 
-<header>
-  <h1>PPV Stream Admin &rsaquo; Wallet</h1>
-  <nav>
-    <a href="/admin/data">Users & Data</a>
-    <a href="/admin/payments">Fiat Payments</a>
-    <a href="#" onclick="doLogout()">Logout</a>
-  </nav>
-</header>
-
-<div class="container">
-
-  <!-- Stats -->
-  <div class="stats" id="stats">
-    <div class="stat"><div class="v" id="statAll">—</div><div class="l">Total Transactions</div></div>
-    <div class="stat"><div class="v" id="statPending">—</div><div class="l">Pending</div></div>
+<nav class="navbar navbar-expand-md bg-danger shadow-sm">
+  <div class="container">
+    <a class="navbar-brand fw-bold text-white" href="/public/admin/dashboard.html" data-platform="brand">🎬 PPV Stream</a>
+    <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#adminNav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="adminNav">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link text-white-50" href="/public/admin/dashboard.html">Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link text-white-50" href="/public/admin/payments.html">Payments</a></li>
+        <li class="nav-item"><a class="nav-link text-white fw-semibold active" href="/public/admin/wallet.html">Wallets</a></li>
+        <li class="nav-item"><a class="nav-link text-white-50" href="/public/admin/settings.html">Settings</a></li>
+      </ul>
+      <div class="d-flex align-items-center gap-2 mt-2 mt-md-0">
+        <span class="badge bg-light text-danger fw-semibold">ADMIN</span>
+        <button class="btn btn-sm btn-outline-light" onclick="toggleTheme()" id="themeToggle">☀️</button>
+        <button id="logoutBtn" class="btn btn-sm btn-outline-light">Logout</button>
+      </div>
+    </div>
   </div>
+</nav>
 
-  <!-- Filters -->
-  <div class="filters">
-    <select id="filterType" onchange="loadTxns()">
-      <option value="">All Types</option>
-      <option value="deposit">Deposit</option>
-      <option value="withdrawal">Withdrawal</option>
-      <option value="transfer_in">Transfer In</option>
-      <option value="transfer_out">Transfer Out</option>
-    </select>
-    <select id="filterStatus" onchange="loadTxns()">
-      <option value="">All Statuses</option>
-      <option value="pending">Pending</option>
-      <option value="approved">Approved</option>
-      <option value="completed">Completed</option>
-      <option value="rejected">Rejected</option>
-    </select>
-    <input type="number" id="filterLimit" value="100" min="10" max="1000" style="width:90px" onchange="loadTxns()">
-    <button class="btn btn-indigo" onclick="loadTxns()">Refresh</button>
-  </div>
+<div class="container py-4 pb-5">
+  <h1 class="mb-1 fs-4 fw-bold">Wallet Management</h1>
+  <p class="text-body-secondary small mb-4">Review and process user deposit and withdrawal requests.</p>
 
-  <!-- Table -->
-  <div class="card">
-    <p class="card-title">Wallet Transactions</p>
-    <div style="overflow-x:auto">
-      <table>
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>User</th>
-            <th>Type</th>
-            <th>Amount</th>
-            <th>Bal. After</th>
-            <th>Status</th>
-            <th>Counterparty</th>
-            <th>Note</th>
-            <th>Date</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="txnBody">
-          <tr><td colspan="10" style="text-align:center;color:#6b7280;padding:28px">Loading…</td></tr>
-        </tbody>
-      </table>
+  <!-- Tabs -->
+  <ul class="nav nav-tabs mb-3" id="adminWalletTabs">
+    <li class="nav-item"><button class="nav-link active" data-tab="withdrawals" onclick="showTab('withdrawals')">Withdrawal Requests</button></li>
+    <li class="nav-item"><button class="nav-link" data-tab="deposits" onclick="showTab('deposits')">Deposit History</button></li>
+    <li class="nav-item"><button class="nav-link" data-tab="balances" onclick="showTab('balances')">User Balances</button></li>
+  </ul>
+
+  <!-- Withdrawals -->
+  <div id="tab-withdrawals" class="tab-pane-custom">
+    <div class="d-flex gap-2 mb-3">
+      <select id="wdFilter" class="form-select" style="max-width:180px" onchange="loadWithdrawals()">
+        <option value="">All statuses</option>
+        <option value="pending" selected>Pending</option>
+        <option value="completed">Completed</option>
+        <option value="rejected">Rejected</option>
+      </select>
+      <button class="btn btn-outline-secondary" onclick="loadWithdrawals()">↻ Refresh</button>
+    </div>
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover tbl-compact mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Date</th>
+                <th>User</th>
+                <th>Amount</th>
+                <th>Method</th>
+                <th>Destination</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="wdBody">
+              <tr><td colspan="7" class="text-body-secondary">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 
-</div>
+  <!-- Deposits -->
+  <div id="tab-deposits" class="tab-pane-custom d-none">
+    <div class="d-flex gap-2 mb-3">
+      <button class="btn btn-outline-secondary" onclick="loadDeposits()">↻ Refresh</button>
+    </div>
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover tbl-compact mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Date</th>
+                <th>User</th>
+                <th>Amount</th>
+                <th>Method</th>
+                <th>Invoice</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="depBody">
+              <tr><td colspan="6" class="text-body-secondary">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
 
-<!-- Action Modal -->
-<div class="modal-bg" id="modalBg">
-  <div class="modal">
-    <h3 id="modalTitle">Action</h3>
-    <label>Admin Note (optional)</label>
-    <textarea id="modalNote" placeholder="Reason, reference number, etc."></textarea>
-    <div class="msg" id="modalMsg"></div>
-    <div class="btns">
-      <button class="btn btn-red" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-green" id="modalConfirmBtn">Confirm</button>
+  <!-- Balances -->
+  <div id="tab-balances" class="tab-pane-custom d-none">
+    <div class="d-flex gap-2 mb-3">
+      <input id="balQ" class="form-control" style="max-width:280px" placeholder="Search username…">
+      <button class="btn btn-outline-secondary" onclick="loadBalances()">↻ Refresh</button>
+    </div>
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover tbl-compact mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>User</th>
+                <th>Balance</th>
+                <th>Total Deposited</th>
+                <th>Total Withdrawn</th>
+              </tr>
+            </thead>
+            <tbody id="balBody">
+              <tr><td colspan="4" class="text-body-secondary">Click ↻ Refresh to load.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
+<!-- Process Modal -->
+<div class="modal fade" id="processModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Process Withdrawal</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="modalWdInfo" class="mb-3 small text-body-secondary"></div>
+        <div class="mb-3">
+          <label for="modalWdNote" class="form-label">Note <span class="text-body-secondary small">(optional)</span></label>
+          <input id="modalWdNote" class="form-control" placeholder="e.g. Transferred via BCA ref #…">
+        </div>
+        <input type="hidden" id="modalWdId">
+      </div>
+      <div class="modal-footer gap-2">
+        <button class="btn btn-success" onclick="processWd('completed')">✓ Complete</button>
+        <button class="btn btn-danger"  onclick="processWd('rejected')">✗ Reject</button>
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-const $ = id => document.getElementById(id);
-
-let pendingAction = null;  // {txnId, action}
-
-function cents(n) {
-  const v = parseInt(n)||0;
-  return `$${Math.floor(v/100)}.${String(Math.abs(v)%100).padStart(2,'0')}`;
-}
-
-function typeBadge(t) {
-  const map = {
-    deposit:      '<span class="type-deposit">↓ Deposit</span>',
-    withdrawal:   '<span class="type-withdrawal">↑ Withdrawal</span>',
-    transfer_in:  '<span class="type-transfer_in">⇐ In</span>',
-    transfer_out: '<span class="type-transfer_out">⇒ Out</span>',
-  };
-  return map[t] || t;
-}
-
-function statusBadge(s) {
-  const map = {pending:'b-yellow',approved:'b-green',completed:'b-green',rejected:'b-red'};
-  return `<span class="badge ${map[s]||'b-blue'}">${s}</span>`;
-}
-
-function actionButtons(t) {
-  if (t.status !== 'pending') return '—';
-  const btns = [];
-  if (t.txn_type === 'deposit') {
-    btns.push(`<button class="btn btn-green btn-sm" onclick="openModal(${t.id},'approve')">Approve</button>`);
-    btns.push(`<button class="btn btn-red btn-sm" onclick="openModal(${t.id},'reject')">Reject</button>`);
-  } else if (t.txn_type === 'withdrawal') {
-    btns.push(`<button class="btn btn-amber btn-sm" onclick="openModal(${t.id},'complete')">Mark Paid</button>`);
-    btns.push(`<button class="btn btn-red btn-sm" onclick="openModal(${t.id},'reject')">Reject & Refund</button>`);
-  }
-  return `<div class="action-row">${btns.join('')}</div>`;
-}
-
-async function loadTxns() {
-  const type   = $('filterType').value;
-  const status = $('filterStatus').value;
-  const limit  = $('filterLimit').value || 100;
-  const params = new URLSearchParams();
-  if (type)   params.set('txn_type', type);
-  if (status) params.set('status', status);
-  params.set('limit', limit);
-
-  const r = await fetch(`/admin/wallet/transactions?${params}`).then(x=>x.json()).catch(()=>({ok:false}));
-  if (!r.ok) {
-    $('txnBody').innerHTML = `<tr><td colspan="10" style="text-align:center;color:#f87171;padding:28px">Failed to load. Are you logged in as admin?</td></tr>`;
-    return;
-  }
-
-  $('statAll').textContent    = r.totals?.all     ?? '—';
-  $('statPending').textContent = r.totals?.pending ?? '—';
-
-  if (!r.items?.length) {
-    $('txnBody').innerHTML = `<tr><td colspan="10" style="text-align:center;color:#6b7280;padding:28px">No transactions found.</td></tr>`;
-    return;
-  }
-
-  $('txnBody').innerHTML = r.items.map(t => `
-    <tr>
-      <td class="mono">${t.id}</td>
-      <td><strong>${t.username}</strong><br><span style="color:#6b7280;font-size:.75rem">${t.email}</span></td>
-      <td>${typeBadge(t.txn_type)}</td>
-      <td class="mono">${cents(t.amount_cents)}</td>
-      <td class="mono">${cents(t.balance_after)}</td>
-      <td>${statusBadge(t.status)}</td>
-      <td>${t.ref_username ? `@${t.ref_username}` : '—'}</td>
-      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${t.note||''}">${t.note||'—'}</td>
-      <td class="mono" style="white-space:nowrap">${(t.created_at||'').slice(0,16).replace('T',' ')}</td>
-      <td>${actionButtons(t)}</td>
-    </tr>
-  `).join('');
-}
-
-function openModal(txnId, action) {
-  pendingAction = {txnId, action};
-  const labels = {approve:'Approve Deposit', complete:'Mark Withdrawal Paid', reject:'Reject & Refund'};
-  $('modalTitle').textContent = labels[action] || action;
-  $('modalNote').value = '';
-  $('modalMsg').className = 'msg';
-  $('modalBg').classList.add('open');
-}
-
-function closeModal() {
-  $('modalBg').classList.remove('open');
-  pendingAction = null;
-}
-
-$('modalConfirmBtn').addEventListener('click', async () => {
-  if (!pendingAction) return;
-  const {txnId, action} = pendingAction;
-  const note = $('modalNote').value.trim();
-
-  const r = await fetch(`/admin/wallet/transactions/${txnId}/${action}`, {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({admin_note: note || null})
-  }).then(x=>x.json()).catch(()=>({ok:false, error:'network error'}));
-
-  const msgEl = $('modalMsg');
-  msgEl.className = `msg show ${r.ok ? 'ok' : 'err'}`;
-  msgEl.textContent = r.ok ? 'Done!' : (r.error || 'Failed');
-
-  if (r.ok) {
-    setTimeout(() => { closeModal(); loadTxns(); }, 800);
-  }
+let processModal;
+document.addEventListener('DOMContentLoaded', () => {
+  processModal = new bootstrap.Modal(document.getElementById('processModal'));
+  loadWithdrawals();
 });
 
-// Close modal on background click
-$('modalBg').addEventListener('click', e => { if (e.target === $('modalBg')) closeModal(); });
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  await fetch('/auth/logout', { method:'POST' }).catch(()=>{});
+  location.href = '/public/auth/login.html';
+});
 
-async function doLogout() {
-  await fetch('/admin/logout', {method:'POST'});
-  location.href = '/public/admin/login.html';
+function showTab(name) {
+  document.querySelectorAll('.tab-pane-custom').forEach(el => el.classList.add('d-none'));
+  document.querySelectorAll('#adminWalletTabs .nav-link').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.remove('d-none');
+  document.querySelector(`#adminWalletTabs [data-tab="${name}"]`).classList.add('active');
+  if (name === 'withdrawals') loadWithdrawals();
+  if (name === 'deposits')    loadDeposits();
+  if (name === 'balances')    loadBalances();
 }
 
-loadTxns();
+async function loadWithdrawals() {
+  const tbody  = document.getElementById('wdBody');
+  const status = document.getElementById('wdFilter').value;
+  tbody.innerHTML = '<tr><td colspan="7" class="text-body-secondary">Loading…</td></tr>';
+  try {
+    const params = new URLSearchParams({ type: 'withdrawal' });
+    if (status) params.set('status', status);
+    const j = await fetch('/api/admin/wallet_transactions?' + params).then(r=>r.json());
+    if (!j.ok || !Array.isArray(j.transactions) || !j.transactions.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-body-secondary">No withdrawal requests found.</td></tr>';
+      return;
+    }
+    const statusBadge = s => {
+      const map = { pending:'warning', completed:'success', rejected:'danger' };
+      return `<span class="badge bg-${map[s]||'secondary'}">${esc(s)}</span>`;
+    };
+    tbody.innerHTML = j.transactions.map(t => `
+      <tr>
+        <td class="small text-nowrap">${esc((t.created_at||'').slice(0,16))}</td>
+        <td class="small">${esc(t.username||t.user_id||'—')}</td>
+        <td class="small fw-semibold">$${((t.amount_cents||0)/100).toFixed(2)}</td>
+        <td class="small">${esc(t.method||'—')}</td>
+        <td class="small text-body-secondary" style="max-width:160px;overflow:hidden;text-overflow:ellipsis">${esc(t.destination||'—')}</td>
+        <td class="small">${statusBadge(t.status||'—')}</td>
+        <td class="small">
+          ${t.status === 'pending'
+            ? `<button class="btn btn-sm btn-outline-primary py-0 px-2" onclick="openProcess(${JSON.stringify(t.id)}, ${JSON.stringify(t)})">Process</button>`
+            : '<span class="text-body-secondary">—</span>'}
+        </td>
+      </tr>`
+    ).join('');
+  } catch(e) { tbody.innerHTML = `<tr><td colspan="7" class="text-danger">${esc(String(e))}</td></tr>`; }
+}
+
+async function loadDeposits() {
+  const tbody = document.getElementById('depBody');
+  tbody.innerHTML = '<tr><td colspan="6" class="text-body-secondary">Loading…</td></tr>';
+  try {
+    const j = await fetch('/api/admin/wallet_transactions?' + new URLSearchParams({ type: 'deposit' })).then(r=>r.json());
+    if (!j.ok || !Array.isArray(j.transactions) || !j.transactions.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-body-secondary">No deposits found.</td></tr>';
+      return;
+    }
+    const statusBadge = s => {
+      const map = { pending:'warning', completed:'success', rejected:'danger', processing:'info' };
+      return `<span class="badge bg-${map[s]||'secondary'}">${esc(s)}</span>`;
+    };
+    tbody.innerHTML = j.transactions.map(t => `
+      <tr>
+        <td class="small text-nowrap">${esc((t.created_at||'').slice(0,16))}</td>
+        <td class="small">${esc(t.username||t.user_id||'—')}</td>
+        <td class="small fw-semibold">$${((t.amount_cents||0)/100).toFixed(2)}</td>
+        <td class="small">${esc(t.method||'—')}</td>
+        <td class="small font-monospace" style="max-width:120px;overflow:hidden;text-overflow:ellipsis">${esc((t.invoice_uid||'—').slice(0,14))}…</td>
+        <td class="small">${statusBadge(t.status||'—')}</td>
+      </tr>`
+    ).join('');
+  } catch(e) { tbody.innerHTML = `<tr><td colspan="6" class="text-danger">${esc(String(e))}</td></tr>`; }
+}
+
+let balTimer;
+document.getElementById('balQ').addEventListener('input', () => {
+  clearTimeout(balTimer);
+  balTimer = setTimeout(loadBalances, 300);
+});
+
+async function loadBalances() {
+  const tbody = document.getElementById('balBody');
+  const q = document.getElementById('balQ').value.trim();
+  tbody.innerHTML = '<tr><td colspan="4" class="text-body-secondary">Loading…</td></tr>';
+  try {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    const j = await fetch('/api/admin/balances?' + params).then(r=>r.json());
+    if (!j.ok || !Array.isArray(j.balances) || !j.balances.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-body-secondary">No users found.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = j.balances.map(b => `
+      <tr>
+        <td class="small fw-semibold">${esc(b.username||b.user_id||'—')}</td>
+        <td class="small fw-bold">$${((b.balance_cents||0)/100).toFixed(2)}</td>
+        <td class="small text-success">$${((b.total_deposited_cents||0)/100).toFixed(2)}</td>
+        <td class="small text-warning">$${((b.total_withdrawn_cents||0)/100).toFixed(2)}</td>
+      </tr>`
+    ).join('');
+  } catch(e) { tbody.innerHTML = `<tr><td colspan="4" class="text-danger">${esc(String(e))}</td></tr>`; }
+}
+
+function openProcess(id, t) {
+  document.getElementById('modalWdId').value = id;
+  document.getElementById('modalWdNote').value = '';
+  document.getElementById('modalWdInfo').innerHTML =
+    `User: <strong>${esc(t.username||t.user_id||'—')}</strong><br>Amount: <strong>$${((t.amount_cents||0)/100).toFixed(2)}</strong><br>Method: ${esc(t.method||'—')}<br>Destination: <code>${esc(t.destination||'—')}</code>`;
+  processModal.show();
+}
+
+async function processWd(action) {
+  const id   = document.getElementById('modalWdId').value;
+  const note = document.getElementById('modalWdNote').value.trim();
+  try {
+    const j = await fetch('/api/admin/wallet_action', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams({ transaction_id: id, action, note }) }).then(r=>r.json());
+    processModal.hide();
+    if (j.ok) loadWithdrawals();
+    else alert('Failed: ' + (j.error||'unknown'));
+  } catch(e) { alert('Error: ' + e.message); }
+}
 </script>
 </body>
 </html>
