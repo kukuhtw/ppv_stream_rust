@@ -48,7 +48,8 @@ async fn watch_once(pool: &PgPool, wss_url: &str, contract_addr: Address) -> Res
     let client = std::sync::Arc::new(provider);
     let contract = X402Splitter::new(contract_addr, client);
 
-    let mut stream = contract.event::<PaidFilter>().stream().await?;
+    let event_builder = contract.event::<PaidFilter>();
+    let mut stream = event_builder.stream().await?;
     info!("🎧 Listening for Paid(...) events on {}", contract_addr);
 
     while let Some(event) = stream.next().await {
