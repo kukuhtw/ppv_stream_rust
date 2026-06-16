@@ -825,6 +825,11 @@ This means:
 - processed media is stored locally
 - no S3-compatible credentials are needed
 
+If you later want to move to S3, MinIO, R2, or B2, use:
+
+- [STORAGE_MIGRATION.md](STORAGE_MIGRATION.md)
+- [STORAGE_ADMIN_MOCKUP.md](STORAGE_ADMIN_MOCKUP.md)
+
 ---
 
 ## 10. Fiat Payment Provider Setup
@@ -901,6 +906,21 @@ Recommended for development:
 
 - keep `STORAGE_BACKEND=local`
 - add S3/MinIO/R2/B2 only when you actually need cloud storage
+
+### Optional next step: prepare storage admin workflow
+
+After the app is running and local storage works, you can also prepare the browser-based storage workflow:
+
+1. open `Admin > Settings > Storage Backend and Migration`
+2. review the active runtime storage summary
+3. save the desired remote backend profile in the database
+4. run `Test Connection`
+5. restart the application later only when you are ready to switch runtime backend behavior
+6. start a migration job only after you have confirmed local upload and playback already work correctly
+
+If you want a visual reference for that screen, see:
+
+- [STORAGE_ADMIN_MOCKUP.md](STORAGE_ADMIN_MOCKUP.md)
 
 ---
 

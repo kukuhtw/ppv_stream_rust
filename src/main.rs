@@ -47,10 +47,10 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
         admin::{
             admin_data, admin_disburse, admin_payment_settings_get, admin_payment_settings_save,
             admin_payments, admin_smtp_get, admin_smtp_save, admin_storage_migration_cancel,
-            admin_storage_migrations_get, admin_storage_migrations_start,
-            admin_storage_settings_get, admin_storage_settings_save, admin_storage_settings_test,
-            admin_wallet_approve, admin_wallet_complete, admin_wallet_reject,
-            admin_wallet_transactions, AdminState,
+            admin_storage_migration_items_get, admin_storage_migrations_get,
+            admin_storage_migrations_start, admin_storage_settings_get,
+            admin_storage_settings_save, admin_storage_settings_test, admin_wallet_approve,
+            admin_wallet_complete, admin_wallet_reject, admin_wallet_transactions, AdminState,
         },
         affiliate::{
             admin_affiliate_commissions, affiliate_earnings, affiliate_link,
@@ -131,6 +131,10 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
         .route(
             "/admin/storage_migrations/:id/cancel",
             post(admin_storage_migration_cancel),
+        )
+        .route(
+            "/admin/storage_migrations/:id/items",
+            get(admin_storage_migration_items_get),
         )
         .route("/admin/smtp", get(admin_smtp_get).post(admin_smtp_save))
         .with_state(AdminState {

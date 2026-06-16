@@ -12,6 +12,7 @@ use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde_json::json;
 use sqlx::Row;
+use std::collections::BTreeSet;
 use std::collections::HashSet;
 use std::path::Path as FsPath;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -640,6 +641,7 @@ pub struct StorageSettingsSavePayload {
 pub struct StorageMigrationStartPayload {
     pub include_uploads: bool,
     pub include_media: bool,
+    pub resume_from_job_id: Option<String>,
 }
 
 async fn test_storage_settings_connection(
@@ -681,7 +683,8 @@ fn active_storage_summary() -> serde_json::Value {
 async fn list_storage_migration_jobs_json(pool: &crate::db::PgPool) -> Vec<serde_json::Value> {
     let rows = sqlx::query(
         r#"SELECT id, status, backend, bucket, endpoint, include_uploads, include_media,
-                  total_files, copied_files, failed_files, retry_attempts, last_error,
+                  total_files, copied_files, failed_files, skipped_files, retry_attempts, last_error,
+                  resumed_from_job_id,
                   started_by_user_id, created_at::TEXT AS created_at,
                   started_at::TEXT AS started_at, completed_at::TEXT AS completed_at
            FROM storage_migration_jobs
@@ -705,12 +708,47 @@ async fn list_storage_migration_jobs_json(pool: &crate::db::PgPool) -> Vec<serde
                 "total_files": r.try_get::<i64, _>("total_files").unwrap_or(0),
                 "copied_files": r.try_get::<i64, _>("copied_files").unwrap_or(0),
                 "failed_files": r.try_get::<i64, _>("failed_files").unwrap_or(0),
+                "skipped_files": r.try_get::<i64, _>("skipped_files").unwrap_or(0),
                 "retry_attempts": r.try_get::<i64, _>("retry_attempts").unwrap_or(0),
                 "last_error": r.try_get::<Option<String>, _>("last_error").unwrap_or(None),
+                "resumed_from_job_id": r.try_get::<Option<String>, _>("resumed_from_job_id").unwrap_or(None),
                 "started_by_user_id": r.try_get::<Option<String>, _>("started_by_user_id").unwrap_or(None),
                 "created_at": r.try_get::<Option<String>, _>("created_at").unwrap_or(None),
                 "started_at": r.try_get::<Option<String>, _>("started_at").unwrap_or(None),
                 "completed_at": r.try_get::<Option<String>, _>("completed_at").unwrap_or(None),
+            })
+        })
+        .collect()
+}
+
+async fn list_storage_migration_job_items_json(
+    pool: &crate::db::PgPool,
+    job_id: &str,
+) -> Vec<serde_json::Value> {
+    let rows = sqlx::query(
+        r#"SELECT id, scope, source_path, object_key, status, retry_attempts,
+                  error_message, created_at::TEXT AS created_at
+           FROM storage_migration_job_items
+           WHERE job_id = $1
+           ORDER BY created_at DESC
+           LIMIT 200"#,
+    )
+    .bind(job_id)
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+
+    rows.into_iter()
+        .map(|r| {
+            json!({
+                "id": r.try_get::<String, _>("id").unwrap_or_default(),
+                "scope": r.try_get::<String, _>("scope").unwrap_or_default(),
+                "source_path": r.try_get::<String, _>("source_path").unwrap_or_default(),
+                "object_key": r.try_get::<String, _>("object_key").unwrap_or_default(),
+                "status": r.try_get::<String, _>("status").unwrap_or_default(),
+                "retry_attempts": r.try_get::<i64, _>("retry_attempts").unwrap_or(0),
+                "error_message": r.try_get::<Option<String>, _>("error_message").unwrap_or(None),
+                "created_at": r.try_get::<Option<String>, _>("created_at").unwrap_or(None),
             })
         })
         .collect()
@@ -721,6 +759,7 @@ async fn update_storage_job_progress(
     job_id: &str,
     copied_files: i64,
     failed_files: i64,
+    skipped_files: i64,
     retry_attempts: i64,
     last_error: Option<&str>,
 ) {
@@ -728,17 +767,67 @@ async fn update_storage_job_progress(
         r#"UPDATE storage_migration_jobs
            SET copied_files = $2,
                failed_files = $3,
-               retry_attempts = $4,
-               last_error = COALESCE($5, last_error)
+               skipped_files = $4,
+               retry_attempts = $5,
+               last_error = COALESCE($6, last_error)
            WHERE id = $1"#,
     )
     .bind(job_id)
     .bind(copied_files)
     .bind(failed_files)
+    .bind(skipped_files)
     .bind(retry_attempts)
     .bind(last_error)
     .execute(pool)
     .await;
+}
+
+async fn insert_storage_migration_job_item(
+    pool: &crate::db::PgPool,
+    job_id: &str,
+    scope: &str,
+    source_path: &str,
+    object_key: &str,
+    status: &str,
+    retry_attempts: i64,
+    error_message: Option<&str>,
+) {
+    let _ = sqlx::query(
+        r#"INSERT INTO storage_migration_job_items
+              (id, job_id, scope, source_path, object_key, status, retry_attempts, error_message, created_at)
+           VALUES
+              ($1, $2, $3, $4, $5, $6, $7, $8, NOW())"#,
+    )
+    .bind(Uuid::new_v4().to_string())
+    .bind(job_id)
+    .bind(scope)
+    .bind(source_path)
+    .bind(object_key)
+    .bind(status)
+    .bind(retry_attempts)
+    .bind(error_message)
+    .execute(pool)
+    .await;
+}
+
+async fn load_resumable_storage_object_keys(
+    pool: &crate::db::PgPool,
+    job_id: &str,
+) -> BTreeSet<String> {
+    let rows = sqlx::query(
+        r#"SELECT object_key
+           FROM storage_migration_job_items
+           WHERE job_id = $1
+             AND status = 'copied'"#,
+    )
+    .bind(job_id)
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+
+    rows.into_iter()
+        .filter_map(|row| row.try_get::<String, _>("object_key").ok())
+        .collect()
 }
 
 async fn request_storage_job_cancel(job_id: &str) {
@@ -761,6 +850,7 @@ async fn mark_storage_job_cancelled(
     job_id: &str,
     copied_files: i64,
     failed_files: i64,
+    skipped_files: i64,
     retry_attempts: i64,
     last_error: Option<&str>,
 ) -> anyhow::Result<()> {
@@ -769,14 +859,16 @@ async fn mark_storage_job_cancelled(
            SET status = 'cancelled',
                copied_files = $2,
                failed_files = $3,
-               retry_attempts = $4,
-               last_error = COALESCE($5, last_error),
+               skipped_files = $4,
+               retry_attempts = $5,
+               last_error = COALESCE($6, last_error),
                completed_at = NOW()
            WHERE id = $1"#,
     )
     .bind(job_id)
     .bind(copied_files)
     .bind(failed_files)
+    .bind(skipped_files)
     .bind(retry_attempts)
     .bind(last_error)
     .execute(pool)
@@ -819,6 +911,7 @@ async fn run_storage_migration_job(
     settings: StoredStorageSettings,
     include_uploads: bool,
     include_media: bool,
+    resume_from_job_id: Option<String>,
 ) -> anyhow::Result<()> {
     let storage = settings.build_plugin()?;
     let mut upload_files = Vec::new();
@@ -847,8 +940,14 @@ async fn run_storage_migration_job(
 
     let mut copied_files = 0_i64;
     let mut failed_files = 0_i64;
+    let mut skipped_files = 0_i64;
     let mut retry_attempts = 0_i64;
     let mut last_error: Option<String> = None;
+    let resumable_keys = if let Some(source_job_id) = resume_from_job_id.as_deref() {
+        load_resumable_storage_object_keys(&pool, source_job_id).await
+    } else {
+        BTreeSet::new()
+    };
 
     for path in upload_files {
         if is_storage_job_cancelled(&job_id).await {
@@ -857,6 +956,7 @@ async fn run_storage_migration_job(
                 &job_id,
                 copied_files,
                 failed_files,
+                skipped_files,
                 retry_attempts,
                 last_error.as_deref(),
             )
@@ -869,14 +969,62 @@ async fn run_storage_migration_job(
             .to_string_lossy()
             .replace('\\', "/");
         let key = format!("uploads/{rel}");
+        let source_path = path.to_string_lossy().replace('\\', "/");
+        if resumable_keys.contains(&key) {
+            skipped_files += 1;
+            insert_storage_migration_job_item(
+                &pool,
+                &job_id,
+                "uploads",
+                &source_path,
+                &key,
+                "skipped",
+                0,
+                Some("Skipped because this object was already copied in the source resume job"),
+            )
+            .await;
+            update_storage_job_progress(
+                &pool,
+                &job_id,
+                copied_files,
+                failed_files,
+                skipped_files,
+                retry_attempts,
+                last_error.as_deref(),
+            )
+            .await;
+            continue;
+        }
         match upload_storage_migration_file(storage.as_ref(), &key, &path, "upload").await {
             Ok(file_retry_attempts) => {
                 copied_files += 1;
                 retry_attempts += file_retry_attempts as i64;
+                insert_storage_migration_job_item(
+                    &pool,
+                    &job_id,
+                    "uploads",
+                    &source_path,
+                    &key,
+                    "copied",
+                    file_retry_attempts as i64,
+                    None,
+                )
+                .await;
             }
             Err(e) => {
                 failed_files += 1;
                 retry_attempts += STORAGE_MIGRATION_MAX_RETRIES as i64;
+                insert_storage_migration_job_item(
+                    &pool,
+                    &job_id,
+                    "uploads",
+                    &source_path,
+                    &key,
+                    "failed",
+                    STORAGE_MIGRATION_MAX_RETRIES as i64,
+                    Some(&e),
+                )
+                .await;
                 last_error = Some(e);
             }
         }
@@ -885,6 +1033,7 @@ async fn run_storage_migration_job(
             &job_id,
             copied_files,
             failed_files,
+            skipped_files,
             retry_attempts,
             last_error.as_deref(),
         )
@@ -898,6 +1047,7 @@ async fn run_storage_migration_job(
                 &job_id,
                 copied_files,
                 failed_files,
+                skipped_files,
                 retry_attempts,
                 last_error.as_deref(),
             )
@@ -910,14 +1060,62 @@ async fn run_storage_migration_job(
             .to_string_lossy()
             .replace('\\', "/");
         let key = format!("videos/{rel}");
+        let source_path = path.to_string_lossy().replace('\\', "/");
+        if resumable_keys.contains(&key) {
+            skipped_files += 1;
+            insert_storage_migration_job_item(
+                &pool,
+                &job_id,
+                "media",
+                &source_path,
+                &key,
+                "skipped",
+                0,
+                Some("Skipped because this object was already copied in the source resume job"),
+            )
+            .await;
+            update_storage_job_progress(
+                &pool,
+                &job_id,
+                copied_files,
+                failed_files,
+                skipped_files,
+                retry_attempts,
+                last_error.as_deref(),
+            )
+            .await;
+            continue;
+        }
         match upload_storage_migration_file(storage.as_ref(), &key, &path, "media").await {
             Ok(file_retry_attempts) => {
                 copied_files += 1;
                 retry_attempts += file_retry_attempts as i64;
+                insert_storage_migration_job_item(
+                    &pool,
+                    &job_id,
+                    "media",
+                    &source_path,
+                    &key,
+                    "copied",
+                    file_retry_attempts as i64,
+                    None,
+                )
+                .await;
             }
             Err(e) => {
                 failed_files += 1;
                 retry_attempts += STORAGE_MIGRATION_MAX_RETRIES as i64;
+                insert_storage_migration_job_item(
+                    &pool,
+                    &job_id,
+                    "media",
+                    &source_path,
+                    &key,
+                    "failed",
+                    STORAGE_MIGRATION_MAX_RETRIES as i64,
+                    Some(&e),
+                )
+                .await;
                 last_error = Some(e);
             }
         }
@@ -926,6 +1124,7 @@ async fn run_storage_migration_job(
             &job_id,
             copied_files,
             failed_files,
+            skipped_files,
             retry_attempts,
             last_error.as_deref(),
         )
@@ -942,8 +1141,9 @@ async fn run_storage_migration_job(
            SET status = $2,
                copied_files = $3,
                failed_files = $4,
-               retry_attempts = $5,
-               last_error = $6,
+               skipped_files = $5,
+               retry_attempts = $6,
+               last_error = $7,
                completed_at = NOW()
            WHERE id = $1"#,
     )
@@ -951,6 +1151,7 @@ async fn run_storage_migration_job(
     .bind(final_status)
     .bind(copied_files)
     .bind(failed_files)
+    .bind(skipped_files)
     .bind(retry_attempts)
     .bind(last_error.as_deref())
     .execute(&pool)
@@ -1174,6 +1375,29 @@ pub async fn admin_storage_migrations_get(
     }))
 }
 
+pub async fn admin_storage_migration_items_get(
+    State(st): State<AdminState>,
+    cookies: Cookies,
+    Path(job_id): Path<String>,
+) -> impl IntoResponse {
+    let admin_user_id = match ensure_admin_session(&st, &cookies).await {
+        Ok(user_id) => user_id,
+        Err(resp) => return resp,
+    };
+    info!(
+        admin_user_id = %admin_user_id,
+        action = "admin_storage_migration_items_view",
+        job_id = %job_id,
+        "storage migration job items viewed"
+    );
+
+    Json(json!({
+        "ok": true,
+        "job_id": job_id,
+        "items": list_storage_migration_job_items_json(&st.pool, &job_id).await,
+    }))
+}
+
 pub async fn admin_storage_migrations_start(
     State(st): State<AdminState>,
     cookies: Cookies,
@@ -1207,12 +1431,67 @@ pub async fn admin_storage_migrations_start(
         );
     }
 
+    let resume_from_job_id = p
+        .resume_from_job_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| value.to_string());
+
+    if let Some(source_job_id) = resume_from_job_id.as_deref() {
+        let resume_row = match sqlx::query(
+            r#"SELECT status, backend, include_uploads, include_media
+               FROM storage_migration_jobs
+               WHERE id = $1"#,
+        )
+        .bind(source_job_id)
+        .fetch_optional(&st.pool)
+        .await
+        {
+            Ok(row) => row,
+            Err(e) => {
+                STORAGE_MIGRATION_RUNNING.store(false, Ordering::SeqCst);
+                return Json(json!({"ok": false, "error": format!("db: {e}")}));
+            }
+        };
+
+        let Some(resume_row) = resume_row else {
+            STORAGE_MIGRATION_RUNNING.store(false, Ordering::SeqCst);
+            return Json(json!({"ok": false, "error": "resume source job not found"}));
+        };
+
+        let resume_status = resume_row
+            .try_get::<String, _>("status")
+            .unwrap_or_default();
+        if !matches!(
+            resume_status.as_str(),
+            "failed" | "cancelled" | "completed_with_errors"
+        ) {
+            STORAGE_MIGRATION_RUNNING.store(false, Ordering::SeqCst);
+            return Json(json!({
+                "ok": false,
+                "error": "resume source job must be failed, cancelled, or completed_with_errors"
+            }));
+        }
+
+        let resume_backend = resume_row
+            .try_get::<String, _>("backend")
+            .unwrap_or_default();
+        if resume_backend != settings.backend {
+            STORAGE_MIGRATION_RUNNING.store(false, Ordering::SeqCst);
+            return Json(json!({
+                "ok": false,
+                "error": "resume source job must use the same target backend"
+            }));
+        }
+    }
+
     let job_id = Uuid::new_v4().to_string();
     let insert = sqlx::query(
         r#"INSERT INTO storage_migration_jobs
-              (id, status, backend, bucket, endpoint, include_uploads, include_media, started_by_user_id, created_at)
+              (id, status, backend, bucket, endpoint, include_uploads, include_media, resumed_from_job_id, started_by_user_id, created_at)
            VALUES
-              ($1, 'pending', $2, $3, $4, $5, $6, $7, NOW())"#,
+              ($1, 'pending', $2, $3, $4, $5, $6, $7, $8, NOW())"#,
     )
     .bind(&job_id)
     .bind(&settings.backend)
@@ -1220,6 +1499,7 @@ pub async fn admin_storage_migrations_start(
     .bind(&settings.endpoint)
     .bind(p.include_uploads)
     .bind(p.include_media)
+    .bind(resume_from_job_id.as_deref())
     .bind(&admin_user_id)
     .execute(&st.pool)
     .await;
@@ -1241,6 +1521,7 @@ pub async fn admin_storage_migrations_start(
             settings,
             p.include_uploads,
             p.include_media,
+            resume_from_job_id.clone(),
         )
         .await;
 
@@ -1282,12 +1563,14 @@ pub async fn admin_storage_migrations_start(
         backend = %backend_for_log,
         include_uploads = p.include_uploads,
         include_media = p.include_media,
+        resumed_from_job_id = ?resume_from_job_id,
         "storage migration started"
     );
 
     Json(json!({
         "ok": true,
         "job_id": job_id,
+        "resumed_from_job_id": resume_from_job_id,
         "message": "Storage migration started in the background."
     }))
 }

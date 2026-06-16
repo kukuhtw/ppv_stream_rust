@@ -286,6 +286,48 @@
           </tbody>
         </table>
       </div>
+
+      <div id="storageMigrationItemsPanel" class="border rounded p-3 mt-3 d-none">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>
+            <div class="fw-semibold">Job Item Details</div>
+            <div id="storageMigrationItemsMeta" class="text-body-secondary small">Select a job to inspect migrated files.</div>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-secondary" id="closeStorageMigrationItemsBtn">Close</button>
+        </div>
+        <div class="row g-3 align-items-end mb-3">
+          <div class="col-md-4">
+            <label for="storageMigrationItemFilter" class="form-label small mb-1">Filter</label>
+            <select id="storageMigrationItemFilter" class="form-select form-select-sm">
+              <option value="all">All items</option>
+              <option value="failed">Failed only</option>
+              <option value="retried">Retried only</option>
+              <option value="failed_or_retried">Failed or retried</option>
+            </select>
+          </div>
+          <div class="col-md-8">
+            <div id="storageMigrationItemsSummary" class="small text-body-secondary">No job selected.</div>
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Created</th>
+                <th>Scope</th>
+                <th>Status</th>
+                <th>Retries</th>
+                <th>Source Path</th>
+                <th>Object Key</th>
+                <th>Error</th>
+              </tr>
+            </thead>
+            <tbody id="storageMigrationItemRows">
+              <tr><td colspan="7" class="text-body-secondary">No job selected.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -346,6 +388,9 @@ function showAlert(id, type, msg) {
   el.textContent = msg;
   el.classList.remove('d-none');
 }
+
+let currentStorageMigrationItemsJobId = '';
+let currentStorageMigrationItems = [];
 
 function fmtDateTime(value) {
   if (!value) return '-';
@@ -564,9 +609,10 @@ function renderStorageMigrationJobs(jobs, running) {
       const total = Number(job.total_files || 0);
       const copied = Number(job.copied_files || 0);
       const failed = Number(job.failed_files || 0);
+      const skipped = Number(job.skipped_files || 0);
       const retryAttempts = Number(job.retry_attempts || 0);
-      const percent = total > 0 ? Math.min(100, Math.round(((copied + failed) / total) * 100)) : 0;
-      const progress = `${copied}/${total} copied` + (failed ? `, ${failed} failed` : '');
+      const percent = total > 0 ? Math.min(100, Math.round(((copied + failed + skipped) / total) * 100)) : 0;
+      const progress = `${copied}/${total} copied` + (skipped ? `, ${skipped} skipped` : '') + (failed ? `, ${failed} failed` : '');
       const retryText = retryAttempts > 0 ? `${retryAttempts} retries` : 'No retries';
       const badgeClass = job.status === 'completed' ? 'success'
         : job.status === 'completed_with_errors' ? 'warning'
@@ -576,20 +622,28 @@ function renderStorageMigrationJobs(jobs, running) {
         : job.status === 'running' ? 'info'
         : 'secondary';
       const canCancel = ['pending', 'running', 'cancel_requested'].includes(job.status || '');
-      const actions = canCancel
-        ? `<button type="button" class="btn btn-sm btn-outline-danger js-cancel-storage-job" data-job-id="${esc(job.id || '')}" ${job.status === 'cancel_requested' ? 'disabled' : ''}>${job.status === 'cancel_requested' ? 'Cancelling...' : 'Cancel'}</button>`
-        : '<span class="text-body-secondary">-</span>';
+      const canResume = ['failed', 'cancelled', 'completed_with_errors'].includes(job.status || '');
+      const actionButtons = [
+        `<button type="button" class="btn btn-sm btn-outline-secondary js-view-storage-job-items" data-job-id="${esc(job.id || '')}">View Items</button>`
+      ];
+      if (canResume) {
+        actionButtons.push(`<button type="button" class="btn btn-sm btn-outline-primary js-resume-storage-job" data-job-id="${esc(job.id || '')}" data-include-uploads="${job.include_uploads ? '1' : '0'}" data-include-media="${job.include_media ? '1' : '0'}">Resume</button>`);
+      }
+      if (canCancel) {
+        actionButtons.push(`<button type="button" class="btn btn-sm btn-outline-danger js-cancel-storage-job" data-job-id="${esc(job.id || '')}" ${job.status === 'cancel_requested' ? 'disabled' : ''}>${job.status === 'cancel_requested' ? 'Cancelling...' : 'Cancel'}</button>`);
+      }
+      const actions = `<div class="d-flex gap-2">${actionButtons.join('')}</div>`;
       return `<tr>
         <td class="small text-nowrap">${esc(fmtDateTime(job.created_at))}</td>
         <td><span class="badge text-bg-${badgeClass}">${esc(job.status || 'unknown')}</span></td>
-        <td class="small">${esc(job.backend || '-')}<div class="text-body-secondary">${esc(job.bucket || '-')}</div></td>
+        <td class="small">${esc(job.backend || '-')}<div class="text-body-secondary">${esc(job.bucket || '-')}</div>${job.resumed_from_job_id ? `<div class="text-body-secondary">Resume of ${esc(job.resumed_from_job_id)}</div>` : ''}</td>
         <td class="small">${esc(scope)}</td>
         <td class="small">
           <div class="fw-semibold mb-1">${esc(progress)}</div>
           <div class="progress" role="progressbar" aria-valuenow="${percent}" aria-valuemin="0" aria-valuemax="100" style="height:8px">
             <div class="progress-bar bg-${badgeClass}" style="width:${percent}%"></div>
           </div>
-          <div class="text-body-secondary mt-1">${percent}% processed · ${esc(retryText)}</div>
+          <div class="text-body-secondary mt-1">${percent}% processed - ${esc(retryText)}</div>
         </td>
         <td class="small text-body-secondary">${esc(job.last_error || '-')}</td>
         <td class="small text-nowrap">${actions}</td>
@@ -606,6 +660,66 @@ async function loadStorageMigrationJobs() {
     renderStorageMigrationJobs(Array.isArray(j.jobs) ? j.jobs : [], !!j.running_job);
   } catch {}
 }
+
+function renderStorageMigrationItems(jobId, items) {
+  const filterValue = document.getElementById('storageMigrationItemFilter').value;
+  const panel = document.getElementById('storageMigrationItemsPanel');
+  const meta = document.getElementById('storageMigrationItemsMeta');
+  const summary = document.getElementById('storageMigrationItemsSummary');
+  const tbody = document.getElementById('storageMigrationItemRows');
+  const failedCount = items.filter(item => (item.status || '') === 'failed').length;
+  const retriedCount = items.filter(item => Number(item.retry_attempts || 0) > 0).length;
+  const copiedCount = items.filter(item => (item.status || '') === 'copied').length;
+  const filteredItems = items.filter(item => {
+    if (filterValue === 'failed') return (item.status || '') === 'failed';
+    if (filterValue === 'retried') return Number(item.retry_attempts || 0) > 0;
+    if (filterValue === 'failed_or_retried') {
+      return (item.status || '') === 'failed' || Number(item.retry_attempts || 0) > 0;
+    }
+    return true;
+  });
+  panel.classList.remove('d-none');
+  meta.textContent = `Showing up to 200 latest file-level records for job ${jobId}.`;
+  summary.textContent = `Visible: ${filteredItems.length} of ${items.length} items. Copied: ${copiedCount}. Failed: ${failedCount}. Retried: ${retriedCount}.`;
+
+  if (!filteredItems.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-body-secondary">No file-level records found for this job yet.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filteredItems.map(item => {
+    const badgeClass = item.status === 'copied' ? 'success' : item.status === 'failed' ? 'danger' : 'secondary';
+    return `<tr>
+      <td class="small text-nowrap">${esc(fmtDateTime(item.created_at))}</td>
+      <td class="small">${esc(item.scope || '-')}</td>
+      <td><span class="badge text-bg-${badgeClass}">${esc(item.status || 'unknown')}</span></td>
+      <td class="small">${esc(String(item.retry_attempts || 0))}</td>
+      <td class="small"><code>${esc(item.source_path || '-')}</code></td>
+      <td class="small"><code>${esc(item.object_key || '-')}</code></td>
+      <td class="small text-body-secondary">${esc(item.error_message || '-')}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function loadStorageMigrationItems(jobId) {
+  try {
+    const j = await fetch(`/admin/storage_migrations/${encodeURIComponent(jobId)}/items`).then(r => r.json());
+    if (!j.ok) {
+      showAlert('storageAlert', 'danger', 'Failed: ' + (j.error || 'unable to load migration items'));
+      return;
+    }
+    currentStorageMigrationItemsJobId = jobId;
+    currentStorageMigrationItems = Array.isArray(j.items) ? j.items : [];
+    renderStorageMigrationItems(jobId, currentStorageMigrationItems);
+  } catch (err) {
+    showAlert('storageAlert', 'danger', 'Error: ' + err.message);
+  }
+}
+
+document.getElementById('storageMigrationItemFilter').addEventListener('change', () => {
+  if (!currentStorageMigrationItemsJobId) return;
+  renderStorageMigrationItems(currentStorageMigrationItemsJobId, currentStorageMigrationItems);
+});
 
 document.getElementById('storageSettingsForm').addEventListener('submit', async e => {
   e.preventDefault();
@@ -682,6 +796,39 @@ document.getElementById('storageMigrationForm').addEventListener('submit', async
 });
 
 document.getElementById('storageMigrationRows').addEventListener('click', async e => {
+  const detailBtn = e.target.closest('.js-view-storage-job-items');
+  if (detailBtn) {
+    const jobId = detailBtn.getAttribute('data-job-id');
+    if (jobId) await loadStorageMigrationItems(jobId);
+    return;
+  }
+
+  const resumeBtn = e.target.closest('.js-resume-storage-job');
+  if (resumeBtn) {
+    const jobId = resumeBtn.getAttribute('data-job-id');
+    if (!jobId) return;
+    resumeBtn.disabled = true;
+    try {
+      const j = await fetch('/admin/storage_migrations', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          include_uploads: resumeBtn.getAttribute('data-include-uploads') === '1',
+          include_media: resumeBtn.getAttribute('data-include-media') === '1',
+          resume_from_job_id: jobId
+        })
+      }).then(r => r.json());
+      showAlert('storageAlert', j.ok ? 'success' : 'danger', j.ok ? (j.message || 'Storage migration resumed.') : ('Failed: ' + (j.error || 'unknown')));
+      await loadStorageMigrationJobs();
+      if (j.ok) setTimeout(loadStorageMigrationJobs, 2000);
+    } catch (err) {
+      showAlert('storageAlert', 'danger', 'Error: ' + err.message);
+    } finally {
+      resumeBtn.disabled = false;
+    }
+    return;
+  }
+
   const btn = e.target.closest('.js-cancel-storage-job');
   if (!btn) return;
   const jobId = btn.getAttribute('data-job-id');
@@ -698,6 +845,16 @@ document.getElementById('storageMigrationRows').addEventListener('click', async 
     btn.disabled = false;
     showAlert('storageAlert', 'danger', 'Error: ' + err.message);
   }
+});
+
+document.getElementById('closeStorageMigrationItemsBtn').addEventListener('click', () => {
+  document.getElementById('storageMigrationItemsPanel').classList.add('d-none');
+  document.getElementById('storageMigrationItemsMeta').textContent = 'Select a job to inspect migrated files.';
+  document.getElementById('storageMigrationItemsSummary').textContent = 'No job selected.';
+  document.getElementById('storageMigrationItemFilter').value = 'all';
+  document.getElementById('storageMigrationItemRows').innerHTML = '<tr><td colspan="7" class="text-body-secondary">No job selected.</td></tr>';
+  currentStorageMigrationItemsJobId = '';
+  currentStorageMigrationItems = [];
 });
 
 (async function loadKurs() {

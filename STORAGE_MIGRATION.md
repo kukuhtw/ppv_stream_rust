@@ -55,12 +55,69 @@ From that UI, an admin can:
 - compare the saved desired backend with the currently active runtime backend
 - start a background migration job for uploaded originals, transcoded HLS media, or both
 - monitor recent migration jobs and progress
+- cancel a running job
+- resume a failed, cancelled, or completed-with-errors job
+- inspect file-level migration records
+- filter job item details to focus on failed or retried records
 
 Important:
 
 - the runtime backend still comes from environment variables at application startup
 - saving a new desired backend in the admin UI does not hot-switch the runtime backend immediately
 - a restart is still required when the saved backend and active runtime backend differ
+
+See also:
+
+- [STORAGE_ADMIN_MOCKUP.md](STORAGE_ADMIN_MOCKUP.md)
+
+## Admin Tutorial
+
+This is the recommended operator workflow for the current admin UI.
+
+### A. Save and verify the backend
+
+1. open `Admin > Settings > Storage Backend and Migration`
+2. review the `Active Storage Backend` card
+3. fill in the desired backend form
+4. click `Save Storage Settings`
+5. click `Test Connection`
+6. if the page shows `Restart required: Yes`, restart the application before expecting the runtime backend to change
+
+### B. Start a first migration job
+
+1. keep local runtime directories in place
+2. choose whether to migrate uploaded originals, transcoded media, or both
+3. click `Start Migration`
+4. watch the progress bar, retry count, and last error column in the recent jobs table
+5. use `View Items` if you need file-level detail
+
+### C. Inspect item-level detail
+
+1. click `View Items` on a job row
+2. use the filter selector to narrow the list:
+   - `All items`
+   - `Failed only`
+   - `Retried only`
+   - `Failed or retried`
+3. review:
+   - source path
+   - destination object key
+   - retry count
+   - final error message if present
+
+### D. Cancel a running job
+
+1. click `Cancel` on a running job
+2. the status changes to `cancel_requested`
+3. once the current in-flight upload finishes, the job should transition to `cancelled`
+
+### E. Resume a partial job
+
+1. find a job with status `failed`, `cancelled`, or `completed_with_errors`
+2. click `Resume`
+3. a new job is created with a `Resume of <job_id>` note
+4. object keys previously marked as `copied` in the source job are recorded as `skipped` in the new job
+5. inspect `View Items` if you want to confirm exactly which files were skipped, retried, copied, or failed
 
 ## What Can Be Migrated Today
 
@@ -540,7 +597,7 @@ However, it is still a first-generation implementation and does not yet provide:
 
 - distributed locking across multiple application instances
 - distributed cancellation coordination across multiple application instances
-- resumable checkpoints per file
+- full resumable checkpoints with orchestration across repeated job chains
 - advanced retry policies with configurable backoff and per-provider tuning
 - object checksum validation
 - full database-to-object reconciliation
@@ -551,8 +608,16 @@ That means it works correctly for a single application instance, but it is not y
 The current worker does include a basic built-in retry for each object upload attempt.
 This helps with short-lived network interruptions, but it is intentionally conservative and should not be treated as a substitute for full resumable migration orchestration.
 
+The admin workflow now also supports a basic resume mode.
+When a prior job ended as `failed`, `cancelled`, or `completed_with_errors`, operators can start a new resume job that skips object keys already recorded as successfully copied in the source job.
+This is a practical checkpoint layer, but it still depends on the recorded job item history rather than a full content-verification or distributed checkpoint system.
+
 The admin migration table now also shows the cumulative retry count for each job.
 This gives operators a lightweight signal that a migration completed under unstable network conditions, even when the final status is still `completed`.
+
+The admin screen also now exposes file-level migration records for each job.
+Operators can inspect up to the most recent 200 item records, including source path, destination object key, retry count, status, and any final error message.
+The detail panel also supports quick filtering for failed items, retried items, or a combined failed-or-retried view.
 
 ### Playback is still local
 

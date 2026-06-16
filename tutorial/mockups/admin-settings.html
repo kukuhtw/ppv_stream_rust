@@ -12,11 +12,11 @@
   </style>
 </head>
 <body>
-<div class="mockup-banner">TUTORIAL MOCKUP — Admin Settings</div>
+<div class="mockup-banner">TUTORIAL MOCKUP - Admin Settings</div>
 
 <nav class="navbar navbar-expand-md bg-danger shadow-sm">
   <div class="container">
-    <a class="navbar-brand fw-bold text-white" href="#">🎬 PPV Stream</a>
+    <a class="navbar-brand fw-bold text-white" href="#">PPV Stream</a>
     <div class="collapse navbar-collapse show">
       <ul class="navbar-nav me-auto">
         <li class="nav-item"><a class="nav-link text-white-50" href="#">Dashboard</a></li>
@@ -26,7 +26,7 @@
       </ul>
       <div class="d-flex align-items-center gap-2">
         <span class="badge bg-light text-danger fw-semibold">ADMIN</span>
-        <button class="btn btn-sm btn-outline-light">☀️</button>
+        <button class="btn btn-sm btn-outline-light">Theme</button>
         <button class="btn btn-sm btn-outline-light">Logout</button>
       </div>
     </div>
@@ -35,12 +35,11 @@
 
 <div class="container py-4 pb-5">
   <h1 class="mb-1 fs-4 fw-bold">Settings</h1>
-  <p class="text-body-secondary small mb-4">Configure platform appearance, payment methods, SMTP, and admin credentials.</p>
+  <p class="text-body-secondary small mb-4">Configure platform appearance, payment methods, SMTP, storage backend migration, and admin credentials.</p>
 
-  <!-- Platform Branding -->
   <div class="card shadow-sm mb-4 annotated">
-    <span class="callout" style="top:-18px;left:0">① Platform Name &amp; Tagline — saved to browser localStorage, applied to all pages</span>
-    <div class="card-header fw-semibold">Platform Name &amp; Tagline</div>
+    <span class="callout" style="top:-18px;left:0">1 Platform Name and Tagline - saved to browser localStorage, applied to all pages</span>
+    <div class="card-header fw-semibold">Platform Name and Tagline</div>
     <div class="card-body">
       <p class="text-body-secondary small mb-3">Saved locally in this browser via <code>theme.js</code>. Set a custom name and tagline that appear on all pages.</p>
       <div class="row g-3">
@@ -52,14 +51,13 @@
         </div>
       </div>
       <div class="mt-3 p-3 rounded border small">
-        Preview: <strong>🎬 My PPV Platform</strong> — <span>Exclusive Content, On Demand</span>
+        Preview: <strong>My PPV Platform</strong> - <span>Exclusive Content, On Demand</span>
       </div>
     </div>
   </div>
 
-  <!-- Payment Methods -->
   <div class="card shadow-sm mb-4 annotated">
-    <span class="callout" style="top:-18px;left:0">② Payment methods — toggle providers directly from the dashboard without editing .env secrets</span>
+    <span class="callout" style="top:-18px;left:0">2 Payment methods - toggle providers directly from the dashboard without editing .env secrets</span>
     <div class="card-header fw-semibold">Payment Methods</div>
     <div class="card-body">
       <div class="row g-3">
@@ -105,9 +103,143 @@
     </div>
   </div>
 
-  <!-- SMTP -->
   <div class="card shadow-sm mb-4 annotated">
-    <span class="callout" style="top:-18px;left:0">③ SMTP settings — read-only from .env; send test email to verify</span>
+    <span class="callout" style="top:-18px;left:0">3 Storage backend and migration - save desired backend, test connection, migrate, cancel, resume, inspect files</span>
+    <div class="card-header fw-semibold">Storage Backend and Migration</div>
+    <div class="card-body">
+      <div class="row g-3 mb-4">
+        <div class="col-md-6">
+          <div class="border rounded p-3 h-100">
+            <div class="fw-semibold mb-2">Active Storage Backend</div>
+            <div class="small"><strong>Backend:</strong> local</div>
+            <div class="small"><strong>Bucket:</strong> -</div>
+            <div class="small"><strong>Endpoint:</strong> -</div>
+            <div class="small"><strong>Public URL:</strong> -</div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="border rounded p-3 h-100">
+            <div class="fw-semibold mb-2">Desired Storage Backend</div>
+            <div class="small"><strong>Backend:</strong> minio</div>
+            <div class="small"><strong>Bucket:</strong> ppv-stream</div>
+            <div class="small"><strong>Endpoint:</strong> http://minio:9000</div>
+            <div class="small"><strong>Restart required:</strong> <span class="text-warning">Yes</span></div>
+            <div class="alert alert-warning py-2 mt-2 mb-0 small">Saved backend differs from the currently active runtime backend until the app is restarted.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-3 mb-4">
+        <div class="col-md-4"><label class="form-label">Backend</label><select class="form-select"><option>minio</option><option>s3</option><option>r2</option><option>b2</option><option>local</option></select></div>
+        <div class="col-md-4"><label class="form-label">Bucket</label><input class="form-control" value="ppv-stream"></div>
+        <div class="col-md-4"><label class="form-label">Region</label><input class="form-control" value="us-east-1"></div>
+        <div class="col-md-6"><label class="form-label">Access Key</label><input class="form-control" value="minioadmin"></div>
+        <div class="col-md-6"><label class="form-label">Secret Key</label><input type="password" class="form-control" value="secret"></div>
+        <div class="col-md-6"><label class="form-label">Endpoint</label><input class="form-control" value="http://minio:9000"></div>
+        <div class="col-md-6"><label class="form-label">Public URL / CDN Base</label><input class="form-control" value="https://files.example.com/ppv-stream"></div>
+        <div class="col-md-6">
+          <div class="form-check form-switch mt-md-4 pt-md-2">
+            <input class="form-check-input" type="checkbox" checked>
+            <label class="form-check-label">Force path-style requests</label>
+          </div>
+        </div>
+        <div class="col-12">
+          <button class="btn btn-primary">Save Storage Settings</button>
+          <button class="btn btn-outline-secondary ms-2">Test Connection</button>
+        </div>
+      </div>
+
+      <div class="border rounded p-3 mb-4">
+        <div class="fw-semibold mb-2">Storage Migration Job</div>
+        <p class="text-body-secondary small mb-3">Copy existing local uploads and transcoded media into the saved remote backend while keeping local runtime directories in place.</p>
+        <div class="row g-3 align-items-end">
+          <div class="col-md-4">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" checked>
+              <label class="form-check-label">Copy uploaded originals</label>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" checked>
+              <label class="form-check-label">Copy transcoded HLS media</label>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <button class="btn btn-outline-primary">Start Migration</button>
+          </div>
+        </div>
+      </div>
+
+      <table class="table table-bordered align-middle mb-4">
+        <thead class="table-light"><tr><th>Created</th><th>Status</th><th>Backend</th><th>Scope</th><th>Progress</th><th>Last Error</th><th>Actions</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>2026-06-16 10:40</td>
+            <td><span class="badge text-bg-info">running</span></td>
+            <td>minio<div class="small text-body-secondary">ppv-stream</div></td>
+            <td>uploads, media</td>
+            <td>120/200 copied, 18 skipped, 1 failed<div class="small text-body-secondary">69% processed - 7 retries</div></td>
+            <td class="small">media videos/abc/index.m3u8 attempt 3/3: timeout</td>
+            <td><div class="d-flex gap-2"><button class="btn btn-sm btn-outline-secondary">View Items</button><button class="btn btn-sm btn-outline-danger">Cancel</button></div></td>
+          </tr>
+          <tr>
+            <td>2026-06-16 09:50</td>
+            <td><span class="badge text-bg-warning">completed_with_errors</span></td>
+            <td>minio<div class="small text-body-secondary">ppv-stream</div></td>
+            <td>uploads, media</td>
+            <td>160/200 copied, 0 skipped, 4 failed<div class="small text-body-secondary">82% processed - 10 retries</div></td>
+            <td class="small">network interruption during media upload</td>
+            <td><div class="d-flex gap-2"><button class="btn btn-sm btn-outline-secondary">View Items</button><button class="btn btn-sm btn-outline-primary">Resume</button></div></td>
+          </tr>
+          <tr>
+            <td>2026-06-16 11:00</td>
+            <td><span class="badge text-bg-success">completed</span></td>
+            <td>minio<div class="small text-body-secondary">ppv-stream</div><div class="small text-body-secondary">Resume of 7f3a-job-old</div></td>
+            <td>uploads, media</td>
+            <td>39/40 copied, 1 skipped<div class="small text-body-secondary">100% processed - No retries</div></td>
+            <td class="small">-</td>
+            <td><div class="d-flex gap-2"><button class="btn btn-sm btn-outline-secondary">View Items</button></div></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="border rounded p-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>
+            <div class="fw-semibold">Job Item Details</div>
+            <div class="text-body-secondary small">Showing up to 200 latest file-level records for job 7f3a-job-new.</div>
+          </div>
+          <button class="btn btn-sm btn-outline-secondary">Close</button>
+        </div>
+        <div class="row g-3 align-items-end mb-3">
+          <div class="col-md-4">
+            <label class="form-label small mb-1">Filter</label>
+            <select class="form-select form-select-sm">
+              <option>All items</option>
+              <option>Failed only</option>
+              <option>Retried only</option>
+              <option selected>Failed or retried</option>
+            </select>
+          </div>
+          <div class="col-md-8">
+            <div class="small text-body-secondary">Visible: 12 of 200 items. Copied: 170. Failed: 8. Retried: 24.</div>
+          </div>
+        </div>
+        <table class="table table-sm table-bordered align-middle mb-0">
+          <thead class="table-light"><tr><th>Created</th><th>Scope</th><th>Status</th><th>Retries</th><th>Source Path</th><th>Object Key</th><th>Error</th></tr></thead>
+          <tbody>
+            <tr><td>2026-06-16 10:42</td><td>media</td><td><span class="badge text-bg-danger">failed</span></td><td>2</td><td><code>media/abc/index.m3u8</code></td><td><code>videos/abc/index.m3u8</code></td><td class="small">timeout after retry</td></tr>
+            <tr><td>2026-06-16 11:00</td><td>media</td><td><span class="badge text-bg-secondary">skipped</span></td><td>0</td><td><code>media/old/playlist.m3u8</code></td><td><code>videos/old/playlist.m3u8</code></td><td class="small">Skipped because this object was already copied in the source resume job</td></tr>
+            <tr><td>2026-06-16 11:01</td><td>uploads</td><td><span class="badge text-bg-success">copied</span></td><td>1</td><td><code>storage/trailer.mp4</code></td><td><code>uploads/trailer.mp4</code></td><td class="small">-</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm mb-4 annotated">
+    <span class="callout" style="top:-18px;left:0">4 SMTP settings - read-only from .env; send test email to verify</span>
     <div class="card-header fw-semibold">SMTP / Email Settings</div>
     <div class="card-body">
       <p class="text-body-secondary small mb-3">SMTP is configured in <code>.env</code>. Use the test button to verify the current config.</p>
@@ -129,10 +261,9 @@
     </div>
   </div>
 
-  <!-- Exchange rate -->
   <div class="card shadow-sm mb-4 annotated">
-    <span class="callout" style="top:-18px;left:0">④ USD → IDR exchange rate — used for fiat price display</span>
-    <div class="card-header fw-semibold">USD → IDR Exchange Rate</div>
+    <span class="callout" style="top:-18px;left:0">5 USD to IDR exchange rate - used for fiat price display</span>
+    <div class="card-header fw-semibold">USD to IDR Exchange Rate</div>
     <div class="card-body">
       <div class="row g-3">
         <div class="col-md-4"><label for="m9" class="form-label">Rate (1 USD = ? IDR)</label><input id="m9" type="number" class="form-control" value="17000"></div>
@@ -141,13 +272,12 @@
     </div>
   </div>
 
-  <!-- Admin password -->
   <div class="card shadow-sm mb-4 annotated">
-    <span class="callout" style="top:-18px;left:0">⑤ Change Admin Password — requires current password verification</span>
+    <span class="callout" style="top:-18px;left:0">6 Change Admin Password - requires current password verification</span>
     <div class="card-header fw-semibold">Change Admin Password</div>
     <div class="card-body">
       <div class="row g-3">
-        <div class="col-md-4"><label for="m10" class="form-label">Current Password</label><div class="input-group"><input id="m10" type="password" class="form-control" value="••••••••"><button class="btn btn-outline-secondary">Show</button></div></div>
+        <div class="col-md-4"><label for="m10" class="form-label">Current Password</label><div class="input-group"><input id="m10" type="password" class="form-control" value="********"><button class="btn btn-outline-secondary">Show</button></div></div>
         <div class="col-md-4"><label for="m11" class="form-label">New Password</label><div class="input-group"><input id="m11" type="password" class="form-control"><button class="btn btn-outline-secondary">Show</button></div></div>
         <div class="col-md-4"><label for="m12" class="form-label">Confirm New Password</label><input id="m12" type="password" class="form-control"></div>
         <div class="col-12"><button class="btn btn-warning">Update Admin Password</button></div>

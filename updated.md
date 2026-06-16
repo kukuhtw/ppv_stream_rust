@@ -98,6 +98,28 @@ File storage is now plugin-based. Switch between local disk and S3-compatible st
 STORAGE_PLUGIN=local   # or s3
 ```
 
+## Latest: Storage Admin Workflow
+
+The storage admin area now supports a fuller operator workflow for backend migration and recovery.
+
+**New and updated pieces:**
+- `migrations/031_storage_settings.sql` - storage settings and base migration job table
+- `migrations/032_storage_migration_retry_attempts.sql` - cumulative retry counts per job
+- `migrations/033_storage_migration_job_items.sql` - file-level migration item history
+- `migrations/034_storage_migration_resume_support.sql` - resume source tracking and skipped file counts
+- `src/handlers/admin.rs` - save/test storage settings, migration start, cancel, resume, item inspection
+- `public/admin/settings.html` - storage backend form, migration jobs table, resume button, item filters
+- `STORAGE_MIGRATION.md` - full admin storage tutorial
+- `STORAGE_ADMIN_MOCKUP.md` - admin UI mockup and expected operator experience
+
+**What the admin can do now:**
+1. Save desired storage settings in the database.
+2. Test connectivity to S3, MinIO, R2, B2, or another S3-compatible backend.
+3. Start a background migration for uploads, media, or both.
+4. Cancel a running job.
+5. Resume a failed or cancelled job without re-copying object keys already marked as copied.
+6. Inspect file-level results and filter to failed or retried items.
+
 ---
 
 ## Video Upload Pipeline
