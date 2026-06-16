@@ -7,6 +7,7 @@ mod services {
 }
 
 mod config;
+mod commission;
 mod db;
 mod email;
 mod ffmpeg;
@@ -58,6 +59,11 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
         wallet::{
             wallet_balance, wallet_deposit, wallet_pay_video, wallet_transactions,
             wallet_transfer, wallet_withdraw, WalletState,
+        },
+        affiliate::{
+            affiliate_settings_get, affiliate_settings_save, affiliate_link,
+            affiliate_earnings, affiliate_program_info, admin_affiliate_commissions,
+            AffiliateState,
         },
     };
     use crate::plugins::payment::PaymentPluginRegistry;
@@ -213,6 +219,15 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
         .route("/admin/wallet/transactions/:id/reject",   post(admin_wallet_reject))
         .with_state(AdminState { pool: pool.clone() });
 
+    let affiliate_state = AffiliateState { pool: pool.clone(), cfg: cfg.clone() };
+    let affiliate_router = Router::new()
+        .route("/api/affiliate/settings",  get(affiliate_settings_get).post(affiliate_settings_save))
+        .route("/api/affiliate/link",      get(affiliate_link))
+        .route("/api/affiliate/earnings",  get(affiliate_earnings))
+        .route("/api/affiliate/program",   get(affiliate_program_info))
+        .route("/admin/affiliate/commissions", get(admin_affiliate_commissions))
+        .with_state(affiliate_state);
+
     let app = static_router
         .merge(admin_pages_router)
         .merge(user_auth_router)
@@ -227,6 +242,7 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
         .merge(kurs_router)
         .merge(wallet_router)
         .merge(admin_wallet_router)
+        .merge(affiliate_router)
         .layer(CookieManagerLayer::new());
 
     start_cleanup_task(pool.clone(), cfg.hls_root.clone());

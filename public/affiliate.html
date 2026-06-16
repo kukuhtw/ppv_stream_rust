@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Affiliate — PPV Stream</title>
+  <style>
+    :root {
+      --bg: #0f0f0f; --card: #1a1a1a; --border: #2a2a2a;
+      --accent: #7c3aed; --accent2: #10b981;
+      --text: #e5e5e5; --muted: #888; --danger: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; }
+    nav { background: var(--card); border-bottom: 1px solid var(--border);
+          padding: 0.75rem 1.5rem; display: flex; align-items: center; gap: 1rem; }
+    nav a { color: var(--muted); text-decoration: none; font-size: 0.9rem; }
+    nav a:hover { color: var(--text); }
+    nav .brand { color: var(--accent); font-weight: 700; font-size: 1.1rem; margin-right: auto; }
+    .page { max-width: 900px; margin: 0 auto; padding: 2rem 1rem; }
+    h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
+    .subtitle { color: var(--muted); margin-bottom: 2rem; font-size: 0.9rem; }
+    .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+    .tab-btn { padding: 0.5rem 1.25rem; border-radius: 6px; border: 1px solid var(--border);
+               background: transparent; color: var(--muted); cursor: pointer; font-size: 0.9rem; }
+    .tab-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .stat-row { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+    .stat { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+            padding: 1rem 1.5rem; min-width: 140px; }
+    .stat .label { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: .05em; }
+    .stat .value { font-size: 1.5rem; font-weight: 700; margin-top: 0.25rem; color: var(--accent2); }
+    label { display: block; color: var(--muted); font-size: 0.8rem; margin-bottom: 0.3rem; }
+    input, select { width: 100%; padding: 0.6rem 0.8rem; background: #222; border: 1px solid var(--border);
+                    border-radius: 6px; color: var(--text); font-size: 0.9rem; }
+    .form-row { margin-bottom: 1rem; }
+    button { padding: 0.6rem 1.25rem; border-radius: 6px; border: none; cursor: pointer;
+             font-size: 0.9rem; font-weight: 600; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-copy { background: #333; color: var(--text); font-size: 0.8rem; padding: 0.35rem 0.75rem; }
+    .link-box { display: flex; gap: 0.5rem; align-items: center; }
+    .link-box input { flex: 1; font-family: monospace; font-size: 0.8rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th { text-align: left; padding: 0.6rem 0.75rem; color: var(--muted);
+         border-bottom: 1px solid var(--border); font-weight: 500; }
+    td { padding: 0.65rem 0.75rem; border-bottom: 1px solid #222; }
+    tr:last-child td { border-bottom: none; }
+    .badge { display: inline-block; padding: 0.2rem 0.55rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+    .badge-wallet { background: #1e3a5f; color: #60a5fa; }
+    .badge-x402   { background: #3b1764; color: #c084fc; }
+    .badge-fiat   { background: #14532d; color: #4ade80; }
+    .msg { padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.85rem; margin-bottom: 1rem; display: none; }
+    .msg.ok  { background: #14532d; color: #4ade80; display: block; }
+    .msg.err { background: #450a0a; color: #f87171; display: block; }
+    .toggle { display: flex; align-items: center; gap: 0.5rem; }
+    .toggle input[type=checkbox] { width: auto; }
+    .empty { color: var(--muted); text-align: center; padding: 2rem; font-size: 0.9rem; }
+    .section-title { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; }
+    .video-select { margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+<nav>
+  <span class="brand">PPV Stream</span>
+  <a href="/public/dashboard.html">Dashboard</a>
+  <a href="/public/wallet.html">Wallet</a>
+  <a href="/public/affiliate.html">Affiliate</a>
+</nav>
+
+<div class="page">
+  <h1>Affiliate Program</h1>
+  <p class="subtitle">Earn commissions by sharing videos. Configure your program as a creator, or track your earnings as an affiliate.</p>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('earnings')">My Earnings</button>
+    <button class="tab-btn" onclick="switchTab('settings')">My Videos</button>
+    <button class="tab-btn" onclick="switchTab('links')">Get Links</button>
+  </div>
+
+  <!-- ── Earnings Tab ── -->
+  <div id="tab-earnings" class="tab-pane active">
+    <div class="stat-row" id="earnings-stats">
+      <div class="stat"><div class="label">Total Earned</div><div class="value" id="stat-total">$0.00</div></div>
+      <div class="stat"><div class="label">Commissions</div><div class="value" id="stat-count" style="color:var(--text)">0</div></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Commission History</div>
+      <div id="earnings-msg"></div>
+      <div id="earnings-empty" class="empty" style="display:none">No commissions yet. Share your referral links to start earning!</div>
+      <table id="earnings-table" style="display:none">
+        <thead>
+          <tr>
+            <th>Video</th><th>Buyer</th><th>Commission</th><th>Method</th><th>Date</th>
+          </tr>
+        </thead>
+        <tbody id="earnings-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Settings Tab ── -->
+  <div id="tab-settings" class="tab-pane">
+    <div class="card">
+      <div class="section-title">Configure Affiliate Program for a Video</div>
+      <p style="color:var(--muted);font-size:0.85rem;margin-bottom:1rem">
+        As a creator, set the commission % you'll share with affiliates who bring buyers to your video.
+        Commission is deducted from your wallet balance after each sale.
+      </p>
+      <div id="settings-msg"></div>
+
+      <div class="form-row video-select">
+        <label>Select Your Video</label>
+        <select id="settings-video-select" onchange="loadAffiliateSettings()">
+          <option value="">-- choose a video --</option>
+        </select>
+      </div>
+
+      <div id="settings-form" style="display:none">
+        <div class="form-row">
+          <label>Commission % (0–90)</label>
+          <input type="number" id="settings-pct" min="0" max="90" value="10" />
+        </div>
+        <div class="form-row">
+          <div class="toggle">
+            <input type="checkbox" id="settings-enabled" />
+            <label for="settings-enabled" style="display:inline;margin:0">Enable affiliate program for this video</label>
+          </div>
+        </div>
+        <button class="btn-primary" onclick="saveAffiliateSettings()">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Links Tab ── -->
+  <div id="tab-links" class="tab-pane">
+    <div class="card">
+      <div class="section-title">Generate Referral Link</div>
+      <p style="color:var(--muted);font-size:0.85rem;margin-bottom:1rem">
+        Share this link. When someone buys through it, you earn the commission % set by the video creator.
+      </p>
+      <div id="links-msg"></div>
+
+      <div class="form-row video-select">
+        <label>Select a Video</label>
+        <select id="links-video-select" onchange="generateLink()">
+          <option value="">-- choose a video --</option>
+        </select>
+      </div>
+
+      <div id="link-result" style="display:none">
+        <div class="form-row">
+          <label>Your Referral Link</label>
+          <div class="link-box">
+            <input type="text" id="link-url" readonly />
+            <button class="btn-copy" onclick="copyLink()">Copy</button>
+          </div>
+        </div>
+        <p id="link-status" style="font-size:0.8rem;margin-top:0.5rem;color:var(--muted)"></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let myVideos = [];
+
+// ── Tab switching ──────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    b.classList.toggle('active', ['earnings','settings','links'][i] === name);
+  });
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────
+async function boot() {
+  await loadMyVideos();
+  await loadEarnings();
+}
+
+async function loadMyVideos() {
+  try {
+    const r = await fetch('/api/my_videos');
+    const data = await r.json();
+    myVideos = Array.isArray(data) ? data : (data.videos || []);
+
+    const settSel = document.getElementById('settings-video-select');
+    const linkSel = document.getElementById('links-video-select');
+
+    myVideos.forEach(v => {
+      const title = v.title || v.id;
+      const opt1 = new Option(title, v.id);
+      const opt2 = new Option(title, v.id);
+      settSel.appendChild(opt1);
+      linkSel.appendChild(opt2);
+    });
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+// ── Earnings ──────────────────────────────────────────────────────────────
+async function loadEarnings() {
+  try {
+    const r = await fetch('/api/affiliate/earnings?limit=100');
+    const data = await r.json();
+    if (!data.ok) { showMsg('earnings-msg', data.error || 'Error', true); return; }
+
+    document.getElementById('stat-total').textContent = fmtCents(data.total_commission_cents || 0);
+    document.getElementById('stat-count').textContent = (data.items || []).length;
+
+    const tbody = document.getElementById('earnings-tbody');
+    tbody.innerHTML = '';
+    if (!data.items || data.items.length === 0) {
+      document.getElementById('earnings-empty').style.display = 'block';
+      document.getElementById('earnings-table').style.display = 'none';
+      return;
+    }
+
+    document.getElementById('earnings-empty').style.display = 'none';
+    document.getElementById('earnings-table').style.display = 'table';
+
+    data.items.forEach(item => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${esc(item.video_title || item.video_id)}</td>
+        <td>@${esc(item.buyer_username)}</td>
+        <td style="color:var(--accent2);font-weight:600">${fmtCents(item.commission_cents)}</td>
+        <td>${methodBadge(item.payment_method)}</td>
+        <td style="color:var(--muted);font-size:0.8rem">${item.created_at ? item.created_at.slice(0,10) : ''}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } catch (e) {
+    showMsg('earnings-msg', 'Network error', true);
+  }
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────
+async function loadAffiliateSettings() {
+  const videoId = document.getElementById('settings-video-select').value;
+  const form = document.getElementById('settings-form');
+  clearMsg('settings-msg');
+  if (!videoId) { form.style.display = 'none'; return; }
+
+  try {
+    const r = await fetch(`/api/affiliate/settings?video_id=${encodeURIComponent(videoId)}`);
+    const data = await r.json();
+    if (!data.ok) { showMsg('settings-msg', data.error || 'Error', true); return; }
+
+    document.getElementById('settings-pct').value     = data.commission_pct || 0;
+    document.getElementById('settings-enabled').checked = !!data.is_enabled;
+    form.style.display = 'block';
+  } catch (e) {
+    showMsg('settings-msg', 'Network error', true);
+  }
+}
+
+async function saveAffiliateSettings() {
+  const videoId = document.getElementById('settings-video-select').value;
+  const pct     = parseInt(document.getElementById('settings-pct').value, 10);
+  const enabled = document.getElementById('settings-enabled').checked;
+  clearMsg('settings-msg');
+
+  if (!videoId) { showMsg('settings-msg', 'Select a video first', true); return; }
+  if (isNaN(pct) || pct < 0 || pct > 90) { showMsg('settings-msg', 'Commission must be 0–90', true); return; }
+
+  try {
+    const r = await fetch('/api/affiliate/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ video_id: videoId, commission_pct: pct, is_enabled: enabled }),
+    });
+    const data = await r.json();
+    showMsg('settings-msg', data.ok ? 'Settings saved!' : (data.error || 'Error'), !data.ok);
+  } catch (e) {
+    showMsg('settings-msg', 'Network error', true);
+  }
+}
+
+// ── Links ─────────────────────────────────────────────────────────────────
+async function generateLink() {
+  const videoId = document.getElementById('links-video-select').value;
+  const result  = document.getElementById('link-result');
+  clearMsg('links-msg');
+  if (!videoId) { result.style.display = 'none'; return; }
+
+  try {
+    const r = await fetch(`/api/affiliate/link?video_id=${encodeURIComponent(videoId)}`);
+    const data = await r.json();
+    if (!data.ok) { showMsg('links-msg', data.error || 'Error', true); return; }
+
+    const full = window.location.origin + data.link;
+    document.getElementById('link-url').value = full;
+    result.style.display = 'block';
+
+    const statusEl = document.getElementById('link-status');
+    if (!data.is_enabled) {
+      statusEl.textContent = 'Note: The creator has not enabled the affiliate program for this video yet.';
+      statusEl.style.color = 'var(--danger)';
+    } else {
+      statusEl.textContent = 'Affiliate program is active for this video. Share the link above!';
+      statusEl.style.color = 'var(--accent2)';
+    }
+  } catch (e) {
+    showMsg('links-msg', 'Network error', true);
+  }
+}
+
+function copyLink() {
+  const inp = document.getElementById('link-url');
+  navigator.clipboard.writeText(inp.value).catch(() => { inp.select(); document.execCommand('copy'); });
+  const btn = inp.nextElementSibling;
+  const orig = btn.textContent;
+  btn.textContent = 'Copied!';
+  setTimeout(() => { btn.textContent = orig; }, 1500);
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function fmtCents(c) {
+  c = c || 0;
+  return `$${Math.floor(c / 100)}.${String(Math.abs(c % 100)).padStart(2, '0')}`;
+}
+
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function methodBadge(m) {
+  const cls = m === 'x402' ? 'badge-x402' : m === 'fiat' ? 'badge-fiat' : 'badge-wallet';
+  return `<span class="badge ${cls}">${esc(m)}</span>`;
+}
+
+function showMsg(id, text, isErr) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text;
+  el.className = 'msg ' + (isErr ? 'err' : 'ok');
+}
+function clearMsg(id) {
+  const el = document.getElementById(id);
+  if (el) { el.textContent = ''; el.className = 'msg'; }
+}
+
+boot();
+</script>
+</body>
+</html>

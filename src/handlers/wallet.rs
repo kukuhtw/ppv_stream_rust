@@ -18,6 +18,7 @@ use serde_json::json;
 use sqlx::{PgPool, Row};
 use tower_cookies::Cookies;
 
+use crate::commission;
 use crate::config::Config;
 use crate::sessions;
 
@@ -394,6 +395,7 @@ pub async fn wallet_transfer(
 #[derive(Deserialize)]
 pub struct WalletPayPayload {
     pub video_id: String,
+    pub ref_code: Option<String>, // affiliate referral username
 }
 
 pub async fn wallet_pay_video(
@@ -547,14 +549,25 @@ pub async fn wallet_pay_video(
     }
 
     match tx.commit().await {
-        Ok(_)  => Json(json!({
-            "ok": true,
-            "balance_cents":   buyer_new,
-            "balance_display": cents_to_display(buyer_new),
-            "creator_received_display": cents_to_display(creator_cut),
-            "paid_display": cents_to_display(price_cents),
-            "message": format!("Access granted. {} sent to @{}.", cents_to_display(creator_cut), owner_username)
-        })),
+        Ok(_) => {
+            // Best-effort affiliate commission (separate tx; does not fail the purchase)
+            if let Some(ref_username) = p.ref_code.as_deref().filter(|s| !s.is_empty()) {
+                if let Err(e) = commission::process_affiliate_commission(
+                    &st.pool, &p.video_id, &uid, &owner_id,
+                    price_cents, ref_username, "wallet", None,
+                ).await {
+                    tracing::warn!("affiliate commission skipped: {e}");
+                }
+            }
+            Json(json!({
+                "ok": true,
+                "balance_cents":   buyer_new,
+                "balance_display": cents_to_display(buyer_new),
+                "creator_received_display": cents_to_display(creator_cut),
+                "paid_display": cents_to_display(price_cents),
+                "message": format!("Access granted. {} sent to @{}.", cents_to_display(creator_cut), owner_username)
+            }))
+        }
         Err(e) => Json(json!({"ok": false, "error": format!("commit: {e}")})),
     }
 }

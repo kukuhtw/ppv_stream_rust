@@ -12,6 +12,7 @@ use serde::Deserialize;
 use serde_json::json;
 use uuid::Uuid;
 
+use crate::commission;
 use crate::config::Config;
 use crate::plugins::payment::{
     models::{ConfirmPaymentRequest, CreateInvoiceRequest, PaymentStatus},
@@ -35,6 +36,7 @@ pub struct CreateInvoicePayload {
     pub buyer_name:    Option<String>,
     pub success_url:   Option<String>,
     pub cancel_url:    Option<String>,
+    pub affiliate_ref: Option<String>, // referral username for commission
     #[serde(default)]
     pub metadata: std::collections::HashMap<String, String>,
 }
@@ -136,6 +138,15 @@ async fn create_invoice_with_provider(
 
     if let Err(e) = insert_result {
         return Json(json!({"ok": false, "error": format!("db insert error: {e}")}));
+    }
+
+    // Store affiliate_ref using a runtime query (new column — avoids sqlx macro cache issue)
+    if let Some(ref_username) = payload.affiliate_ref.as_deref().filter(|s| !s.is_empty()) {
+        let _ = sqlx::query(
+            "UPDATE fiat_invoices SET affiliate_ref = $1 WHERE invoice_uid = $2"
+        )
+        .bind(ref_username).bind(&invoice_uid)
+        .execute(&state.pool).await;
     }
 
     // Inject uid and title into metadata so the plugin can embed them in provider requests
@@ -354,6 +365,36 @@ pub async fn handle_webhook(
         "fiat payment granted: provider={provider} uid={invoice_uid} user={} video={}",
         inv.user_id, inv.video_id
     );
+
+    // ---- Affiliate commission (best-effort) ----
+    {
+        let aff_ref: Option<String> = sqlx::query(
+            "SELECT affiliate_ref FROM fiat_invoices WHERE invoice_uid = $1 LIMIT 1"
+        )
+        .bind(invoice_uid)
+        .fetch_optional(&state.pool)
+        .await
+        .ok().flatten()
+        .and_then(|r: sqlx::postgres::PgRow| {
+            use sqlx::Row as _;
+            r.try_get::<Option<String>, _>("affiliate_ref").ok().flatten()
+        });
+
+        if let Some(ref_username) = aff_ref.as_deref().filter(|s| !s.is_empty()) {
+            if let Err(e) = commission::process_affiliate_commission(
+                &state.pool,
+                &inv.video_id,
+                &inv.user_id,
+                &inv.creator_id,
+                inv.amount,
+                ref_username,
+                &provider,
+                Some(invoice_uid),
+            ).await {
+                tracing::warn!("fiat affiliate commission skipped: {e}");
+            }
+        }
+    }
 
     // ---- Xendit auto-disburse ----
     // Only possible for Xendit and only when the creator has a bank_account set.

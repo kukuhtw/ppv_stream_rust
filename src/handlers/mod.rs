@@ -12,3 +12,4 @@ pub mod kurs; // <-- WAJIB: expose router /api/kurs
 pub mod pay;
 pub mod payment_plugins;
 pub mod wallet;
+pub mod affiliate;

@@ -33,6 +33,7 @@ use std::time::{Duration, Instant};
 use tower_cookies::Cookies;
 use uuid::Uuid;
 
+use crate::commission;
 use crate::handlers::video::VideoState;
 use crate::sessions;
 
@@ -128,11 +129,12 @@ pub async fn pay_options(
 /// JSON request body accepted by `POST /api/pay/x402/start`.
 #[derive(Deserialize)]
 pub struct StartPayReq {
-    pub video_id: String,
-    pub chain_id: i64,
-    pub symbol: String,
+    pub video_id:      String,
+    pub chain_id:      i64,
+    pub symbol:        String,
     pub token_address: Option<String>,
     pub payer_address: String,
+    pub ref_code:      Option<String>, // affiliate referral username
 }
 
 /// JSON response returned after an x402 payment invoice is created and signed.
@@ -315,6 +317,15 @@ pub async fn x402_start(
     .bind(&token_amount_decimal)
     .execute(&st.pool)
     .await;
+
+    // Store affiliate_ref if provided (separate runtime query — new column)
+    if let Some(ref_username) = body.ref_code.as_deref().filter(|s| !s.is_empty()) {
+        let _ = sqlx::query(
+            "UPDATE x402_invoices SET affiliate_ref = $1 WHERE invoice_uid = $2"
+        )
+        .bind(ref_username).bind(&invoice_uid)
+        .execute(&st.pool).await;
+    }
 
     // Load the target smart contract address. The frontend is expected to
     // perform an additional deployed-code validation before submitting payment.
@@ -822,6 +833,40 @@ pub async fn x402_confirm(
         )
         .execute(&st.pool)
         .await;
+    }
+
+    // Best-effort affiliate commission after x402 payment
+    let affiliate_ref: Option<String> = sqlx::query(
+        "SELECT affiliate_ref FROM x402_invoices WHERE invoice_uid = $1 LIMIT 1"
+    )
+    .bind(&body.invoice_uid)
+    .fetch_optional(&st.pool)
+    .await
+    .ok()
+    .flatten()
+    .and_then(|r: sqlx::postgres::PgRow| r.try_get::<Option<String>, _>("affiliate_ref").ok().flatten());
+
+    if let Some(ref_username) = affiliate_ref.as_deref().filter(|s| !s.is_empty()) {
+        // We need creator_id + price_cents — re-read from invoice
+        let inv_extra = sqlx::query(
+            "SELECT creator_id, price_cents FROM x402_invoices WHERE invoice_uid = $1 LIMIT 1"
+        )
+        .bind(&body.invoice_uid)
+        .fetch_optional(&st.pool)
+        .await
+        .ok().flatten();
+
+        if let Some(row) = inv_extra {
+            let creator_id: String = row.try_get("creator_id").unwrap_or_default();
+            let price_cents: i64   = row.try_get("price_cents").unwrap_or(0);
+
+            if let Err(e) = commission::process_affiliate_commission(
+                &st.pool, &invoice.video_id, &invoice.user_id, &creator_id,
+                price_cents, ref_username, "x402", Some(&body.invoice_uid),
+            ).await {
+                tracing::warn!("x402 affiliate commission skipped: {e}");
+            }
+        }
     }
 
     Json(json!({"ok": true, "status": "paid"}))

@@ -179,6 +179,7 @@ let USD_TO_IDR = 17000;
 
 // user bar + resolve current user_id
 let CURRENT_USER = null;
+let REF_CODE = '';  // affiliate referral username from ?ref= URL param
 (async function loadMe(){
   try{
     const r=await fetch('/api/me'); const j=await r.json();
@@ -242,7 +243,7 @@ async function doWalletPay(videoId){
   try{
     const r=await fetch('/api/wallet/pay',{
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({video_id: videoId})
+      body: JSON.stringify({video_id: videoId, ref_code: REF_CODE||undefined})
     });
     const j=await r.json();
     if(j.ok){
@@ -294,7 +295,7 @@ async function ensureNetwork(provider,inv){
 
 async function createInvoice(videoId, choice, payer){
   const r=await fetch('/api/pay/x402/start',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({video_id:videoId,chain_id:choice.chain_id,symbol:choice.symbol,token_address:choice.erc20,payer_address:payer})});
+    body:JSON.stringify({video_id:videoId,chain_id:choice.chain_id,symbol:choice.symbol,token_address:choice.erc20,payer_address:payer,ref_code:REF_CODE||undefined})});
   const inv=await r.json().catch(()=>({}));
   if(!r.ok||inv.ok!==true) throw new Error(inv.error||'Failed to create invoice.');
   return inv;
@@ -361,13 +362,14 @@ async function doFiatPay(videoId, provider, priceCents){
     const r=await fetch(`/api/pay/${encodeURIComponent(provider)}/start`,{
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
-        user_id: CURRENT_USER.id||CURRENT_USER.user_id||'',
-        video_id: videoId,
-        amount_cents: priceCents,
+        user_id:       CURRENT_USER.id||CURRENT_USER.user_id||'',
+        video_id:      videoId,
+        amount_cents:  priceCents,
         currency,
-        buyer_email: CURRENT_USER.email||'',
-        success_url: location.href,
-        cancel_url:  location.href,
+        buyer_email:   CURRENT_USER.email||'',
+        success_url:   location.href,
+        cancel_url:    location.href,
+        affiliate_ref: REF_CODE||undefined,
       })
     });
     const j=await r.json();
@@ -453,6 +455,14 @@ async function showPaymentPanel(videoId, meta){
     </button>
   `).join('')||'<p class="text-muted small">No payment gateway configured by admin.</p>';
 
+  // Show referral notice if buyer arrived via affiliate link
+  if(REF_CODE){
+    const notice=document.createElement('div');
+    notice.className='alert alert-info py-2 small mb-0 mt-2';
+    notice.innerHTML=`🔗 Referred by <strong>@${esc(REF_CODE)}</strong>. They earn a commission when you purchase.`;
+    document.getElementById('payPanel').querySelector('.card-body').appendChild(notice);
+  }
+
   document.getElementById('payPanel').classList.remove('d-none');
 }
 
@@ -461,6 +471,10 @@ async function showPaymentPanel(videoId, meta){
   const p=new URLSearchParams(location.search);
   const vid=p.get('video_id');
   if(!vid) return document.body.insertAdjacentHTML('beforeend','<div class="container py-3"><p>video_id is missing</p></div>');
+
+  // Capture affiliate referral code from URL (?ref=USERNAME)
+  REF_CODE = p.get('ref') || '';
+
   document.getElementById('selfLink').href='/public/watch.html?video_id='+encodeURIComponent(vid);
 
   // Load video meta
