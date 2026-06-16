@@ -13,7 +13,11 @@
 // Commission is taken from the creator's wallet balance and transferred to the
 // affiliate after every successful purchase. See src/commission.rs.
 
-use axum::{extract::{Query, State}, response::IntoResponse, Json};
+use axum::{
+    extract::{Query, State},
+    response::IntoResponse,
+    Json,
+};
 use serde::Deserialize;
 use serde_json::json;
 use sqlx::{PgPool, Row};
@@ -26,7 +30,50 @@ use crate::sessions;
 #[derive(Clone)]
 pub struct AffiliateState {
     pub pool: PgPool,
-    pub cfg:  Config,
+    pub cfg: Config,
+}
+
+pub async fn affiliate_summary(
+    State(st): State<AffiliateState>,
+    cookies: Cookies,
+) -> impl IntoResponse {
+    let (uid, _) = match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await {
+        Some(v) => v,
+        None => return Json(json!({"ok": false, "error": "not logged in"})),
+    };
+
+    let total_earnings_cents: i64 = sqlx::query_scalar(
+        r#"SELECT COALESCE(SUM(commission_cents), 0) FROM affiliate_commissions WHERE affiliate_id = $1"#,
+    )
+    .bind(&uid)
+    .fetch_one(&st.pool)
+    .await
+    .unwrap_or(0);
+
+    let month_earnings_cents: i64 = sqlx::query_scalar(
+        r#"SELECT COALESCE(SUM(commission_cents), 0)
+           FROM affiliate_commissions
+           WHERE affiliate_id = $1
+             AND created_at >= date_trunc('month', now())"#,
+    )
+    .bind(&uid)
+    .fetch_one(&st.pool)
+    .await
+    .unwrap_or(0);
+
+    let total_referrals: i64 =
+        sqlx::query_scalar(r#"SELECT COUNT(*) FROM affiliate_commissions WHERE affiliate_id = $1"#)
+            .bind(&uid)
+            .fetch_one(&st.pool)
+            .await
+            .unwrap_or(0);
+
+    Json(json!({
+        "ok": true,
+        "total_earnings_cents": total_earnings_cents,
+        "month_earnings_cents": month_earnings_cents,
+        "total_referrals": total_referrals,
+    }))
 }
 
 // ─── GET /api/affiliate/settings?video_id= ───────────────────────────────────
@@ -34,12 +81,12 @@ pub struct AffiliateState {
 
 pub async fn affiliate_settings_get(
     State(st): State<AffiliateState>,
-    cookies:   Cookies,
-    Query(q):  Query<HashMap<String, String>>,
+    cookies: Cookies,
+    Query(q): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
     let (uid, _) = match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await {
         Some(v) => v,
-        None    => return Json(json!({"ok": false, "error": "not logged in"})),
+        None => return Json(json!({"ok": false, "error": "not logged in"})),
     };
 
     let video_id = q.get("video_id").cloned().unwrap_or_default();
@@ -47,11 +94,13 @@ pub async fn affiliate_settings_get(
         return Json(json!({"ok": false, "error": "video_id required"}));
     }
 
-    let owned: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM videos WHERE id = $1 AND owner_id = $2"
-    )
-    .bind(&video_id).bind(&uid)
-    .fetch_one(&st.pool).await.unwrap_or(0);
+    let owned: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM videos WHERE id = $1 AND owner_id = $2")
+            .bind(&video_id)
+            .bind(&uid)
+            .fetch_one(&st.pool)
+            .await
+            .unwrap_or(0);
 
     if owned == 0 {
         return Json(json!({"ok": false, "error": "not your video"}));
@@ -59,7 +108,7 @@ pub async fn affiliate_settings_get(
 
     let row = sqlx::query(
         "SELECT commission_pct, is_enabled \
-         FROM affiliate_settings WHERE video_id = $1 LIMIT 1"
+         FROM affiliate_settings WHERE video_id = $1 LIMIT 1",
     )
     .bind(&video_id)
     .fetch_optional(&st.pool)
@@ -87,19 +136,19 @@ pub async fn affiliate_settings_get(
 
 #[derive(Deserialize)]
 pub struct AffiliateSettingsPayload {
-    pub video_id:       String,
+    pub video_id: String,
     pub commission_pct: i32,
-    pub is_enabled:     bool,
+    pub is_enabled: bool,
 }
 
 pub async fn affiliate_settings_save(
     State(st): State<AffiliateState>,
-    cookies:   Cookies,
-    Json(p):   Json<AffiliateSettingsPayload>,
+    cookies: Cookies,
+    Json(p): Json<AffiliateSettingsPayload>,
 ) -> impl IntoResponse {
     let (uid, _) = match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await {
         Some(v) => v,
-        None    => return Json(json!({"ok": false, "error": "not logged in"})),
+        None => return Json(json!({"ok": false, "error": "not logged in"})),
     };
 
     if p.video_id.is_empty() {
@@ -109,11 +158,13 @@ pub async fn affiliate_settings_save(
         return Json(json!({"ok": false, "error": "commission_pct must be 0–90"}));
     }
 
-    let owned: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM videos WHERE id = $1 AND owner_id = $2"
-    )
-    .bind(&p.video_id).bind(&uid)
-    .fetch_one(&st.pool).await.unwrap_or(0);
+    let owned: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM videos WHERE id = $1 AND owner_id = $2")
+            .bind(&p.video_id)
+            .bind(&uid)
+            .fetch_one(&st.pool)
+            .await
+            .unwrap_or(0);
 
     if owned == 0 {
         return Json(json!({"ok": false, "error": "not your video"}));
@@ -125,14 +176,17 @@ pub async fn affiliate_settings_save(
            ON CONFLICT (video_id) DO UPDATE
              SET commission_pct = EXCLUDED.commission_pct,
                  is_enabled     = EXCLUDED.is_enabled,
-                 updated_at     = NOW()"#
+                 updated_at     = NOW()"#,
     )
-    .bind(&p.video_id).bind(&uid).bind(p.commission_pct).bind(p.is_enabled)
+    .bind(&p.video_id)
+    .bind(&uid)
+    .bind(p.commission_pct)
+    .bind(p.is_enabled)
     .execute(&st.pool)
     .await;
 
     match res {
-        Ok(_)  => Json(json!({"ok": true, "message": "Affiliate settings saved."})),
+        Ok(_) => Json(json!({"ok": true, "message": "Affiliate settings saved."})),
         Err(e) => Json(json!({"ok": false, "error": format!("db: {e}")})),
     }
 }
@@ -142,12 +196,12 @@ pub async fn affiliate_settings_save(
 
 pub async fn affiliate_link(
     State(st): State<AffiliateState>,
-    cookies:   Cookies,
-    Query(q):  Query<HashMap<String, String>>,
+    cookies: Cookies,
+    Query(q): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
     let (_, username) = match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await {
         Some(v) => v,
-        None    => return Json(json!({"ok": false, "error": "not logged in"})),
+        None => return Json(json!({"ok": false, "error": "not logged in"})),
     };
 
     let video_id = q.get("video_id").cloned().unwrap_or_default();
@@ -155,13 +209,14 @@ pub async fn affiliate_link(
         return Json(json!({"ok": false, "error": "video_id required"}));
     }
 
-    let enabled: bool = sqlx::query_scalar(
-        "SELECT is_enabled FROM affiliate_settings WHERE video_id = $1"
-    )
-    .bind(&video_id)
-    .fetch_optional(&st.pool)
-    .await
-    .ok().flatten().unwrap_or(false);
+    let enabled: bool =
+        sqlx::query_scalar("SELECT is_enabled FROM affiliate_settings WHERE video_id = $1")
+            .bind(&video_id)
+            .fetch_optional(&st.pool)
+            .await
+            .ok()
+            .flatten()
+            .unwrap_or(false);
 
     let link = format!("/public/watch.html?video_id={video_id}&ref={username}");
 
@@ -179,15 +234,16 @@ pub async fn affiliate_link(
 
 pub async fn affiliate_earnings(
     State(st): State<AffiliateState>,
-    cookies:   Cookies,
-    Query(q):  Query<HashMap<String, String>>,
+    cookies: Cookies,
+    Query(q): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
     let (uid, _) = match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await {
         Some(v) => v,
-        None    => return Json(json!({"ok": false, "error": "not logged in"})),
+        None => return Json(json!({"ok": false, "error": "not logged in"})),
     };
 
-    let limit: i64 = q.get("limit")
+    let limit: i64 = q
+        .get("limit")
         .and_then(|s| s.parse().ok())
         .unwrap_or(50)
         .min(200);
@@ -206,15 +262,17 @@ pub async fn affiliate_earnings(
            JOIN users  buyer  ON buyer.id  = ac.buyer_id
            WHERE ac.affiliate_id = $1
            ORDER BY ac.created_at DESC
-           LIMIT $2"#
+           LIMIT $2"#,
     )
-    .bind(&uid).bind(limit)
+    .bind(&uid)
+    .bind(limit)
     .fetch_all(&st.pool)
     .await;
 
     match rows {
         Ok(r) => {
-            let total_cents: i64 = r.iter()
+            let total_cents: i64 = r
+                .iter()
                 .map(|row| row.try_get::<i64, _>("commission_cents").unwrap_or(0))
                 .sum();
 
@@ -237,6 +295,7 @@ pub async fn affiliate_earnings(
                 "ok":                    true,
                 "total_commission_cents": total_cents,
                 "total_display":         fmt(total_cents),
+                "earnings":              items.clone(),
                 "items":                 items,
             }))
         }
@@ -250,7 +309,7 @@ pub async fn affiliate_earnings(
 
 pub async fn affiliate_program_info(
     State(st): State<AffiliateState>,
-    Query(q):  Query<HashMap<String, String>>,
+    Query(q): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
     let video_id = q.get("video_id").cloned().unwrap_or_default();
     if video_id.is_empty() {
@@ -259,7 +318,7 @@ pub async fn affiliate_program_info(
 
     let row = sqlx::query(
         "SELECT commission_pct, is_enabled \
-         FROM affiliate_settings WHERE video_id = $1 LIMIT 1"
+         FROM affiliate_settings WHERE video_id = $1 LIMIT 1",
     )
     .bind(&video_id)
     .fetch_optional(&st.pool)
@@ -268,7 +327,7 @@ pub async fn affiliate_program_info(
     match row {
         Ok(Some(r)) => {
             let enabled: bool = r.try_get("is_enabled").unwrap_or(false);
-            let pct:     i32  = r.try_get("commission_pct").unwrap_or(0);
+            let pct: i32 = r.try_get("commission_pct").unwrap_or(0);
             Json(json!({
                 "ok":             true,
                 "has_affiliate":  enabled && pct > 0,
@@ -276,7 +335,7 @@ pub async fn affiliate_program_info(
             }))
         }
         Ok(None) => Json(json!({"ok": true, "has_affiliate": false, "commission_pct": 0})),
-        Err(e)   => Json(json!({"ok": false, "error": format!("db: {e}")})),
+        Err(e) => Json(json!({"ok": false, "error": format!("db: {e}")})),
     }
 }
 
@@ -285,9 +344,10 @@ pub async fn affiliate_program_info(
 
 pub async fn admin_affiliate_commissions(
     State(st): State<AffiliateState>,
-    Query(q):  Query<HashMap<String, String>>,
+    Query(q): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
-    let limit: i64 = q.get("limit")
+    let limit: i64 = q
+        .get("limit")
         .and_then(|s| s.parse().ok())
         .unwrap_or(100)
         .min(500);
@@ -309,7 +369,7 @@ pub async fn admin_affiliate_commissions(
            JOIN users  buyer  ON buyer.id = ac.buyer_id
            JOIN users  owner  ON owner.id = ac.owner_id
            ORDER BY ac.created_at DESC
-           LIMIT $1"#
+           LIMIT $1"#,
     )
     .bind(limit)
     .fetch_all(&st.pool)
@@ -317,7 +377,8 @@ pub async fn admin_affiliate_commissions(
 
     match rows {
         Ok(r) => {
-            let total_cents: i64 = r.iter()
+            let total_cents: i64 = r
+                .iter()
                 .map(|row| row.try_get::<i64, _>("commission_cents").unwrap_or(0))
                 .sum();
 

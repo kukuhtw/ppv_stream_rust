@@ -13,13 +13,13 @@ use argon2::password_hash::{rand_core::OsRng, PasswordHash, SaltString};
 use argon2::{Argon2, PasswordHasher, PasswordVerifier};
 use sqlx::{PgPool, Row};
 
-use crate::sessions;
 use crate::config::Config;
+use crate::sessions;
 
 #[derive(Clone)]
 pub struct AuthAdminState {
     pub pool: PgPool,
-    pub cfg:  Config, // <-- penting: untuk create_session/destroy_session
+    pub cfg: Config, // <-- penting: untuk create_session/destroy_session
 }
 
 #[derive(Deserialize)]
@@ -46,9 +46,7 @@ pub async fn post_admin_login(
     .await
     {
         Ok(r) => r,
-        Err(_) => {
-            return Redirect::to("/public/admin/login.html?status=fail&reason=server_error")
-        }
+        Err(_) => return Redirect::to("/public/admin/login.html?status=fail&reason=server_error"),
     };
 
     let Some(r) = row else {
@@ -102,16 +100,17 @@ pub async fn post_admin_logout(
 #[derive(Deserialize)]
 pub struct AdminChangePasswordPayload {
     pub current_password: String,
-    pub new_password:     String,
+    pub new_password: String,
 }
 
 pub async fn admin_change_password(
-    State(st):  State<AuthAdminState>,
-    cookies:    Cookies,
+    State(st): State<AuthAdminState>,
+    cookies: Cookies,
     Json(payload): Json<AdminChangePasswordPayload>,
 ) -> impl IntoResponse {
     // Require admin session
-    let Some((user_id, is_admin)) = sessions::current_user_id(&st.pool, &st.cfg, &cookies).await else {
+    let Some((user_id, is_admin)) = sessions::current_user_id(&st.pool, &st.cfg, &cookies).await
+    else {
         return Json(json!({"ok": false, "error": "not logged in"}));
     };
     if !is_admin {
@@ -119,10 +118,14 @@ pub async fn admin_change_password(
     }
 
     if payload.new_password.len() < 8 {
-        return Json(json!({"ok": false, "error": "Password baru terlalu pendek (min 8 karakter)"}));
+        return Json(
+            json!({"ok": false, "error": "Password baru terlalu pendek (min 8 karakter)"}),
+        );
     }
     if payload.current_password == payload.new_password {
-        return Json(json!({"ok": false, "error": "Password baru harus berbeda dari password lama"}));
+        return Json(
+            json!({"ok": false, "error": "Password baru harus berbeda dari password lama"}),
+        );
     }
 
     // Fetch current hash, email, username
@@ -170,8 +173,12 @@ pub async fn admin_change_password(
 
     // Send notification email (fire-and-forget)
     let pool_clone = st.pool.clone();
-    let email_addr: String = row.try_get::<Option<String>, _>("email").ok().flatten().unwrap_or_default();
-    let username: String   = row.try_get("username").unwrap_or_default();
+    let email_addr: String = row
+        .try_get::<Option<String>, _>("email")
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+    let username: String = row.try_get("username").unwrap_or_default();
     tokio::spawn(async move {
         crate::email::send_password_changed(&pool_clone, &email_addr, &username).await;
     });

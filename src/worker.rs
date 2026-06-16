@@ -1,11 +1,7 @@
 // src/worker.rs
 // Background transcoding queue and FFmpeg job processor.
 
-use crate::{
-    config::Config,
-    ffmpeg::run_ffmpeg,
-    plugins::storage::StoragePlugin,
-};
+use crate::{config::Config, ffmpeg::run_ffmpeg, plugins::storage::StoragePlugin};
 use anyhow::{anyhow, Context, Result};
 use sqlx::PgPool;
 use std::{
@@ -32,13 +28,18 @@ pub struct Worker {
 }
 
 impl Worker {
-    pub fn new(pool: PgPool, cfg: Config, storage: Arc<dyn StoragePlugin>, concurrency: usize) -> Self {
+    pub fn new(
+        pool: PgPool,
+        cfg: Config,
+        storage: Arc<dyn StoragePlugin>,
+        concurrency: usize,
+    ) -> Self {
         let (tx, mut rx) = mpsc::channel::<TranscodeJob>(1024);
         let semaphore = Arc::new(Semaphore::new(concurrency.max(1)));
 
         let _handle: JoinHandle<()> = tokio::spawn({
             let semaphore = semaphore.clone();
-            let storage   = storage.clone();
+            let storage = storage.clone();
             async move {
                 while let Some(job) = rx.recv().await {
                     let permit = match semaphore.clone().acquire_owned().await {
@@ -48,8 +49,8 @@ impl Worker {
                             break;
                         }
                     };
-                    let pool    = pool.clone();
-                    let cfg     = cfg.clone();
+                    let pool = pool.clone();
+                    let cfg = cfg.clone();
                     let storage = storage.clone();
                     tokio::spawn(async move {
                         let _permit = permit;
@@ -81,7 +82,12 @@ async fn update_video_error(pool: &PgPool, video_id: &str, message: &str) -> Res
     Ok(())
 }
 
-async fn process_job(pool: &PgPool, cfg: &Config, storage: Arc<dyn StoragePlugin>, job: TranscodeJob) -> Result<()> {
+async fn process_job(
+    pool: &PgPool,
+    cfg: &Config,
+    storage: Arc<dyn StoragePlugin>,
+    job: TranscodeJob,
+) -> Result<()> {
     sqlx::query!(
         "UPDATE videos SET processing_state = 'processing', last_error = NULL WHERE id = $1",
         job.video_id
@@ -153,13 +159,19 @@ async fn process_job(pool: &PgPool, cfg: &Config, storage: Arc<dyn StoragePlugin
             // Push HLS output to remote storage backend (fire-and-forget, non-fatal).
             // No-op when STORAGE_BACKEND=local.
             if !storage.is_local() {
-                let storage_clone  = storage.clone();
-                let prefix         = format!("videos/{}", job.video_id);
-                let out_dir_clone  = job.out_dir.clone();
+                let storage_clone = storage.clone();
+                let prefix = format!("videos/{}", job.video_id);
+                let out_dir_clone = job.out_dir.clone();
                 let video_id_clone = job.video_id.clone();
                 tokio::spawn(async move {
-                    match storage_clone.put_dir(&prefix, Path::new(&out_dir_clone)).await {
-                        Ok(n)  => info!("storage: synced {n} HLS files for {video_id_clone} to {}", storage_clone.backend_name()),
+                    match storage_clone
+                        .put_dir(&prefix, Path::new(&out_dir_clone))
+                        .await
+                    {
+                        Ok(n) => info!(
+                            "storage: synced {n} HLS files for {video_id_clone} to {}",
+                            storage_clone.backend_name()
+                        ),
                         Err(e) => warn!("storage: HLS sync for {video_id_clone} non-fatal: {e}"),
                     }
                 });
@@ -180,7 +192,10 @@ async fn process_job(pool: &PgPool, cfg: &Config, storage: Arc<dyn StoragePlugin
 
             if let Err(remove_err) = fs::remove_dir_all(&job.out_dir).await {
                 if remove_err.kind() != std::io::ErrorKind::NotFound {
-                    warn!("failed to remove incomplete HLS directory {}: {}", job.out_dir, remove_err);
+                    warn!(
+                        "failed to remove incomplete HLS directory {}: {}",
+                        job.out_dir, remove_err
+                    );
                 }
             }
 

@@ -22,14 +22,14 @@ use tracing::{info, warn};
 
 #[derive(Clone, Debug, Default)]
 pub struct SmtpConfig {
-    pub host:       String,
-    pub port:       u16,
-    pub username:   String,
-    pub password:   String,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub password: String,
     pub from_email: String,
-    pub from_name:  String,
-    pub use_tls:    bool,
-    pub enabled:    bool,
+    pub from_name: String,
+    pub use_tls: bool,
+    pub enabled: bool,
 }
 
 impl SmtpConfig {
@@ -37,7 +37,7 @@ impl SmtpConfig {
     pub async fn load(pool: &PgPool) -> Self {
         let row = sqlx::query(
             "SELECT host, port, username, password, from_email, from_name, use_tls, enabled
-             FROM smtp_settings WHERE id = 1"
+             FROM smtp_settings WHERE id = 1",
         )
         .fetch_optional(pool)
         .await;
@@ -46,14 +46,16 @@ impl SmtpConfig {
             Ok(Some(r)) => {
                 use sqlx::Row;
                 Self {
-                    host:       r.try_get("host").unwrap_or_default(),
-                    port:       r.try_get::<i32, _>("port").unwrap_or(587) as u16,
-                    username:   r.try_get("username").unwrap_or_default(),
-                    password:   r.try_get("password").unwrap_or_default(),
+                    host: r.try_get("host").unwrap_or_default(),
+                    port: r.try_get::<i32, _>("port").unwrap_or(587) as u16,
+                    username: r.try_get("username").unwrap_or_default(),
+                    password: r.try_get("password").unwrap_or_default(),
                     from_email: r.try_get("from_email").unwrap_or_default(),
-                    from_name:  r.try_get("from_name").unwrap_or_else(|_| "PPV Stream".into()),
-                    use_tls:    r.try_get("use_tls").unwrap_or(true),
-                    enabled:    r.try_get("enabled").unwrap_or(false),
+                    from_name: r
+                        .try_get("from_name")
+                        .unwrap_or_else(|_| "PPV Stream".into()),
+                    use_tls: r.try_get("use_tls").unwrap_or(true),
+                    enabled: r.try_get("enabled").unwrap_or(false),
                 }
             }
             _ => Self::default(),
@@ -61,9 +63,7 @@ impl SmtpConfig {
     }
 
     fn is_ready(&self) -> bool {
-        self.enabled
-            && !self.host.is_empty()
-            && !self.from_email.is_empty()
+        self.enabled && !self.host.is_empty() && !self.from_email.is_empty()
     }
 }
 
@@ -71,9 +71,18 @@ impl SmtpConfig {
 // Core send function
 // ---------------------------------------------------------------------------
 
-async fn send(cfg: &SmtpConfig, to_email: &str, to_name: &str, subject: &str, html: &str) -> Result<()> {
+async fn send(
+    cfg: &SmtpConfig,
+    to_email: &str,
+    to_name: &str,
+    subject: &str,
+    html: &str,
+) -> Result<()> {
     if !cfg.is_ready() {
-        info!(to = to_email, subject, "SMTP disabled — email not sent (logged only)");
+        info!(
+            to = to_email,
+            subject, "SMTP disabled — email not sent (logged only)"
+        );
         return Ok(());
     }
 
@@ -82,7 +91,9 @@ async fn send(cfg: &SmtpConfig, to_email: &str, to_name: &str, subject: &str, ht
         .map_err(|e| anyhow!("invalid from address: {e}"))?;
 
     let to_mailbox: Mailbox = if to_name.is_empty() {
-        to_email.parse().map_err(|e| anyhow!("invalid to address: {e}"))?
+        to_email
+            .parse()
+            .map_err(|e| anyhow!("invalid to address: {e}"))?
     } else {
         format!("{to_name} <{to_email}>")
             .parse()
@@ -131,9 +142,11 @@ fn env_template(key: &str, default_value: &str) -> String {
 }
 
 fn render_template(template: &str, values: &[(&str, &str)]) -> String {
-    values.iter().fold(template.to_string(), |acc, (key, value)| {
-        acc.replace(&format!("{{{{{key}}}}}"), value)
-    })
+    values
+        .iter()
+        .fold(template.to_string(), |acc, (key, value)| {
+            acc.replace(&format!("{{{{{key}}}}}"), value)
+        })
 }
 
 // ---------------------------------------------------------------------------
@@ -195,10 +208,7 @@ pub async fn send_password_changed(pool: &PgPool, to_email: &str, username: &str
 
 /// Send a test email from the admin SMTP settings page.
 pub async fn send_test(cfg: &SmtpConfig, to_email: &str) -> Result<()> {
-    let subject = env_template(
-        "EMAIL_TEST_SUBJECT",
-        "PPV Stream test email",
-    );
+    let subject = env_template("EMAIL_TEST_SUBJECT", "PPV Stream test email");
 
     let html = env_template(
         "EMAIL_TEST_HTML",

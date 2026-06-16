@@ -302,7 +302,10 @@ pub async fn request_play(
             }
             Err(e) => {
                 let message = e.to_string();
-                error!("playback ffmpeg failed for session {}: {}", session_for_task, message);
+                error!(
+                    "playback ffmpeg failed for session {}: {}",
+                    session_for_task, message
+                );
                 let _ = mark_session_failed(&pool_for_task, &session_for_task, &message).await;
                 let _ = fs::remove_dir_all(&session_dir_for_task).await;
                 let _ = status_tx.send(Err(message));
@@ -431,7 +434,11 @@ fn resolve_input_path(cfg: &Config, filename_in_db: &str) -> Option<PathBuf> {
     None
 }
 
-async fn mark_session_failed(pool: &PgPool, session_id: &str, message: &str) -> Result<(), sqlx::Error> {
+async fn mark_session_failed(
+    pool: &PgPool,
+    session_id: &str,
+    message: &str,
+) -> Result<(), sqlx::Error> {
     sqlx::query!(
         "UPDATE playback_sessions SET status='error', last_error=$2 WHERE session_id=$1",
         session_id,
@@ -465,7 +472,11 @@ pub async fn cleanup_expired_sessions(pool: &PgPool, hls_root: &str) -> Result<u
             Ok(_) => true,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => true,
             Err(e) => {
-                warn!("failed to delete expired playback directory {}: {}", path.display(), e);
+                warn!(
+                    "failed to delete expired playback directory {}: {}",
+                    path.display(),
+                    e
+                );
                 false
             }
         };
@@ -526,7 +537,9 @@ pub async fn serve_hls(
     .await
     {
         Ok(row) => row,
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "session lookup failed").into_response(),
+        Err(_) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "session lookup failed").into_response()
+        }
     };
 
     let Some(session_row) = session_row else {
@@ -542,7 +555,11 @@ pub async fn serve_hls(
     }
 
     if session_row.user_id != current_user_id {
-        return (StatusCode::FORBIDDEN, "session does not belong to this user").into_response();
+        return (
+            StatusCode::FORBIDDEN,
+            "session does not belong to this user",
+        )
+            .into_response();
     }
 
     if session_row.status == "error" {
@@ -551,11 +568,15 @@ pub async fn serve_hls(
 
     let root = match fs::canonicalize(&st.cfg.hls_root).await {
         Ok(path) => path,
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "hls root is unavailable").into_response(),
+        Err(_) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "hls root is unavailable").into_response()
+        }
     };
     let session_dir = match fs::canonicalize(&session_row.session_dir).await {
         Ok(path) => path,
-        Err(_) => return (StatusCode::GONE, "playback session files are unavailable").into_response(),
+        Err(_) => {
+            return (StatusCode::GONE, "playback session files are unavailable").into_response()
+        }
     };
 
     if !session_dir.starts_with(&root) {
@@ -620,9 +641,9 @@ fn file_type(name: &str) -> FileType {
 
 fn is_safe_token(value: &str) -> bool {
     !value.is_empty()
-        && value
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || character == '-' || character == '_')
+        && value.chars().all(|character| {
+            character.is_ascii_alphanumeric() || character == '-' || character == '_'
+        })
 }
 
 fn is_safe_file(value: &str) -> bool {

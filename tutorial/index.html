@@ -2,26 +2,26 @@
 <html lang="en" data-bs-theme="dark">
 <head>
   <meta charset="utf-8">
-  <title>PPV Stream — Tutorial & Page Guide</title>
+  <title>PPV Stream - Tutorial &amp; Page Guide</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    .sidebar { position:sticky; top:0; height:100vh; overflow-y:auto; border-right:1px solid var(--bs-border-color); }
-    .sidebar .nav-link { padding:.35rem .75rem; font-size:.875rem; border-radius:.375rem; }
-    .sidebar .nav-link.active { background:var(--bs-primary); color:#fff; }
-    .section-anchor { scroll-margin-top:1.5rem; }
-    .fn-table th { font-size:.8rem; }
-    .fn-table td { font-size:.85rem; }
-    @media (max-width:767px) { .sidebar { position:static; height:auto; border-right:none; border-bottom:1px solid var(--bs-border-color); } }
+    .sidebar { position: sticky; top: 0; height: 100vh; overflow-y: auto; border-right: 1px solid var(--bs-border-color); }
+    .sidebar .nav-link { padding: .35rem .75rem; font-size: .875rem; border-radius: .375rem; }
+    .sidebar .nav-link.active { background: var(--bs-primary); color: #fff; }
+    .section-anchor { scroll-margin-top: 1.5rem; }
+    .fn-table th { font-size: .8rem; }
+    .fn-table td { font-size: .85rem; }
+    @media (max-width: 767px) {
+      .sidebar { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--bs-border-color); }
+    }
   </style>
 </head>
 <body>
 
 <div class="d-flex flex-column flex-md-row" style="min-height:100vh">
-
-  <!-- Sidebar -->
   <nav class="sidebar bg-body-tertiary p-3 flex-shrink-0" style="width:240px">
-    <div class="fw-bold mb-3 fs-6">🎬 PPV Stream<br><span class="text-body-secondary fw-normal" style="font-size:.75rem">Tutorial Guide</span></div>
+    <div class="fw-bold mb-3 fs-6">PPV Stream<br><span class="text-body-secondary fw-normal" style="font-size:.75rem">Tutorial Guide</span></div>
     <div class="small text-body-secondary mb-2 text-uppercase" style="font-size:.7rem;letter-spacing:.08em">User Pages</div>
     <ul class="nav flex-column mb-3">
       <li class="nav-item"><a class="nav-link active" href="#browse">Browse Videos</a></li>
@@ -39,230 +39,217 @@
     </ul>
     <div class="small text-body-secondary mb-2 text-uppercase" style="font-size:.7rem;letter-spacing:.08em">Mockups</div>
     <ul class="nav flex-column">
-      <li class="nav-item"><a class="nav-link" href="mockups/browse.html" target="_blank">Browse ↗</a></li>
-      <li class="nav-item"><a class="nav-link" href="mockups/user-dashboard.html" target="_blank">Dashboard ↗</a></li>
-      <li class="nav-item"><a class="nav-link" href="mockups/user-wallet.html" target="_blank">Wallet ↗</a></li>
-      <li class="nav-item"><a class="nav-link" href="mockups/affiliate.html" target="_blank">Affiliate ↗</a></li>
-      <li class="nav-item"><a class="nav-link" href="mockups/watch.html" target="_blank">Watch ↗</a></li>
-      <li class="nav-item"><a class="nav-link" href="mockups/admin-dashboard.html" target="_blank">Admin Dashboard ↗</a></li>
-      <li class="nav-item"><a class="nav-link" href="mockups/admin-payments.html" target="_blank">Admin Payments ↗</a></li>
-      <li class="nav-item"><a class="nav-link" href="mockups/admin-settings.html" target="_blank">Admin Settings ↗</a></li>
-      <li class="nav-item"><a class="nav-link" href="mockups/admin-wallet.html" target="_blank">Admin Wallets ↗</a></li>
+      <li class="nav-item"><a class="nav-link" href="mockups/browse.html" target="_blank">Browse -></a></li>
+      <li class="nav-item"><a class="nav-link" href="mockups/user-dashboard.html" target="_blank">Dashboard -></a></li>
+      <li class="nav-item"><a class="nav-link" href="mockups/user-wallet.html" target="_blank">Wallet -></a></li>
+      <li class="nav-item"><a class="nav-link" href="mockups/affiliate.html" target="_blank">Affiliate -></a></li>
+      <li class="nav-item"><a class="nav-link" href="mockups/watch.html" target="_blank">Watch -></a></li>
+      <li class="nav-item"><a class="nav-link" href="mockups/admin-dashboard.html" target="_blank">Admin Dashboard -></a></li>
+      <li class="nav-item"><a class="nav-link" href="mockups/admin-payments.html" target="_blank">Admin Payments -></a></li>
+      <li class="nav-item"><a class="nav-link" href="mockups/admin-settings.html" target="_blank">Admin Settings -></a></li>
+      <li class="nav-item"><a class="nav-link" href="mockups/admin-wallet.html" target="_blank">Admin Wallets -></a></li>
     </ul>
   </nav>
 
-  <!-- Content -->
   <main class="flex-grow-1 p-4 pb-5" style="max-width:860px">
-
-    <h1 class="fs-3 fw-bold mb-1">PPV Stream — Page Guide</h1>
+    <h1 class="fs-3 fw-bold mb-1">PPV Stream - Page Guide</h1>
     <p class="text-body-secondary mb-4">Explains the function of every page for both users and administrators. All mockup links open a static annotated replica of the live page.</p>
 
     <div class="alert alert-info small py-2 mb-4">
       <strong>Design notes:</strong> All pages share a unified Bootstrap 5.3.3 layout with a consistent navbar, light/dark toggle (<code>data-bs-theme</code>), and platform name injection via <code>theme.js</code>. User pages use a neutral navbar; admin pages use a red (<code>bg-danger</code>) navbar with an <strong>ADMIN</strong> badge.
     </div>
 
-    <!-- ── USER PAGES ── -->
     <h2 class="fs-5 fw-bold border-bottom pb-2 mb-3">User Pages</h2>
 
-    <!-- Browse -->
     <section id="browse" class="section-anchor mb-5">
       <div class="d-flex align-items-baseline gap-2 mb-2">
         <h3 class="fs-6 fw-bold mb-0">Browse Videos</h3>
         <code class="text-body-secondary small">/public/browse.html</code>
-        <a href="mockups/browse.html" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-auto">Open Mockup ↗</a>
+        <a href="mockups/browse.html" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-auto">Open Mockup -></a>
       </div>
       <p class="small text-body-secondary mb-2">The main catalog. Users can search, filter, and sort all available videos, then click a card to open the Watch page.</p>
       <table class="table table-bordered fn-table">
         <thead class="table-light"><tr><th>UI Element</th><th>Function</th></tr></thead>
         <tbody>
-          <tr><td>Navbar brand + links</td><td>Consistent navigation; active link highlighted</td></tr>
-          <tr><td>Search input</td><td>Filters by title, creator name, description (debounced 200 ms)</td></tr>
-          <tr><td>Sort dropdown</td><td>Newest / Cheapest / Most expensive / A–Z</td></tr>
-          <tr><td>Video cards</td><td>Clickable → goes to watch page; shows ▶ Ready or ⏳ Processing badge</td></tr>
-          <tr><td>Free badge</td><td>Green text — video costs $0 (no payment needed)</td></tr>
-          <tr><td>Price display</td><td>In Rupiah using live USD→IDR rate from <code>/api/kurs</code></td></tr>
-          <tr><td>User bar</td><td>Shows logged-in username; shows "Sign In" link if not logged in</td></tr>
-          <tr><td>Theme toggle (☀️/🌙)</td><td>Switches light/dark; saved to <code>localStorage</code></td></tr>
+          <tr><td>Navbar brand + links</td><td>Consistent navigation; active link highlighted.</td></tr>
+          <tr><td>Search input</td><td>Filters by title, creator name, description.</td></tr>
+          <tr><td>Sort dropdown</td><td>Newest / Cheapest / Most expensive / A-Z.</td></tr>
+          <tr><td>Video cards</td><td>Clickable -> goes to watch page; shows Ready or Processing badge.</td></tr>
+          <tr><td>Free badge</td><td>Green text when the video costs $0.</td></tr>
+          <tr><td>Price display</td><td>In Rupiah using the live USD to IDR rate from <code>/api/kurs</code>.</td></tr>
+          <tr><td>User bar</td><td>Shows logged-in username; shows Sign In link if not logged in.</td></tr>
+          <tr><td>Theme toggle</td><td>Switches light/dark and is saved to <code>localStorage</code>.</td></tr>
         </tbody>
       </table>
     </section>
 
-    <!-- Dashboard -->
     <section id="dashboard" class="section-anchor mb-5">
       <div class="d-flex align-items-baseline gap-2 mb-2">
         <h3 class="fs-6 fw-bold mb-0">User Dashboard</h3>
         <code class="text-body-secondary small">/public/dashboard.html</code>
-        <a href="mockups/user-dashboard.html" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-auto">Open Mockup ↗</a>
+        <a href="mockups/user-dashboard.html" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-auto">Open Mockup -></a>
       </div>
-      <p class="small text-body-secondary mb-2">Central hub for content creators: manage profile, upload videos, configure pricing, and grant access.</p>
+      <p class="small text-body-secondary mb-2">Central hub for content creators: manage profile, upload videos, configure pricing, grant access, and chat with admin or other users.</p>
       <table class="table table-bordered fn-table">
         <thead class="table-light"><tr><th>Section</th><th>Function</th></tr></thead>
         <tbody>
-          <tr><td>Profile &amp; Payout Info</td><td>Email (read-only), WhatsApp, bank account, EVM wallet, preferred chain, bio. Used for fiat/crypto disbursement.</td></tr>
-          <tr><td>Change Password</td><td>Requires current password + new password confirmation. Uses <code>POST /api/change_password</code>.</td></tr>
-          <tr><td>My Videos &amp; Access</td><td>Lists uploaded videos with HLS status, inline edit form (title/price/description), and per-video allowlist.</td></tr>
-          <tr><td>Upload Video</td><td>Multipart form upload of MP4. Server transcodes to HLS automatically. Supports title, price, description.</td></tr>
-          <tr><td>Grant Access (Allowlist)</td><td>Pick a video + enter username → grants access without payment. Uses <code>POST /api/allow</code>.</td></tr>
+          <tr><td>Profile &amp; Payout Info</td><td>Email (read-only), WhatsApp, bank account, EVM wallet, preferred chain, and bio for fiat/crypto disbursement.</td></tr>
+          <tr><td>Change Password</td><td>Requires current password plus new password confirmation. Uses <code>POST /api/change_password</code>.</td></tr>
+          <tr><td>My Videos &amp; Access</td><td>Lists uploaded videos with HLS status, inline edit form, and per-video allowlist.</td></tr>
+          <tr><td>Upload Video</td><td>Multipart MP4 upload. Server transcodes to HLS automatically.</td></tr>
+          <tr><td>Grant Access (Allowlist)</td><td>Pick a video and enter a username to grant access without payment. Uses <code>POST /api/allow</code>.</td></tr>
+          <tr><td>Chat</td><td>User can open a support thread with admin, search other users, start direct conversations, and send messages from the browser. All messages are stored in the database via <code>/api/chat/*</code>.</td></tr>
         </tbody>
       </table>
     </section>
 
-    <!-- Wallet -->
     <section id="wallet" class="section-anchor mb-5">
       <div class="d-flex align-items-baseline gap-2 mb-2">
         <h3 class="fs-6 fw-bold mb-0">Wallet</h3>
         <code class="text-body-secondary small">/public/wallet.html</code>
-        <a href="mockups/user-wallet.html" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-auto">Open Mockup ↗</a>
+        <a href="mockups/user-wallet.html" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-auto">Open Mockup -></a>
       </div>
       <p class="small text-body-secondary mb-2">Manage platform balance. Top-up via crypto or bank, withdraw to bank/crypto, transfer to another user.</p>
       <table class="table table-bordered fn-table">
         <thead class="table-light"><tr><th>Tab / Element</th><th>Function</th></tr></thead>
         <tbody>
           <tr><td>Balance card</td><td>Shows available balance in USD and IDR equivalent. Refresh button reloads from server.</td></tr>
-          <tr><td>Deposit / Top Up tab</td><td>Choose amount + method (x402 crypto / bank / QRIS). After submit, shows payment instructions.</td></tr>
-          <tr><td>Withdraw tab</td><td>Request withdrawal; destination is taken from Profile page. Admin processes within 1–2 business days.</td></tr>
-          <tr><td>Transfer tab</td><td>Send balance to another user by username. Includes real-time username lookup.</td></tr>
-          <tr><td>History tab</td><td>Full transaction log: date, type, amount, status, note. Loaded from <code>/api/wallet/history</code>.</td></tr>
+          <tr><td>Deposit / Top Up tab</td><td>Choose amount and method (x402 crypto / bank / QRIS). Shows payment instructions after submit.</td></tr>
+          <tr><td>Withdraw tab</td><td>Request withdrawal; destination is taken from the Profile page.</td></tr>
+          <tr><td>Transfer tab</td><td>Send balance to another user by username with live lookup.</td></tr>
+          <tr><td>History tab</td><td>Full transaction log loaded from the wallet API.</td></tr>
         </tbody>
       </table>
     </section>
 
-    <!-- Affiliate -->
     <section id="affiliate" class="section-anchor mb-5">
       <div class="d-flex align-items-baseline gap-2 mb-2">
         <h3 class="fs-6 fw-bold mb-0">Affiliate Program</h3>
         <code class="text-body-secondary small">/public/affiliate.html</code>
-        <a href="mockups/affiliate.html" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-auto">Open Mockup ↗</a>
+        <a href="mockups/affiliate.html" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-auto">Open Mockup -></a>
       </div>
-      <p class="small text-body-secondary mb-2">Earn 10% commission on every purchase made through your referral link.</p>
+      <p class="small text-body-secondary mb-2">Creators can configure commission percentage per video, and affiliates can earn from every purchase made through their referral link.</p>
       <table class="table table-bordered fn-table">
         <thead class="table-light"><tr><th>Section</th><th>Function</th></tr></thead>
         <tbody>
-          <tr><td>Summary cards</td><td>Total earnings, this month's earnings, referral count, and your referral code (= username).</td></tr>
-          <tr><td>Earnings tab</td><td>Commission history: video, buyer, amount, payment method, status.</td></tr>
-          <tr><td>My Videos tab</td><td>All promotable paid videos with commission rate (10%) and per-video referral stats.</td></tr>
-          <tr><td>Get Links tab</td><td>Select a video → generates <code>?ref=username</code> URL. Copy button copies to clipboard.</td></tr>
+          <tr><td>Summary cards</td><td>Total earnings, monthly earnings, referral count, and referral code.</td></tr>
+          <tr><td>Earnings tab</td><td>Commission history: video, buyer, amount, payment method, and status.</td></tr>
+          <tr><td>Creator Settings tab</td><td>Video owners can set <code>commission_pct</code> per paid video and enable or disable the affiliate program.</td></tr>
+          <tr><td>Get Links tab</td><td>Select a paid video to generate a <code>?ref=username</code> URL and see whether the affiliate program is enabled for that video.</td></tr>
         </tbody>
       </table>
     </section>
 
-    <!-- Watch -->
     <section id="watch" class="section-anchor mb-5">
       <div class="d-flex align-items-baseline gap-2 mb-2">
         <h3 class="fs-6 fw-bold mb-0">Watch / Payment</h3>
         <code class="text-body-secondary small">/public/watch.html</code>
-        <a href="mockups/watch.html" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-auto">Open Mockup ↗</a>
+        <a href="mockups/watch.html" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-auto">Open Mockup -></a>
       </div>
       <p class="small text-body-secondary mb-2">The pay-per-view page. Shows the HLS player if the user has access; otherwise shows a 3-tab payment panel.</p>
       <table class="table table-bordered fn-table">
         <thead class="table-light"><tr><th>Element</th><th>Function</th></tr></thead>
         <tbody>
-          <tr><td>Locked player overlay</td><td>Shown before payment. Displays price in USD + IDR. <code>?ref=</code> badge shown if referral link was used.</td></tr>
-          <tr><td>💳 Wallet tab</td><td>Instant payment from wallet balance. Deducted immediately; access granted at once.</td></tr>
-          <tr><td>⛓ Crypto (x402) tab</td><td>Initiates an x402 on-chain payment. Shows address + chain ID. Access confirmed automatically after tx.</td></tr>
-          <tr><td>🏦 Bank Transfer tab</td><td>User confirms after manual bank transfer. Access granted after seller verifies receipt.</td></tr>
-          <tr><td>HLS player</td><td>Streams via hls.js after access is confirmed. Falls back to native HLS for Safari.</td></tr>
-          <tr><td>Video description</td><td>Shows creator's description below the player if available.</td></tr>
+          <tr><td>Locked player overlay</td><td>Shown before payment. Displays price in USD and IDR.</td></tr>
+          <tr><td>Wallet tab</td><td>Instant payment from wallet balance.</td></tr>
+          <tr><td>Crypto (x402) tab</td><td>Initiates an x402 on-chain payment and confirms automatically.</td></tr>
+          <tr><td>Bank Transfer tab</td><td>User confirms after manual transfer; access is granted after verification.</td></tr>
+          <tr><td>HLS player</td><td>Streams after access is confirmed.</td></tr>
+          <tr><td>Video description</td><td>Shows creator description below the player if available.</td></tr>
         </tbody>
       </table>
     </section>
 
-    <!-- ── ADMIN PAGES ── -->
     <h2 class="fs-5 fw-bold border-bottom pb-2 mb-3 mt-2">Admin Pages</h2>
 
-    <!-- Admin Dashboard -->
     <section id="admin-dashboard" class="section-anchor mb-5">
       <div class="d-flex align-items-baseline gap-2 mb-2">
         <h3 class="fs-6 fw-bold mb-0">Admin Dashboard</h3>
         <code class="text-body-secondary small">/public/admin/dashboard.html</code>
-        <a href="mockups/admin-dashboard.html" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-auto">Open Mockup ↗</a>
+        <a href="mockups/admin-dashboard.html" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-auto">Open Mockup -></a>
       </div>
-      <p class="small text-body-secondary mb-2">Top-level overview with live stats and quick-access cards to each admin section. Red navbar distinguishes admin area.</p>
+      <p class="small text-body-secondary mb-2">Top-level overview with live stats, support chat threads from users, and quick-access cards to each admin section.</p>
       <table class="table table-bordered fn-table">
         <thead class="table-light"><tr><th>Element</th><th>Function</th></tr></thead>
         <tbody>
-          <tr><td>Stats cards</td><td>Total users, total videos, pending payments (highlighted in yellow), total revenue in USD.</td></tr>
-          <tr><td>Quick menu cards</td><td>Clickable shortcuts to Payments / Wallets / Settings / Browse.</td></tr>
-          <tr><td>Recent Payments table</td><td>Last 10 transactions across all users. Links to full Payments page.</td></tr>
+          <tr><td>Stats cards</td><td>Total users, total videos, pending payments, and total revenue in USD.</td></tr>
+          <tr><td>User Support Chat</td><td>Lists all user-to-admin conversations. Admin can open a thread, read stored history, and reply directly from the dashboard.</td></tr>
+          <tr><td>Quick menu cards</td><td>Clickable shortcuts to Payments, Wallets, Settings, and Browse.</td></tr>
+          <tr><td>Recent Payments table</td><td>Last 10 transactions across all users with a link to the full Payments page.</td></tr>
         </tbody>
       </table>
     </section>
 
-    <!-- Admin Payments -->
     <section id="admin-payments" class="section-anchor mb-5">
       <div class="d-flex align-items-baseline gap-2 mb-2">
         <h3 class="fs-6 fw-bold mb-0">Admin Payments</h3>
         <code class="text-body-secondary small">/public/admin/payments.html</code>
-        <a href="mockups/admin-payments.html" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-auto">Open Mockup ↗</a>
+        <a href="mockups/admin-payments.html" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-auto">Open Mockup -></a>
       </div>
       <p class="small text-body-secondary mb-2">Monitor all payment transactions. Approve or reject pending fiat payments and trigger seller disbursement.</p>
       <table class="table table-bordered fn-table">
         <thead class="table-light"><tr><th>Element</th><th>Function</th></tr></thead>
         <tbody>
-          <tr><td>Search + filters</td><td>Filter by status (pending/completed/rejected) and method (x402/bank/QRIS/wallet).</td></tr>
-          <tr><td>Payments table</td><td>Shows all transactions; pending rows have a <strong>Process</strong> button.</td></tr>
-          <tr><td>Process modal</td><td>Admin enters a note, then clicks Approve (credits seller) or Reject. Calls <code>POST /api/admin/disburse</code>.</td></tr>
+          <tr><td>Search + filters</td><td>Filter by status and method.</td></tr>
+          <tr><td>Payments table</td><td>Shows all transactions; pending rows have a Process button.</td></tr>
+          <tr><td>Process modal</td><td>Admin enters a note, then approves or rejects.</td></tr>
         </tbody>
       </table>
     </section>
 
-    <!-- Admin Settings -->
     <section id="admin-settings" class="section-anchor mb-5">
       <div class="d-flex align-items-baseline gap-2 mb-2">
         <h3 class="fs-6 fw-bold mb-0">Admin Settings</h3>
         <code class="text-body-secondary small">/public/admin/settings.html</code>
-        <a href="mockups/admin-settings.html" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-auto">Open Mockup ↗</a>
+        <a href="mockups/admin-settings.html" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-auto">Open Mockup -></a>
       </div>
       <p class="small text-body-secondary mb-2">Configure platform branding, verify SMTP, set the exchange rate, and change the admin password.</p>
       <table class="table table-bordered fn-table">
         <thead class="table-light"><tr><th>Section</th><th>Function</th></tr></thead>
         <tbody>
-          <tr><td>Platform Name &amp; Tagline</td><td>Saved to <code>localStorage</code> via <code>theme.js</code>. Applied to all pages via <code>[data-platform]</code> attributes. No DB migration needed.</td></tr>
-          <tr><td>SMTP Settings</td><td>Read-only display of server-side SMTP config (<code>.env</code>). Send Test Email button verifies current config.</td></tr>
-          <tr><td>Exchange Rate</td><td>Sets USD → IDR rate used for price display sitewide. Stored server-side via <code>POST /api/admin/kurs</code>.</td></tr>
-          <tr><td>Change Admin Password</td><td>Requires current password; calls same <code>/api/change_password</code> endpoint as users.</td></tr>
+          <tr><td>Platform Name &amp; Tagline</td><td>Saved to <code>localStorage</code> via <code>theme.js</code>.</td></tr>
+          <tr><td>SMTP Settings</td><td>Read-only display of server-side SMTP config with a test email action.</td></tr>
+          <tr><td>Exchange Rate</td><td>Sets the USD to IDR rate used for sitewide price display.</td></tr>
+          <tr><td>Change Admin Password</td><td>Requires the current password.</td></tr>
         </tbody>
       </table>
     </section>
 
-    <!-- Admin Wallets -->
     <section id="admin-wallet" class="section-anchor mb-5">
       <div class="d-flex align-items-baseline gap-2 mb-2">
         <h3 class="fs-6 fw-bold mb-0">Admin Wallets</h3>
         <code class="text-body-secondary small">/public/admin/wallet.html</code>
-        <a href="mockups/admin-wallet.html" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-auto">Open Mockup ↗</a>
+        <a href="mockups/admin-wallet.html" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-auto">Open Mockup -></a>
       </div>
       <p class="small text-body-secondary mb-2">Manage user wallet requests: approve withdrawals, view deposit history, and inspect user balances.</p>
       <table class="table table-bordered fn-table">
         <thead class="table-light"><tr><th>Tab</th><th>Function</th></tr></thead>
         <tbody>
-          <tr><td>Withdrawal Requests</td><td>Lists pending/completed/rejected withdrawal requests with user destination info. Process button opens modal.</td></tr>
-          <tr><td>Process modal</td><td>Complete (manual transfer done) or Reject with optional note. Calls <code>POST /api/admin/wallet_action</code>.</td></tr>
-          <tr><td>Deposit History</td><td>All deposit transactions across all users with invoice IDs and statuses.</td></tr>
-          <tr><td>User Balances</td><td>Search all user balances, total deposited, and total withdrawn. Read-only overview.</td></tr>
+          <tr><td>Withdrawal Requests</td><td>Lists pending/completed/rejected withdrawal requests with destination info.</td></tr>
+          <tr><td>Process modal</td><td>Complete or reject with an optional note.</td></tr>
+          <tr><td>Deposit History</td><td>All deposit transactions across users.</td></tr>
+          <tr><td>User Balances</td><td>Read-only overview of balances and totals.</td></tr>
         </tbody>
       </table>
     </section>
 
     <div class="alert alert-secondary small py-2">
-      <strong>Flow summary:</strong> User registers → browses videos → watches free or pays (wallet / x402 / bank) → video unlocks. Creators upload videos, set prices, and grant manual access. Affiliates share referral links and earn 10% per sale. Admin reviews fiat payments, approves withdrawals, configures platform settings.
+      <strong>Flow summary:</strong> User registers -> browses videos -> watches free or pays (wallet / x402 / bank) -> video unlocks. Creators upload videos, set prices, grant manual access, configure affiliate commission per video, and can chat with admin or other users. Affiliates share referral links and earn according to the configured commission. Admin reviews support chats, fiat payments, approves withdrawals, and configures platform settings.
     </div>
-
   </main>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-// Highlight active sidebar link on scroll
 const sections = document.querySelectorAll('.section-anchor');
-const links    = document.querySelectorAll('.sidebar .nav-link[href^="#"]');
+const links = document.querySelectorAll('.sidebar .nav-link[href^="#"]');
 const obs = new IntersectionObserver(entries => {
   entries.forEach(e => {
     if (e.isIntersecting) {
       links.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + e.target.id));
     }
   });
-}, { rootMargin:'-20% 0px -75% 0px' });
+}, { rootMargin: '-20% 0px -75% 0px' });
 sections.forEach(s => obs.observe(s));
 </script>
 </body>

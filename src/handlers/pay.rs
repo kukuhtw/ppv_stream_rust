@@ -129,12 +129,12 @@ pub async fn pay_options(
 /// JSON request body accepted by `POST /api/pay/x402/start`.
 #[derive(Deserialize)]
 pub struct StartPayReq {
-    pub video_id:      String,
-    pub chain_id:      i64,
-    pub symbol:        String,
+    pub video_id: String,
+    pub chain_id: i64,
+    pub symbol: String,
     pub token_address: Option<String>,
     pub payer_address: String,
-    pub ref_code:      Option<String>, // affiliate referral username
+    pub ref_code: Option<String>, // affiliate referral username
 }
 
 /// JSON response returned after an x402 payment invoice is created and signed.
@@ -216,7 +216,8 @@ pub async fn x402_start(
 
     // A creator wallet is required because the smart contract splits payment
     // between the creator and platform administrator.
-    let creator_wallet_string = match video_metadata.try_get::<Option<String>, _>("wallet_account") {
+    let creator_wallet_string = match video_metadata.try_get::<Option<String>, _>("wallet_account")
+    {
         Ok(Some(wallet)) if !wallet.is_empty() => wallet,
         _ => return Json(json!({"ok": false, "error": "creator has no wallet"})),
     };
@@ -250,12 +251,8 @@ pub async fn x402_start(
         return Json(json!({"ok": false, "error": "token not supported"}));
     };
 
-    let decimals = token_info
-        .try_get::<i32, _>("decimals")
-        .unwrap_or(18) as u32;
-    let price_cents: i64 = video_metadata
-        .try_get::<i64, _>("price_cents")
-        .unwrap_or(0);
+    let decimals = token_info.try_get::<i32, _>("decimals").unwrap_or(18) as u32;
+    let price_cents: i64 = video_metadata.try_get::<i64, _>("price_cents").unwrap_or(0);
 
     // Convert price cents into token base units and round upward. For example,
     // an 18-decimal token uses 10^18 base units per whole token.
@@ -281,8 +278,8 @@ pub async fn x402_start(
 
     // PostgreSQL NUMERIC values are represented through BigDecimal so token
     // amounts are stored without floating point precision loss.
-    let token_amount_decimal = BigDecimal::from_str(&token_amount_wei.to_string())
-        .unwrap_or_else(|_| BigDecimal::from(0));
+    let token_amount_decimal =
+        BigDecimal::from_str(&token_amount_wei.to_string()).unwrap_or_else(|_| BigDecimal::from(0));
 
     // Persist a pending invoice before returning the signing payload. The stored
     // invoice is later matched against the on-chain Paid event.
@@ -320,11 +317,11 @@ pub async fn x402_start(
 
     // Store affiliate_ref if provided (separate runtime query — new column)
     if let Some(ref_username) = body.ref_code.as_deref().filter(|s| !s.is_empty()) {
-        let _ = sqlx::query(
-            "UPDATE x402_invoices SET affiliate_ref = $1 WHERE invoice_uid = $2"
-        )
-        .bind(ref_username).bind(&invoice_uid)
-        .execute(&st.pool).await;
+        let _ = sqlx::query("UPDATE x402_invoices SET affiliate_ref = $1 WHERE invoice_uid = $2")
+            .bind(ref_username)
+            .bind(&invoice_uid)
+            .execute(&st.pool)
+            .await;
     }
 
     // Load the target smart contract address. The frontend is expected to
@@ -625,11 +622,8 @@ pub async fn x402_confirm(
 
     // Compute the expected event signature topic from the Paid ABI.
     let paid_event = paid_event_abi();
-    let paid_signature = format!(
-        "0x{}",
-        hex::encode(paid_event.signature().to_fixed_bytes())
-    )
-    .to_lowercase();
+    let paid_signature =
+        format!("0x{}", hex::encode(paid_event.signature().to_fixed_bytes())).to_lowercase();
 
     // Only events emitted by the configured x402 contract are accepted.
     let x402_contract = std::env::var("X402_CONTRACT_ADDRESS")
@@ -675,10 +669,7 @@ pub async fn x402_confirm(
         }
 
         // `topic[0]` identifies the event type and must match Paid.
-        let event_signature_topic = topics[0]
-            .as_str()
-            .unwrap_or("")
-            .to_lowercase();
+        let event_signature_topic = topics[0].as_str().unwrap_or("").to_lowercase();
 
         if event_signature_topic != paid_signature {
             continue;
@@ -689,10 +680,7 @@ pub async fn x402_confirm(
             continue;
         }
 
-        let invoice_topic = topics[1]
-            .as_str()
-            .unwrap_or("")
-            .to_lowercase();
+        let invoice_topic = topics[1].as_str().unwrap_or("").to_lowercase();
 
         if invoice_topic != expected_invoice_topic {
             continue;
@@ -700,7 +688,10 @@ pub async fn x402_confirm(
 
         // Decode the non-indexed event data and convert topics into H256 values
         // required by ethabi RawLog.
-        let data_hex = log.get("data").and_then(|value| value.as_str()).unwrap_or("");
+        let data_hex = log
+            .get("data")
+            .and_then(|value| value.as_str())
+            .unwrap_or("");
         let data_bytes = hex::decode(data_hex.trim_start_matches("0x")).unwrap_or_default();
 
         let topics_h256: Vec<H256> = topics
@@ -810,14 +801,13 @@ pub async fn x402_confirm(
 
     // Resolve the buyer username because playback authorization currently uses
     // the `(video_id, username)` allowlist rather than a direct user ID relation.
-    let username = sqlx::query_scalar::<_, Option<String>>(
-        r#"SELECT username FROM users WHERE id=$1"#,
-    )
-    .bind(&invoice.user_id)
-    .fetch_one(&st.pool)
-    .await
-    .unwrap_or(None)
-    .unwrap_or_default();
+    let username =
+        sqlx::query_scalar::<_, Option<String>>(r#"SELECT username FROM users WHERE id=$1"#)
+            .bind(&invoice.user_id)
+            .fetch_one(&st.pool)
+            .await
+            .unwrap_or(None)
+            .unwrap_or_default();
 
     // Insert the allowlist entry idempotently. `user_has_view_access` later uses
     // this record to authorize the buyer's playback request.
@@ -836,34 +826,46 @@ pub async fn x402_confirm(
     }
 
     // Best-effort affiliate commission after x402 payment
-    let affiliate_ref: Option<String> = sqlx::query(
-        "SELECT affiliate_ref FROM x402_invoices WHERE invoice_uid = $1 LIMIT 1"
-    )
-    .bind(&body.invoice_uid)
-    .fetch_optional(&st.pool)
-    .await
-    .ok()
-    .flatten()
-    .and_then(|r: sqlx::postgres::PgRow| r.try_get::<Option<String>, _>("affiliate_ref").ok().flatten());
+    let affiliate_ref: Option<String> =
+        sqlx::query("SELECT affiliate_ref FROM x402_invoices WHERE invoice_uid = $1 LIMIT 1")
+            .bind(&body.invoice_uid)
+            .fetch_optional(&st.pool)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|r: sqlx::postgres::PgRow| {
+                r.try_get::<Option<String>, _>("affiliate_ref")
+                    .ok()
+                    .flatten()
+            });
 
     if let Some(ref_username) = affiliate_ref.as_deref().filter(|s| !s.is_empty()) {
         // We need creator_id + price_cents — re-read from invoice
         let inv_extra = sqlx::query(
-            "SELECT creator_id, price_cents FROM x402_invoices WHERE invoice_uid = $1 LIMIT 1"
+            "SELECT creator_id, price_cents FROM x402_invoices WHERE invoice_uid = $1 LIMIT 1",
         )
         .bind(&body.invoice_uid)
         .fetch_optional(&st.pool)
         .await
-        .ok().flatten();
+        .ok()
+        .flatten();
 
         if let Some(row) = inv_extra {
             let creator_id: String = row.try_get("creator_id").unwrap_or_default();
-            let price_cents: i64   = row.try_get("price_cents").unwrap_or(0);
+            let price_cents: i64 = row.try_get("price_cents").unwrap_or(0);
 
             if let Err(e) = commission::process_affiliate_commission(
-                &st.pool, &invoice.video_id, &invoice.user_id, &creator_id,
-                price_cents, ref_username, "x402", Some(&body.invoice_uid),
-            ).await {
+                &st.pool,
+                &invoice.video_id,
+                &invoice.user_id,
+                &creator_id,
+                price_cents,
+                ref_username,
+                "x402",
+                Some(&body.invoice_uid),
+            )
+            .await
+            {
                 tracing::warn!("x402 affiliate commission skipped: {e}");
             }
         }
@@ -882,8 +884,8 @@ pub async fn x402_confirm(
 
 pub async fn all_options(
     State(st): State<VideoState>,
-    cookies:   Cookies,
-    Query(q):  Query<HashMap<String, String>>,
+    cookies: Cookies,
+    Query(q): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
     let video_id = q.get("video_id").cloned().unwrap_or_default();
     if video_id.is_empty() {
@@ -891,21 +893,20 @@ pub async fn all_options(
     }
 
     // Load video price and owner
-    let video_row = sqlx::query(
-        "SELECT v.price_cents, v.owner_id FROM videos v WHERE v.id = $1 LIMIT 1"
-    )
-    .bind(&video_id)
-    .fetch_optional(&st.pool)
-    .await;
+    let video_row =
+        sqlx::query("SELECT v.price_cents, v.owner_id FROM videos v WHERE v.id = $1 LIMIT 1")
+            .bind(&video_id)
+            .fetch_optional(&st.pool)
+            .await;
 
     let video_row = match video_row {
         Ok(Some(r)) => r,
-        Ok(None)    => return Json(json!({"ok": false, "error": "video not found"})),
-        Err(e)      => return Json(json!({"ok": false, "error": format!("db: {e}")})),
+        Ok(None) => return Json(json!({"ok": false, "error": "video not found"})),
+        Err(e) => return Json(json!({"ok": false, "error": format!("db: {e}")})),
     };
 
-    let price_cents: i64    = video_row.try_get("price_cents").unwrap_or(0);
-    let owner_id:    String = video_row.try_get("owner_id").unwrap_or_default();
+    let price_cents: i64 = video_row.try_get("price_cents").unwrap_or(0);
+    let owner_id: String = video_row.try_get("owner_id").unwrap_or_default();
 
     // Wallet balance (null if not logged in)
     let current_user = sessions::current_user_id(&st.pool, &st.cfg, &cookies).await;
@@ -919,9 +920,10 @@ pub async fn all_options(
             .unwrap_or(0);
 
         let purchased: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM purchases WHERE user_id = $1 AND video_id = $2"
+            "SELECT COUNT(*) FROM purchases WHERE user_id = $1 AND video_id = $2",
         )
-        .bind(uid).bind(&video_id)
+        .bind(uid)
+        .bind(&video_id)
         .fetch_one(&st.pool)
         .await
         .unwrap_or(0);
@@ -935,19 +937,24 @@ pub async fn all_options(
     let tokens = sqlx::query(
         r#"SELECT chain, chain_id, symbol, decimals,
                   COALESCE(erc20_address, erc20) AS erc20_address
-           FROM pay_tokens WHERE is_active = TRUE ORDER BY chain_id, symbol"#
+           FROM pay_tokens WHERE is_active = TRUE ORDER BY chain_id, symbol"#,
     )
     .fetch_all(&st.pool)
     .await
     .unwrap_or_default();
 
-    let token_list: Vec<serde_json::Value> = tokens.iter().map(|t| json!({
-        "chain":     t.try_get::<String, _>("chain").unwrap_or_default(),
-        "chain_id":  t.try_get::<i64,    _>("chain_id").unwrap_or(0),
-        "symbol":    t.try_get::<String, _>("symbol").unwrap_or_default(),
-        "decimals":  t.try_get::<i32,    _>("decimals").unwrap_or(18),
-        "erc20":     t.try_get::<Option<String>, _>("erc20_address").unwrap_or(None),
-    })).collect();
+    let token_list: Vec<serde_json::Value> = tokens
+        .iter()
+        .map(|t| {
+            json!({
+                "chain":     t.try_get::<String, _>("chain").unwrap_or_default(),
+                "chain_id":  t.try_get::<i64,    _>("chain_id").unwrap_or(0),
+                "symbol":    t.try_get::<String, _>("symbol").unwrap_or_default(),
+                "decimals":  t.try_get::<i32,    _>("decimals").unwrap_or(18),
+                "erc20":     t.try_get::<Option<String>, _>("erc20_address").unwrap_or(None),
+            })
+        })
+        .collect();
 
     // Fiat providers from env (admin-configured)
     let fiat_providers: Vec<String> = std::env::var("PAYMENT_PLUGINS")
@@ -957,9 +964,8 @@ pub async fn all_options(
         .filter(|s| !s.is_empty() && s != "x402")
         .collect();
 
-    let cents_display = |c: i64| -> String {
-        format!("${}.{:02}", c / 100, (c % 100).unsigned_abs())
-    };
+    let cents_display =
+        |c: i64| -> String { format!("${}.{:02}", c / 100, (c % 100).unsigned_abs()) };
 
     Json(json!({
         "ok": true,

@@ -34,19 +34,19 @@ use crate::plugins::payment::{
 
 #[derive(Clone, Debug)]
 pub struct XenditPaymentPlugin {
-    config:        PaymentProviderConfig,
-    secret_key:    String,
+    config: PaymentProviderConfig,
+    secret_key: String,
     webhook_token: String,
-    api_base:      String,
+    api_base: String,
 }
 
 impl XenditPaymentPlugin {
     pub fn from_env() -> Self {
-        let environment   = env_or("XENDIT_ENV", "test");
-        let api_base      = "https://api.xendit.co".to_string();
-        let secret_key    = std::env::var("XENDIT_SECRET_KEY").unwrap_or_default();
+        let environment = env_or("XENDIT_ENV", "test");
+        let api_base = "https://api.xendit.co".to_string();
+        let secret_key = std::env::var("XENDIT_SECRET_KEY").unwrap_or_default();
         let webhook_token = std::env::var("XENDIT_WEBHOOK_TOKEN").unwrap_or_default();
-        let required      = ["XENDIT_SECRET_KEY", "XENDIT_WEBHOOK_TOKEN"];
+        let required = ["XENDIT_SECRET_KEY", "XENDIT_WEBHOOK_TOKEN"];
         Self {
             secret_key,
             webhook_token,
@@ -66,13 +66,19 @@ impl XenditPaymentPlugin {
     /// Expected format: "BCA 1234567890 a/n Nama Lengkap"
     fn parse_bank_account(bank_account: &str) -> Option<(String, String, String)> {
         let parts: Vec<&str> = bank_account.splitn(2, "a/n").collect();
-        if parts.len() != 2 { return None; }
+        if parts.len() != 2 {
+            return None;
+        }
         let left: Vec<&str> = parts[0].split_whitespace().collect();
-        if left.len() < 2 { return None; }
-        let bank_code      = left[0].to_uppercase();
+        if left.len() < 2 {
+            return None;
+        }
+        let bank_code = left[0].to_uppercase();
         let account_number = left[1].to_string();
-        let holder_name    = parts[1].trim().to_string();
-        if holder_name.is_empty() || account_number.is_empty() { return None; }
+        let holder_name = parts[1].trim().to_string();
+        if holder_name.is_empty() || account_number.is_empty() {
+            return None;
+        }
         Some((bank_code, account_number, holder_name))
     }
 
@@ -82,8 +88,8 @@ impl XenditPaymentPlugin {
     pub async fn disburse_to_creator(
         &self,
         creator_bank_account: &str,
-        amount_idr:           i64,
-        invoice_uid:          &str,
+        amount_idr: i64,
+        invoice_uid: &str,
     ) -> Result<Value> {
         let (bank_code, account_number, holder_name) =
             Self::parse_bank_account(creator_bank_account)
@@ -115,7 +121,9 @@ impl XenditPaymentPlugin {
             .map_err(|e| anyhow!("xendit: disbursement request failed: {e}"))?;
 
         let http_status = resp.status();
-        let result: Value = resp.json().await
+        let result: Value = resp
+            .json()
+            .await
             .map_err(|e| anyhow!("xendit: disbursement parse error: {e}"))?;
 
         if !http_status.is_success() {
@@ -128,45 +136,68 @@ impl XenditPaymentPlugin {
 }
 
 impl Default for XenditPaymentPlugin {
-    fn default() -> Self { Self::from_env() }
+    fn default() -> Self {
+        Self::from_env()
+    }
 }
 
 #[async_trait::async_trait]
 impl PaymentPlugin for XenditPaymentPlugin {
-    fn provider_key(&self)  -> &'static str { "xendit" }
-    fn display_name(&self)  -> &'static str { "Xendit" }
+    fn provider_key(&self) -> &'static str {
+        "xendit"
+    }
+    fn display_name(&self) -> &'static str {
+        "Xendit"
+    }
 
     fn capability(&self) -> PaymentPluginCapability {
         PaymentPluginCapability {
-            provider:                      self.provider_key().into(),
-            display_name:                  self.display_name().into(),
-            configured:                    self.config.configured,
-            environment:                   self.config.environment.clone(),
-            api_base_url:                  self.config.api_base_url.clone(),
-            supports_redirect_checkout:    true,
+            provider: self.provider_key().into(),
+            display_name: self.display_name().into(),
+            configured: self.config.configured,
+            environment: self.config.environment.clone(),
+            api_base_url: self.config.api_base_url.clone(),
+            supports_redirect_checkout: true,
             supports_webhook_confirmation: true,
-            supports_manual_confirmation:  false,
-            supported_currencies:          vec!["IDR".into(), "PHP".into(), "USD".into()],
-            required_env:                  self.config.required_env.clone(),
-            missing_env:                   self.config.missing_env.clone(),
+            supports_manual_confirmation: false,
+            supported_currencies: vec!["IDR".into(), "PHP".into(), "USD".into()],
+            required_env: self.config.required_env.clone(),
+            missing_env: self.config.missing_env.clone(),
         }
     }
 
     async fn create_invoice(&self, request: CreateInvoiceRequest) -> Result<Invoice> {
         if !self.config.configured {
-            bail!("Xendit plugin not configured: {:?}", self.config.missing_env);
+            bail!(
+                "Xendit plugin not configured: {:?}",
+                self.config.missing_env
+            );
         }
 
-        let invoice_uid = request.metadata.get("invoice_uid").cloned().unwrap_or_default();
-        let video_title = request.metadata.get("video_title").cloned()
+        let invoice_uid = request
+            .metadata
+            .get("invoice_uid")
+            .cloned()
+            .unwrap_or_default();
+        let video_title = request
+            .metadata
+            .get("video_title")
+            .cloned()
             .unwrap_or_else(|| "Video".into());
-        let buyer_name  = request.metadata.get("buyer_name").cloned()
+        let buyer_name = request
+            .metadata
+            .get("buyer_name")
+            .cloned()
             .unwrap_or_else(|| "Buyer".into());
-        let success_url = request.success_url.as_deref()
+        let success_url = request
+            .success_url
+            .as_deref()
             .unwrap_or("https://example.com/pay/success");
-        let cancel_url  = request.cancel_url.as_deref()
+        let cancel_url = request
+            .cancel_url
+            .as_deref()
             .unwrap_or("https://example.com/pay/cancel");
-        let currency    = request.currency.to_uppercase();
+        let currency = request.currency.to_uppercase();
 
         let invoice_body = json!({
             "external_id":          invoice_uid,
@@ -189,7 +220,9 @@ impl PaymentPlugin for XenditPaymentPlugin {
             .map_err(|e| anyhow!("xendit: invoice request failed: {e}"))?;
 
         let http_status = resp.status();
-        let body: Value  = resp.json().await
+        let body: Value = resp
+            .json()
+            .await
             .map_err(|e| anyhow!("xendit: invoice parse error: {e}"))?;
 
         if !http_status.is_success() {
@@ -197,17 +230,17 @@ impl PaymentPlugin for XenditPaymentPlugin {
             bail!("xendit: API {http_status}: {msg}");
         }
 
-        let xendit_id   = body["id"].as_str().unwrap_or("").to_string();
+        let xendit_id = body["id"].as_str().unwrap_or("").to_string();
         let payment_url = body["invoice_url"].as_str().map(String::from);
 
         Ok(Invoice {
-            provider:     self.provider_key().into(),
-            invoice_id:   invoice_uid,
+            provider: self.provider_key().into(),
+            invoice_id: invoice_uid,
             payment_url,
             amount_cents: request.amount_cents,
-            currency:     request.currency,
-            status:       PaymentStatus::Pending,
-            raw:          json!({ "xendit_invoice_id": xendit_id }),
+            currency: request.currency,
+            status: PaymentStatus::Pending,
+            raw: json!({ "xendit_invoice_id": xendit_id }),
         })
     }
 
@@ -217,13 +250,18 @@ impl PaymentPlugin for XenditPaymentPlugin {
     /// `disburse_to_creator()` for the creator share auto-payout (see CREATOR_SPLIT_BP).
     async fn confirm_payment(&self, request: ConfirmPaymentRequest) -> Result<PaymentResult> {
         if !self.config.configured {
-            bail!("Xendit plugin not configured: {:?}", self.config.missing_env);
+            bail!(
+                "Xendit plugin not configured: {:?}",
+                self.config.missing_env
+            );
         }
 
-        let payload = request.webhook_payload
+        let payload = request
+            .webhook_payload
             .ok_or_else(|| anyhow!("xendit: no webhook payload"))?;
 
-        let token = request.signature_headers
+        let token = request
+            .signature_headers
             .get("x-callback-token")
             .ok_or_else(|| anyhow!("xendit: missing x-callback-token header"))?;
 
@@ -234,25 +272,26 @@ impl PaymentPlugin for XenditPaymentPlugin {
         let xendit_status = payload["status"].as_str().unwrap_or("PENDING");
         let status = match xendit_status {
             "PAID" | "SETTLED" => PaymentStatus::Paid,
-            "EXPIRED"          => PaymentStatus::Expired,
-            _                  => PaymentStatus::Pending,
+            "EXPIRED" => PaymentStatus::Expired,
+            _ => PaymentStatus::Pending,
         };
 
-        let invoice_uid    = payload["external_id"].as_str().unwrap_or("").to_string();
+        let invoice_uid = payload["external_id"].as_str().unwrap_or("").to_string();
         let transaction_id = payload["id"].as_str().map(String::from);
-        let paid_amount    = payload["paid_amount"].as_i64()
+        let paid_amount = payload["paid_amount"]
+            .as_i64()
             .or_else(|| payload["amount"].as_i64())
             .unwrap_or(0);
         let currency = payload["currency"].as_str().unwrap_or("IDR").to_uppercase();
 
         Ok(PaymentResult {
-            provider:          self.provider_key().into(),
-            invoice_id:        invoice_uid,
+            provider: self.provider_key().into(),
+            invoice_id: invoice_uid,
             transaction_id,
             status,
             paid_amount_cents: paid_amount,
             currency,
-            raw:               payload,
+            raw: payload,
         })
     }
 }

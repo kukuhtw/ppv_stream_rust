@@ -24,5 +24,7 @@ async fn get_kurs(State(state): State<KursState>) -> Json<KursResp> {
 }
 
 pub fn router(state: KursState) -> Router {
-    Router::new().route("/api/kurs", get(get_kurs)).with_state(state)
+    Router::new()
+        .route("/api/kurs", get(get_kurs))
+        .with_state(state)
 }

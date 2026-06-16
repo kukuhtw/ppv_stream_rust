@@ -15,7 +15,7 @@ use crate::sessions;
 #[derive(Clone)]
 pub struct VideoState {
     pub pool: PgPool,
-    pub cfg:  Config,
+    pub cfg: Config,
 }
 
 #[derive(Serialize)]
@@ -58,7 +58,8 @@ pub async fn list_videos(State(st): State<VideoState>) -> impl IntoResponse {
         "#,
     )
     .fetch_all(&st.pool)
-    .await {
+    .await
+    {
         Ok(r) => r,
         Err(e) => return Json(serde_json::json!({"ok": false, "error": format!("db: {e}")})),
     };
@@ -75,8 +76,14 @@ pub async fn list_videos(State(st): State<VideoState>) -> impl IntoResponse {
                 .try_get::<Option<String>, _>("owner_email")
                 .unwrap_or(None)
                 .unwrap_or_default(),
-            owner_whatsapp: r.try_get::<Option<String>, _>("owner_whatsapp").ok().flatten(),
-            owner_wallet: r.try_get::<Option<String>, _>("owner_wallet").ok().flatten(),
+            owner_whatsapp: r
+                .try_get::<Option<String>, _>("owner_whatsapp")
+                .ok()
+                .flatten(),
+            owner_wallet: r
+                .try_get::<Option<String>, _>("owner_wallet")
+                .ok()
+                .flatten(),
             owner_bank: r.try_get::<Option<String>, _>("owner_bank").ok().flatten(),
             owner_profile_desc: r
                 .try_get::<Option<String>, _>("owner_profile_desc")
@@ -131,13 +138,12 @@ pub async fn my_videos(State(st): State<VideoState>, cookies: Cookies) -> impl I
     let mut out: Vec<MyVideo> = Vec::with_capacity(vids.len());
     for v in vids {
         let vid = v.try_get::<String, _>("id").unwrap_or_default();
-        let allow_rows = sqlx::query(
-            r#"SELECT username FROM allowlist WHERE video_id = $1 ORDER BY username"#,
-        )
-        .bind(&vid)
-        .fetch_all(&st.pool)
-        .await
-        .unwrap_or_default();
+        let allow_rows =
+            sqlx::query(r#"SELECT username FROM allowlist WHERE video_id = $1 ORDER BY username"#)
+                .bind(&vid)
+                .fetch_all(&st.pool)
+                .await
+                .unwrap_or_default();
 
         let allow_users: Vec<String> = allow_rows
             .into_iter()
@@ -170,11 +176,12 @@ pub async fn user_lookup(
     Query(qs): Query<UserLookupQs>,
 ) -> impl IntoResponse {
     if let Some(u) = qs.username.as_deref().filter(|s| !s.is_empty()) {
-        let row = sqlx::query(r#"SELECT id, username, email FROM users WHERE username = $1 LIMIT 1"#)
-            .bind(u)
-            .fetch_optional(&st.pool)
-            .await
-            .unwrap_or(None);
+        let row =
+            sqlx::query(r#"SELECT id, username, email FROM users WHERE username = $1 LIMIT 1"#)
+                .bind(u)
+                .fetch_optional(&st.pool)
+                .await
+                .unwrap_or(None);
         return match row {
             Some(r) => Json(serde_json::json!({"ok": true, "user": {
                 "id": r.try_get::<String,_>("id").unwrap_or_default(),
@@ -283,12 +290,10 @@ pub async fn add_allow(
             _ => String::new(),
         }
     } else if let Some(k) = &f.username_or_email {
-        match sqlx::query(
-            r#"SELECT username FROM users WHERE username = $1 OR email = $1 LIMIT 1"#,
-        )
-        .bind(k.trim())
-        .fetch_optional(&st.pool)
-        .await
+        match sqlx::query(r#"SELECT username FROM users WHERE username = $1 OR email = $1 LIMIT 1"#)
+            .bind(k.trim())
+            .fetch_optional(&st.pool)
+            .await
         {
             Ok(Some(r)) => r.try_get::<String, _>("username").unwrap_or_default(),
             _ => String::new(),
@@ -364,12 +369,30 @@ pub async fn update_video(
     }
 }
 
-/// AuthZ helper
+/// AuthZ helper.
+/// Grants access when any of these are true:
+///   1. Video is free (price_cents = 0)
+///   2. User is the video owner
+///   3. User is an admin (is_admin session flag)
+///   4. User is in the allowlist
+///   5. User has a completed payment for the video
 pub async fn user_has_view_access(
     pool: &PgPool,
     video_id: &str,
     user_id: &str,
 ) -> anyhow::Result<bool> {
+    // 1. Free video — open to all authenticated users
+    let price_cents: i64 =
+        sqlx::query_scalar(r#"SELECT price_cents FROM videos WHERE id = $1 LIMIT 1"#)
+            .bind(video_id)
+            .fetch_one(pool)
+            .await
+            .unwrap_or(1); // default non-zero so we don't accidentally open paid videos
+    if price_cents <= 0 {
+        return Ok(true);
+    }
+
+    // 2. Owner
     let is_owner: bool = sqlx::query_scalar(
         r#"SELECT EXISTS(SELECT 1 FROM videos WHERE id = $1 AND owner_id = $2)"#,
     )
@@ -382,26 +405,64 @@ pub async fn user_has_view_access(
         return Ok(true);
     }
 
-    let username_opt = sqlx::query_scalar::<_, Option<String>>(
-        r#"SELECT username FROM users WHERE id = $1"#,
-    )
-    .bind(user_id)
-    .fetch_one(pool)
-    .await
-    .unwrap_or(None);
+    // Fetch username + is_admin in one query for remaining checks
+    let row = sqlx::query(r#"SELECT username, is_admin FROM users WHERE id = $1 LIMIT 1"#)
+        .bind(user_id)
+        .fetch_optional(pool)
+        .await
+        .unwrap_or(None);
 
-    let Some(username) = username_opt else {
+    let Some(row) = row else {
         return Ok(false);
     };
 
+    use sqlx::Row;
+    let username: String = row.try_get("username").unwrap_or_default();
+    // is_admin is stored as INTEGER 0/1
+    let is_admin: bool = row.try_get::<i32, _>("is_admin").unwrap_or(0) != 0;
+
+    // 3. Admin bypasses all access control
+    if is_admin {
+        return Ok(true);
+    }
+
+    // 4. Manual allowlist grant
     let is_allowed: bool = sqlx::query_scalar(
         r#"SELECT EXISTS(SELECT 1 FROM allowlist WHERE video_id = $1 AND username = $2)"#,
     )
     .bind(video_id)
-    .bind(username)
+    .bind(&username)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(false);
+    if is_allowed {
+        return Ok(true);
+    }
+
+    // 5. Completed payment: purchases table (x402 / wallet) or fiat_invoices (paid)
+    let has_purchase: bool = sqlx::query_scalar(
+        r#"SELECT EXISTS(SELECT 1 FROM purchases WHERE video_id = $1 AND user_id = $2)"#,
+    )
+    .bind(video_id)
+    .bind(user_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(false);
+    if has_purchase {
+        return Ok(true);
+    }
+
+    let has_fiat_paid: bool = sqlx::query_scalar(
+        r#"SELECT EXISTS(
+            SELECT 1 FROM fiat_invoices
+            WHERE video_id = $1 AND user_id = $2 AND status = 'paid'
+        )"#,
+    )
+    .bind(video_id)
+    .bind(user_id)
     .fetch_one(pool)
     .await
     .unwrap_or(false);
 
-    Ok(is_allowed)
+    Ok(has_fiat_paid)
 }

@@ -11,8 +11,8 @@
 // balance is too low, affiliate username is invalid, etc.) the function returns
 // Ok(0) so the calling purchase flow is never rolled back.
 
-use sqlx::Row;
 pub use sqlx::PgPool;
+use sqlx::Row;
 
 /// Attempt to pay an affiliate commission for a completed video purchase.
 ///
@@ -20,14 +20,14 @@ pub use sqlx::PgPool;
 /// skipped (affiliate disabled, missing, or invalid), and `Err` only for
 /// unexpected database failures.
 pub async fn process_affiliate_commission(
-    pool:               &PgPool,
-    video_id:           &str,
-    buyer_id:           &str,
-    owner_id:           &str,
-    price_cents:        i64,
+    pool: &PgPool,
+    video_id: &str,
+    buyer_id: &str,
+    owner_id: &str,
+    price_cents: i64,
     affiliate_username: &str,
-    payment_method:     &str,
-    invoice_uid:        Option<&str>,
+    payment_method: &str,
+    invoice_uid: Option<&str>,
 ) -> Result<i64, String> {
     let aff_username = affiliate_username.trim();
     if aff_username.is_empty() {
@@ -37,7 +37,7 @@ pub async fn process_affiliate_commission(
     // Look up affiliate settings for this video (runtime query — new table)
     let settings = sqlx::query(
         "SELECT commission_pct, is_enabled \
-         FROM affiliate_settings WHERE video_id = $1 LIMIT 1"
+         FROM affiliate_settings WHERE video_id = $1 LIMIT 1",
     )
     .bind(video_id)
     .fetch_optional(pool)
@@ -46,10 +46,10 @@ pub async fn process_affiliate_commission(
 
     let settings = match settings {
         Some(r) => r,
-        None    => return Ok(0), // no affiliate program configured
+        None => return Ok(0), // no affiliate program configured
     };
 
-    let is_enabled:    bool = settings.try_get("is_enabled").unwrap_or(false);
+    let is_enabled: bool = settings.try_get("is_enabled").unwrap_or(false);
     let commission_pct: i32 = settings.try_get("commission_pct").unwrap_or(0);
 
     if !is_enabled || commission_pct <= 0 {
@@ -65,7 +65,7 @@ pub async fn process_affiliate_commission(
 
     let aff_row = match aff_row {
         Some(r) => r,
-        None    => return Ok(0), // username not found — skip silently
+        None => return Ok(0), // username not found — skip silently
     };
 
     let affiliate_id: String = aff_row.try_get("id").unwrap_or_default();
@@ -89,15 +89,18 @@ pub async fn process_affiliate_commission(
     };
 
     let _ = sqlx::query("SELECT id FROM users WHERE id IN ($1,$2) ORDER BY id FOR UPDATE")
-        .bind(&id_a).bind(&id_b)
-        .fetch_all(&mut *tx).await;
+        .bind(&id_a)
+        .bind(&id_b)
+        .fetch_all(&mut *tx)
+        .await;
 
     // Read creator balance — if insufficient, skip without failing the purchase
     let creator_bal: i64 = sqlx::query("SELECT balance_cents FROM users WHERE id = $1")
         .bind(owner_id)
         .fetch_optional(&mut *tx)
         .await
-        .ok().flatten()
+        .ok()
+        .flatten()
         .map(|r: sqlx::postgres::PgRow| r.try_get("balance_cents").unwrap_or(0))
         .unwrap_or(0);
 
@@ -110,57 +113,93 @@ pub async fn process_affiliate_commission(
         .bind(&affiliate_id)
         .fetch_optional(&mut *tx)
         .await
-        .ok().flatten()
+        .ok()
+        .flatten()
         .map(|r: sqlx::postgres::PgRow| r.try_get("balance_cents").unwrap_or(0))
         .unwrap_or(0);
 
     let creator_new = creator_bal - commission_cents;
-    let aff_new     = aff_bal    + commission_cents;
+    let aff_new = aff_bal + commission_cents;
 
     // Deduct from creator
     if let Err(e) = sqlx::query("UPDATE users SET balance_cents = $1 WHERE id = $2")
-        .bind(creator_new).bind(owner_id).execute(&mut *tx).await
-    { let _ = tx.rollback().await; return Err(format!("deduct creator: {e}")); }
+        .bind(creator_new)
+        .bind(owner_id)
+        .execute(&mut *tx)
+        .await
+    {
+        let _ = tx.rollback().await;
+        return Err(format!("deduct creator: {e}"));
+    }
 
     // Credit affiliate
     if let Err(e) = sqlx::query("UPDATE users SET balance_cents = $1 WHERE id = $2")
-        .bind(aff_new).bind(&affiliate_id).execute(&mut *tx).await
-    { let _ = tx.rollback().await; return Err(format!("credit affiliate: {e}")); }
+        .bind(aff_new)
+        .bind(&affiliate_id)
+        .execute(&mut *tx)
+        .await
+    {
+        let _ = tx.rollback().await;
+        return Err(format!("credit affiliate: {e}"));
+    }
 
     // Wallet ledger: creator side (transfer_out)
     if let Err(e) = sqlx::query(
         "INSERT INTO wallet_transactions \
          (user_id,txn_type,amount_cents,balance_after,status,ref_user_id,note) \
-         VALUES ($1,'transfer_out',$2,$3,'completed',$4,$5)"
+         VALUES ($1,'transfer_out',$2,$3,'completed',$4,$5)",
     )
-    .bind(owner_id).bind(commission_cents).bind(creator_new)
-    .bind(&affiliate_id).bind(format!("Affiliate commission: {video_id}"))
-    .execute(&mut *tx).await
-    { let _ = tx.rollback().await; return Err(format!("ledger creator: {e}")); }
+    .bind(owner_id)
+    .bind(commission_cents)
+    .bind(creator_new)
+    .bind(&affiliate_id)
+    .bind(format!("Affiliate commission: {video_id}"))
+    .execute(&mut *tx)
+    .await
+    {
+        let _ = tx.rollback().await;
+        return Err(format!("ledger creator: {e}"));
+    }
 
     // Wallet ledger: affiliate side (transfer_in)
     if let Err(e) = sqlx::query(
         "INSERT INTO wallet_transactions \
          (user_id,txn_type,amount_cents,balance_after,status,ref_user_id,note) \
-         VALUES ($1,'transfer_in',$2,$3,'completed',$4,$5)"
+         VALUES ($1,'transfer_in',$2,$3,'completed',$4,$5)",
     )
-    .bind(&affiliate_id).bind(commission_cents).bind(aff_new)
-    .bind(owner_id).bind(format!("Commission earned: {video_id}"))
-    .execute(&mut *tx).await
-    { let _ = tx.rollback().await; return Err(format!("ledger affiliate: {e}")); }
+    .bind(&affiliate_id)
+    .bind(commission_cents)
+    .bind(aff_new)
+    .bind(owner_id)
+    .bind(format!("Commission earned: {video_id}"))
+    .execute(&mut *tx)
+    .await
+    {
+        let _ = tx.rollback().await;
+        return Err(format!("ledger affiliate: {e}"));
+    }
 
     // Persist commission record
     if let Err(e) = sqlx::query(
         "INSERT INTO affiliate_commissions \
          (video_id,affiliate_id,buyer_id,owner_id,\
           purchase_price_cents,commission_cents,payment_method,ref_invoice_uid) \
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)"
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
     )
-    .bind(video_id).bind(&affiliate_id).bind(buyer_id).bind(owner_id)
-    .bind(price_cents).bind(commission_cents)
-    .bind(payment_method).bind(invoice_uid)
-    .execute(&mut *tx).await
-    { let _ = tx.rollback().await; return Err(format!("commissions row: {e}")); }
+    .bind(video_id)
+    .bind(&affiliate_id)
+    .bind(buyer_id)
+    .bind(owner_id)
+    .bind(price_cents)
+    .bind(commission_cents)
+    .bind(payment_method)
+    .bind(invoice_uid)
+    .execute(&mut *tx)
+    .await
+    {
+        let _ = tx.rollback().await;
+        return Err(format!("commissions row: {e}"));
+    }
 
     tx.commit().await.map_err(|e| format!("commit: {e}"))?;
     Ok(commission_cents)

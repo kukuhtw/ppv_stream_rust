@@ -305,17 +305,17 @@ pub async fn admin_data(
 #[derive(Deserialize)]
 pub struct PaymentsQuery {
     pub provider: Option<String>,
-    pub status:   Option<String>,
-    pub limit:    Option<i64>,
+    pub status: Option<String>,
+    pub limit: Option<i64>,
 }
 
 pub async fn admin_payments(
     State(st): State<AdminState>,
-    Query(q):  Query<PaymentsQuery>,
+    Query(q): Query<PaymentsQuery>,
 ) -> impl IntoResponse {
-    let limit    = q.limit.unwrap_or(100).min(1000);
+    let limit = q.limit.unwrap_or(100).min(1000);
     let provider = q.provider.as_deref().unwrap_or("");
-    let status   = q.status.as_deref().unwrap_or("");
+    let status = q.status.as_deref().unwrap_or("");
 
     // Build WHERE clauses dynamically using runtime query (not macro) to avoid DB-at-build-time
     let base_sql = r#"
@@ -342,8 +342,12 @@ pub async fn admin_payments(
     "#;
 
     let mut conditions: Vec<String> = vec![];
-    if !provider.is_empty() { conditions.push(format!("fi.provider = '{}'", provider.replace('\'', "''"))); }
-    if !status.is_empty()   { conditions.push(format!("fi.status = '{}'",   status.replace('\'', "''"))); }
+    if !provider.is_empty() {
+        conditions.push(format!("fi.provider = '{}'", provider.replace('\'', "''")));
+    }
+    if !status.is_empty() {
+        conditions.push(format!("fi.status = '{}'", status.replace('\'', "''")));
+    }
 
     let where_clause = if conditions.is_empty() {
         String::new()
@@ -358,35 +362,50 @@ pub async fn admin_payments(
         .await
         .unwrap_or_default();
 
-    let items: Vec<serde_json::Value> = rows.iter().map(|r| {
-        json!({
-            "invoice_uid":      r.try_get::<String, _>("invoice_uid").unwrap_or_default(),
-            "provider":         r.try_get::<String, _>("provider").unwrap_or_default(),
-            "status":           r.try_get::<String, _>("status").unwrap_or_default(),
-            "amount":           r.try_get::<i64,   _>("amount").unwrap_or(0),
-            "currency":         r.try_get::<String, _>("currency").unwrap_or_default(),
-            "payment_url":      r.try_get::<Option<String>, _>("payment_url").unwrap_or(None),
-            "buyer_email":      r.try_get::<Option<String>, _>("buyer_email").unwrap_or(None),
-            "created_at":       r.try_get::<Option<String>, _>("created_at").unwrap_or(None),
-            "paid_at":          r.try_get::<Option<String>, _>("paid_at").unwrap_or(None),
-            "disbursed_at":     r.try_get::<Option<String>, _>("disbursed_at").unwrap_or(None),
-            "disburse_ref":     r.try_get::<Option<String>, _>("disburse_ref").unwrap_or(None),
-            "buyer_username":   r.try_get::<String, _>("buyer_username").unwrap_or_default(),
-            "video_title":      r.try_get::<Option<String>, _>("video_title").unwrap_or(None),
-            "creator_username": r.try_get::<String, _>("creator_username").unwrap_or_default(),
-            "creator_bank":     r.try_get::<Option<String>, _>("creator_bank").unwrap_or(None),
+    let items: Vec<serde_json::Value> = rows
+        .iter()
+        .map(|r| {
+            json!({
+                "invoice_uid":      r.try_get::<String, _>("invoice_uid").unwrap_or_default(),
+                "provider":         r.try_get::<String, _>("provider").unwrap_or_default(),
+                "status":           r.try_get::<String, _>("status").unwrap_or_default(),
+                "amount":           r.try_get::<i64,   _>("amount").unwrap_or(0),
+                "currency":         r.try_get::<String, _>("currency").unwrap_or_default(),
+                "payment_url":      r.try_get::<Option<String>, _>("payment_url").unwrap_or(None),
+                "buyer_email":      r.try_get::<Option<String>, _>("buyer_email").unwrap_or(None),
+                "created_at":       r.try_get::<Option<String>, _>("created_at").unwrap_or(None),
+                "paid_at":          r.try_get::<Option<String>, _>("paid_at").unwrap_or(None),
+                "disbursed_at":     r.try_get::<Option<String>, _>("disbursed_at").unwrap_or(None),
+                "disburse_ref":     r.try_get::<Option<String>, _>("disburse_ref").unwrap_or(None),
+                "buyer_username":   r.try_get::<String, _>("buyer_username").unwrap_or_default(),
+                "video_title":      r.try_get::<Option<String>, _>("video_title").unwrap_or(None),
+                "creator_username": r.try_get::<String, _>("creator_username").unwrap_or_default(),
+                "creator_bank":     r.try_get::<Option<String>, _>("creator_bank").unwrap_or(None),
+            })
         })
-    }).collect();
+        .collect();
 
     // Totals for filter status badge counts
     let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM fiat_invoices")
-        .fetch_one(&st.pool).await.unwrap_or(0);
-    let total_paid: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM fiat_invoices WHERE status='paid'")
-        .fetch_one(&st.pool).await.unwrap_or(0);
-    let total_pending: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM fiat_invoices WHERE status='pending'")
-        .fetch_one(&st.pool).await.unwrap_or(0);
-    let total_failed: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM fiat_invoices WHERE status IN ('failed','expired','cancelled')")
-        .fetch_one(&st.pool).await.unwrap_or(0);
+        .fetch_one(&st.pool)
+        .await
+        .unwrap_or(0);
+    let total_paid: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM fiat_invoices WHERE status='paid'")
+            .fetch_one(&st.pool)
+            .await
+            .unwrap_or(0);
+    let total_pending: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM fiat_invoices WHERE status='pending'")
+            .fetch_one(&st.pool)
+            .await
+            .unwrap_or(0);
+    let total_failed: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM fiat_invoices WHERE status IN ('failed','expired','cancelled')",
+    )
+    .fetch_one(&st.pool)
+    .await
+    .unwrap_or(0);
 
     Json(json!({
         "ok": true,
@@ -409,8 +428,8 @@ pub async fn admin_payments(
 //   they have already transferred via the provider's own dashboard).
 
 pub async fn admin_disburse(
-    State(st):       State<AdminState>,
-    Path(uid):       Path<String>,
+    State(st): State<AdminState>,
+    Path(uid): Path<String>,
 ) -> impl IntoResponse {
     // Fetch invoice + creator bank_account in one query
     let row = sqlx::query(
@@ -426,14 +445,14 @@ pub async fn admin_disburse(
 
     let row = match row {
         Ok(Some(r)) => r,
-        Ok(None)    => return Json(json!({"ok": false, "error": "invoice not found"})),
-        Err(e)      => return Json(json!({"ok": false, "error": format!("db: {e}")})),
+        Ok(None) => return Json(json!({"ok": false, "error": "invoice not found"})),
+        Err(e) => return Json(json!({"ok": false, "error": format!("db: {e}")})),
     };
 
-    let status:       String         = row.try_get("status").unwrap_or_default();
+    let status: String = row.try_get("status").unwrap_or_default();
     let disbursed_at: Option<String> = row.try_get("disbursed_at").unwrap_or(None);
-    let provider:     String         = row.try_get("provider").unwrap_or_default();
-    let amount:       i64            = row.try_get("amount").unwrap_or(0);
+    let provider: String = row.try_get("provider").unwrap_or_default();
+    let amount: i64 = row.try_get("amount").unwrap_or(0);
 
     if status != "paid" {
         return Json(json!({"ok": false, "error": "invoice is not paid yet"}));
@@ -460,10 +479,14 @@ pub async fn admin_disburse(
                         .bind(&uid)
                         .execute(&st.pool)
                         .await;
-                        return Json(json!({"ok": true, "disburse_ref": disburse_ref, "method": "xendit_api"}));
+                        return Json(
+                            json!({"ok": true, "disburse_ref": disburse_ref, "method": "xendit_api"}),
+                        );
                     }
                     Err(e) => {
-                        return Json(json!({"ok": false, "error": format!("xendit disburse: {e}")}));
+                        return Json(
+                            json!({"ok": false, "error": format!("xendit disburse: {e}")}),
+                        );
                     }
                 }
             }
@@ -491,48 +514,46 @@ pub async fn admin_disburse(
 pub async fn admin_smtp_get(State(st): State<AdminState>) -> impl IntoResponse {
     let row = sqlx::query(
         "SELECT host, port, username, password, from_email, from_name, use_tls, enabled
-         FROM smtp_settings WHERE id = 1"
+         FROM smtp_settings WHERE id = 1",
     )
     .fetch_optional(&st.pool)
     .await;
 
     match row {
-        Ok(Some(r)) => {
-            Json(json!({
-                "ok": true,
-                "smtp": {
-                    "host":       r.try_get::<String,  _>("host").unwrap_or_default(),
-                    "port":       r.try_get::<i32,     _>("port").unwrap_or(587),
-                    "username":   r.try_get::<String,  _>("username").unwrap_or_default(),
-                    "password":   r.try_get::<String,  _>("password").unwrap_or_default(),
-                    "from_email": r.try_get::<String,  _>("from_email").unwrap_or_default(),
-                    "from_name":  r.try_get::<String,  _>("from_name").unwrap_or_else(|_| "PPV Stream".into()),
-                    "use_tls":    r.try_get::<bool,    _>("use_tls").unwrap_or(true),
-                    "enabled":    r.try_get::<bool,    _>("enabled").unwrap_or(false),
-                }
-            }))
-        }
+        Ok(Some(r)) => Json(json!({
+            "ok": true,
+            "smtp": {
+                "host":       r.try_get::<String,  _>("host").unwrap_or_default(),
+                "port":       r.try_get::<i32,     _>("port").unwrap_or(587),
+                "username":   r.try_get::<String,  _>("username").unwrap_or_default(),
+                "password":   r.try_get::<String,  _>("password").unwrap_or_default(),
+                "from_email": r.try_get::<String,  _>("from_email").unwrap_or_default(),
+                "from_name":  r.try_get::<String,  _>("from_name").unwrap_or_else(|_| "PPV Stream".into()),
+                "use_tls":    r.try_get::<bool,    _>("use_tls").unwrap_or(true),
+                "enabled":    r.try_get::<bool,    _>("enabled").unwrap_or(false),
+            }
+        })),
         _ => Json(json!({"ok": false, "error": "smtp_settings not found"})),
     }
 }
 
 #[derive(Deserialize)]
 pub struct SmtpSavePayload {
-    pub host:       String,
-    pub port:       i32,
-    pub username:   String,
-    pub password:   String,
+    pub host: String,
+    pub port: i32,
+    pub username: String,
+    pub password: String,
     pub from_email: String,
-    pub from_name:  String,
-    pub use_tls:    bool,
-    pub enabled:    bool,
+    pub from_name: String,
+    pub use_tls: bool,
+    pub enabled: bool,
     /// Optional: send a test email to this address after saving
     pub test_email: Option<String>,
 }
 
 pub async fn admin_smtp_save(
     State(st): State<AdminState>,
-    Json(p):   Json<SmtpSavePayload>,
+    Json(p): Json<SmtpSavePayload>,
 ) -> impl IntoResponse {
     let res = sqlx::query(
         r#"INSERT INTO smtp_settings (id, host, port, username, password, from_email, from_name, use_tls, enabled, updated_at)
@@ -560,14 +581,14 @@ pub async fn admin_smtp_save(
     if let Some(test_to) = &p.test_email {
         if !test_to.trim().is_empty() {
             let cfg = crate::email::SmtpConfig {
-                host:       p.host.clone(),
-                port:       p.port as u16,
-                username:   p.username.clone(),
-                password:   p.password.clone(),
+                host: p.host.clone(),
+                port: p.port as u16,
+                username: p.username.clone(),
+                password: p.password.clone(),
                 from_email: p.from_email.clone(),
-                from_name:  p.from_name.clone(),
-                use_tls:    p.use_tls,
-                enabled:    true, // force enabled for test
+                from_name: p.from_name.clone(),
+                use_tls: p.use_tls,
+                enabled: true, // force enabled for test
             };
             if let Err(e) = crate::email::send_test(&cfg, test_to).await {
                 return Json(json!({"ok": true, "saved": true, "test_error": e.to_string()}));
@@ -586,22 +607,30 @@ pub async fn admin_smtp_save(
 #[derive(Deserialize)]
 pub struct WalletTxnQuery {
     pub txn_type: Option<String>,
-    pub status:   Option<String>,
-    pub limit:    Option<i64>,
+    pub status: Option<String>,
+    pub limit: Option<i64>,
 }
 
 pub async fn admin_wallet_transactions(
     State(st): State<AdminState>,
-    Query(q):  Query<WalletTxnQuery>,
+    Query(q): Query<WalletTxnQuery>,
 ) -> impl IntoResponse {
-    let limit  = q.limit.unwrap_or(100).min(1000);
-    let ttype  = q.txn_type.as_deref().unwrap_or("");
+    let limit = q.limit.unwrap_or(100).min(1000);
+    let ttype = q.txn_type.as_deref().unwrap_or("");
     let status = q.status.as_deref().unwrap_or("");
 
     let mut conditions: Vec<String> = vec![];
-    if !ttype.is_empty()  { conditions.push(format!("wt.txn_type = '{}'", ttype.replace('\'', "''"))); }
-    if !status.is_empty() { conditions.push(format!("wt.status = '{}'",   status.replace('\'', "''"))); }
-    let where_clause = if conditions.is_empty() { String::new() } else { format!("WHERE {}", conditions.join(" AND ")) };
+    if !ttype.is_empty() {
+        conditions.push(format!("wt.txn_type = '{}'", ttype.replace('\'', "''")));
+    }
+    if !status.is_empty() {
+        conditions.push(format!("wt.status = '{}'", status.replace('\'', "''")));
+    }
+    let where_clause = if conditions.is_empty() {
+        String::new()
+    } else {
+        format!("WHERE {}", conditions.join(" AND "))
+    };
 
     let sql = format!(
         r#"SELECT wt.id, wt.txn_type, wt.amount_cents, wt.balance_after, wt.status,
@@ -616,28 +645,39 @@ pub async fn admin_wallet_transactions(
            LIMIT {limit}"#
     );
 
-    let rows = sqlx::query(&sql).fetch_all(&st.pool).await.unwrap_or_default();
+    let rows = sqlx::query(&sql)
+        .fetch_all(&st.pool)
+        .await
+        .unwrap_or_default();
 
-    let items: Vec<serde_json::Value> = rows.iter().map(|r| {
-        json!({
-            "id":            r.try_get::<i64,            _>("id").unwrap_or(0),
-            "txn_type":      r.try_get::<String,         _>("txn_type").unwrap_or_default(),
-            "amount_cents":  r.try_get::<i64,            _>("amount_cents").unwrap_or(0),
-            "balance_after": r.try_get::<i64,            _>("balance_after").unwrap_or(0),
-            "status":        r.try_get::<String,         _>("status").unwrap_or_default(),
-            "note":          r.try_get::<Option<String>, _>("note").unwrap_or(None),
-            "admin_note":    r.try_get::<Option<String>, _>("admin_note").unwrap_or(None),
-            "created_at":    r.try_get::<Option<String>, _>("created_at").unwrap_or(None),
-            "username":      r.try_get::<String,         _>("username").unwrap_or_default(),
-            "email":         r.try_get::<String,         _>("email").unwrap_or_default(),
-            "ref_username":  r.try_get::<Option<String>, _>("ref_username").unwrap_or(None),
+    let items: Vec<serde_json::Value> = rows
+        .iter()
+        .map(|r| {
+            json!({
+                "id":            r.try_get::<i64,            _>("id").unwrap_or(0),
+                "txn_type":      r.try_get::<String,         _>("txn_type").unwrap_or_default(),
+                "amount_cents":  r.try_get::<i64,            _>("amount_cents").unwrap_or(0),
+                "balance_after": r.try_get::<i64,            _>("balance_after").unwrap_or(0),
+                "status":        r.try_get::<String,         _>("status").unwrap_or_default(),
+                "note":          r.try_get::<Option<String>, _>("note").unwrap_or(None),
+                "admin_note":    r.try_get::<Option<String>, _>("admin_note").unwrap_or(None),
+                "created_at":    r.try_get::<Option<String>, _>("created_at").unwrap_or(None),
+                "username":      r.try_get::<String,         _>("username").unwrap_or_default(),
+                "email":         r.try_get::<String,         _>("email").unwrap_or_default(),
+                "ref_username":  r.try_get::<Option<String>, _>("ref_username").unwrap_or(None),
+            })
         })
-    }).collect();
+        .collect();
 
     let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM wallet_transactions")
-        .fetch_one(&st.pool).await.unwrap_or(0);
-    let total_pending: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM wallet_transactions WHERE status='pending'")
-        .fetch_one(&st.pool).await.unwrap_or(0);
+        .fetch_one(&st.pool)
+        .await
+        .unwrap_or(0);
+    let total_pending: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM wallet_transactions WHERE status='pending'")
+            .fetch_one(&st.pool)
+            .await
+            .unwrap_or(0);
 
     Json(json!({
         "ok": true,
@@ -657,12 +697,12 @@ pub struct WalletActionPayload {
 }
 
 pub async fn admin_wallet_approve(
-    State(st):    State<AdminState>,
+    State(st): State<AdminState>,
     Path(txn_id): Path<i64>,
-    Json(p):      Json<WalletActionPayload>,
+    Json(p): Json<WalletActionPayload>,
 ) -> impl IntoResponse {
     let mut tx = match st.pool.begin().await {
-        Ok(t)  => t,
+        Ok(t) => t,
         Err(e) => return Json(json!({"ok": false, "error": format!("db: {e}")})),
     };
 
@@ -675,32 +715,47 @@ pub async fn admin_wallet_approve(
 
     let row = match row {
         Ok(Some(r)) => r,
-        Ok(None)    => { let _ = tx.rollback().await; return Json(json!({"ok": false, "error": "transaction not found"})); }
-        Err(e)      => { let _ = tx.rollback().await; return Json(json!({"ok": false, "error": format!("db: {e}")})); }
+        Ok(None) => {
+            let _ = tx.rollback().await;
+            return Json(json!({"ok": false, "error": "transaction not found"}));
+        }
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return Json(json!({"ok": false, "error": format!("db: {e}")}));
+        }
     };
 
-    let status:       String = row.try_get("status").unwrap_or_default();
-    let txn_type:     String = row.try_get("txn_type").unwrap_or_default();
-    let user_id:      String = row.try_get("user_id").unwrap_or_default();
-    let amount_cents: i64    = row.try_get("amount_cents").unwrap_or(0);
+    let status: String = row.try_get("status").unwrap_or_default();
+    let txn_type: String = row.try_get("txn_type").unwrap_or_default();
+    let user_id: String = row.try_get("user_id").unwrap_or_default();
+    let amount_cents: i64 = row.try_get("amount_cents").unwrap_or(0);
 
     if status != "pending" {
         let _ = tx.rollback().await;
-        return Json(json!({"ok": false, "error": format!("cannot approve: status is '{status}'")}));
+        return Json(
+            json!({"ok": false, "error": format!("cannot approve: status is '{status}'")}),
+        );
     }
     if txn_type != "deposit" {
         let _ = tx.rollback().await;
-        return Json(json!({"ok": false, "error": "only deposits can be approved via this endpoint"}));
+        return Json(
+            json!({"ok": false, "error": "only deposits can be approved via this endpoint"}),
+        );
     }
 
     let new_bal: i64 = match sqlx::query_scalar(
-        "UPDATE users SET balance_cents = balance_cents + $1 WHERE id = $2 RETURNING balance_cents"
+        "UPDATE users SET balance_cents = balance_cents + $1 WHERE id = $2 RETURNING balance_cents",
     )
-    .bind(amount_cents).bind(&user_id)
-    .fetch_one(&mut *tx).await
+    .bind(amount_cents)
+    .bind(&user_id)
+    .fetch_one(&mut *tx)
+    .await
     {
         Ok(b) => b,
-        Err(e) => { let _ = tx.rollback().await; return Json(json!({"ok": false, "error": format!("db credit: {e}")})); }
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return Json(json!({"ok": false, "error": format!("db credit: {e}")}));
+        }
     };
 
     if let Err(e) = sqlx::query(
@@ -714,7 +769,7 @@ pub async fn admin_wallet_approve(
     }
 
     match tx.commit().await {
-        Ok(_)  => Json(json!({"ok": true, "new_balance_cents": new_bal})),
+        Ok(_) => Json(json!({"ok": true, "new_balance_cents": new_bal})),
         Err(e) => Json(json!({"ok": false, "error": format!("commit: {e}")})),
     }
 }
@@ -724,31 +779,31 @@ pub async fn admin_wallet_approve(
 // ---------------------------------------------------------------------------
 
 pub async fn admin_wallet_complete(
-    State(st):    State<AdminState>,
+    State(st): State<AdminState>,
     Path(txn_id): Path<i64>,
-    Json(p):      Json<WalletActionPayload>,
+    Json(p): Json<WalletActionPayload>,
 ) -> impl IntoResponse {
-    let row = sqlx::query(
-        "SELECT txn_type, status FROM wallet_transactions WHERE id = $1"
-    )
-    .bind(txn_id)
-    .fetch_optional(&st.pool)
-    .await;
+    let row = sqlx::query("SELECT txn_type, status FROM wallet_transactions WHERE id = $1")
+        .bind(txn_id)
+        .fetch_optional(&st.pool)
+        .await;
 
     let row = match row {
         Ok(Some(r)) => r,
-        Ok(None)    => return Json(json!({"ok": false, "error": "transaction not found"})),
-        Err(e)      => return Json(json!({"ok": false, "error": format!("db: {e}")})),
+        Ok(None) => return Json(json!({"ok": false, "error": "transaction not found"})),
+        Err(e) => return Json(json!({"ok": false, "error": format!("db: {e}")})),
     };
 
-    let status:   String = row.try_get("status").unwrap_or_default();
+    let status: String = row.try_get("status").unwrap_or_default();
     let txn_type: String = row.try_get("txn_type").unwrap_or_default();
 
     if status != "pending" {
         return Json(json!({"ok": false, "error": format!("status is '{status}', not pending")}));
     }
     if txn_type != "withdrawal" {
-        return Json(json!({"ok": false, "error": "only withdrawals can be completed via this endpoint"}));
+        return Json(
+            json!({"ok": false, "error": "only withdrawals can be completed via this endpoint"}),
+        );
     }
 
     match sqlx::query(
@@ -767,12 +822,12 @@ pub async fn admin_wallet_complete(
 // ---------------------------------------------------------------------------
 
 pub async fn admin_wallet_reject(
-    State(st):    State<AdminState>,
+    State(st): State<AdminState>,
     Path(txn_id): Path<i64>,
-    Json(p):      Json<WalletActionPayload>,
+    Json(p): Json<WalletActionPayload>,
 ) -> impl IntoResponse {
     let mut tx = match st.pool.begin().await {
-        Ok(t)  => t,
+        Ok(t) => t,
         Err(e) => return Json(json!({"ok": false, "error": format!("db: {e}")})),
     };
 
@@ -785,14 +840,20 @@ pub async fn admin_wallet_reject(
 
     let row = match row {
         Ok(Some(r)) => r,
-        Ok(None)    => { let _ = tx.rollback().await; return Json(json!({"ok": false, "error": "transaction not found"})); }
-        Err(e)      => { let _ = tx.rollback().await; return Json(json!({"ok": false, "error": format!("db: {e}")})); }
+        Ok(None) => {
+            let _ = tx.rollback().await;
+            return Json(json!({"ok": false, "error": "transaction not found"}));
+        }
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return Json(json!({"ok": false, "error": format!("db: {e}")}));
+        }
     };
 
-    let status:       String = row.try_get("status").unwrap_or_default();
-    let txn_type:     String = row.try_get("txn_type").unwrap_or_default();
-    let user_id:      String = row.try_get("user_id").unwrap_or_default();
-    let amount_cents: i64    = row.try_get("amount_cents").unwrap_or(0);
+    let status: String = row.try_get("status").unwrap_or_default();
+    let txn_type: String = row.try_get("txn_type").unwrap_or_default();
+    let user_id: String = row.try_get("user_id").unwrap_or_default();
+    let amount_cents: i64 = row.try_get("amount_cents").unwrap_or(0);
 
     if status != "pending" {
         let _ = tx.rollback().await;
@@ -802,11 +863,12 @@ pub async fn admin_wallet_reject(
     let is_withdrawal = txn_type == "withdrawal";
 
     if is_withdrawal {
-        if let Err(e) = sqlx::query(
-            "UPDATE users SET balance_cents = balance_cents + $1 WHERE id = $2"
-        )
-        .bind(amount_cents).bind(&user_id)
-        .execute(&mut *tx).await
+        if let Err(e) =
+            sqlx::query("UPDATE users SET balance_cents = balance_cents + $1 WHERE id = $2")
+                .bind(amount_cents)
+                .bind(&user_id)
+                .execute(&mut *tx)
+                .await
         {
             let _ = tx.rollback().await;
             return Json(json!({"ok": false, "error": format!("db refund: {e}")}));
@@ -824,7 +886,7 @@ pub async fn admin_wallet_reject(
     }
 
     match tx.commit().await {
-        Ok(_)  => Json(json!({"ok": true, "refunded": is_withdrawal})),
+        Ok(_) => Json(json!({"ok": true, "refunded": is_withdrawal})),
         Err(e) => Json(json!({"ok": false, "error": format!("commit: {e}")})),
     }
 }

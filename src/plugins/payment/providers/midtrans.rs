@@ -21,8 +21,8 @@
 
 use anyhow::{anyhow, bail, Result};
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
-use sha2::{Digest, Sha512};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha512};
 
 use crate::plugins::payment::{
     env::{env_or, missing_env, required_env},
@@ -35,9 +35,9 @@ use crate::plugins::payment::{
 
 #[derive(Clone, Debug)]
 pub struct MidtransPaymentPlugin {
-    config:     PaymentProviderConfig,
+    config: PaymentProviderConfig,
     server_key: String,
-    snap_base:  String,
+    snap_base: String,
 }
 
 impl MidtransPaymentPlugin {
@@ -54,7 +54,7 @@ impl MidtransPaymentPlugin {
             ),
         };
         let server_key = std::env::var("MIDTRANS_SERVER_KEY").unwrap_or_default();
-        let required   = ["MIDTRANS_SERVER_KEY", "MIDTRANS_CLIENT_KEY"];
+        let required = ["MIDTRANS_SERVER_KEY", "MIDTRANS_CLIENT_KEY"];
         Self {
             server_key,
             snap_base: snap_base.clone(),
@@ -84,44 +84,67 @@ impl MidtransPaymentPlugin {
 }
 
 impl Default for MidtransPaymentPlugin {
-    fn default() -> Self { Self::from_env() }
+    fn default() -> Self {
+        Self::from_env()
+    }
 }
 
 #[async_trait::async_trait]
 impl PaymentPlugin for MidtransPaymentPlugin {
-    fn provider_key(&self)  -> &'static str { "midtrans" }
-    fn display_name(&self)  -> &'static str { "Midtrans" }
+    fn provider_key(&self) -> &'static str {
+        "midtrans"
+    }
+    fn display_name(&self) -> &'static str {
+        "Midtrans"
+    }
 
     fn capability(&self) -> PaymentPluginCapability {
         PaymentPluginCapability {
-            provider:                      self.provider_key().into(),
-            display_name:                  self.display_name().into(),
-            configured:                    self.config.configured,
-            environment:                   self.config.environment.clone(),
-            api_base_url:                  self.config.api_base_url.clone(),
-            supports_redirect_checkout:    true,
+            provider: self.provider_key().into(),
+            display_name: self.display_name().into(),
+            configured: self.config.configured,
+            environment: self.config.environment.clone(),
+            api_base_url: self.config.api_base_url.clone(),
+            supports_redirect_checkout: true,
             supports_webhook_confirmation: true,
-            supports_manual_confirmation:  false,
-            supported_currencies:          vec!["IDR".into()],
-            required_env:                  self.config.required_env.clone(),
-            missing_env:                   self.config.missing_env.clone(),
+            supports_manual_confirmation: false,
+            supported_currencies: vec!["IDR".into()],
+            required_env: self.config.required_env.clone(),
+            missing_env: self.config.missing_env.clone(),
         }
     }
 
     async fn create_invoice(&self, request: CreateInvoiceRequest) -> Result<Invoice> {
         if !self.config.configured {
-            bail!("Midtrans plugin not configured: {:?}", self.config.missing_env);
+            bail!(
+                "Midtrans plugin not configured: {:?}",
+                self.config.missing_env
+            );
         }
 
-        let invoice_uid  = request.metadata.get("invoice_uid").cloned().unwrap_or_default();
-        let video_title  = request.metadata.get("video_title").cloned()
+        let invoice_uid = request
+            .metadata
+            .get("invoice_uid")
+            .cloned()
+            .unwrap_or_default();
+        let video_title = request
+            .metadata
+            .get("video_title")
+            .cloned()
             .unwrap_or_else(|| "Video".into());
-        let buyer_name   = request.metadata.get("buyer_name").cloned()
+        let buyer_name = request
+            .metadata
+            .get("buyer_name")
+            .cloned()
             .unwrap_or_else(|| "Buyer".into());
         let gross_amount = request.amount_cents; // IDR in full units, not cents
-        let success_url  = request.success_url.as_deref()
+        let success_url = request
+            .success_url
+            .as_deref()
             .unwrap_or("https://example.com/pay/success");
-        let cancel_url   = request.cancel_url.as_deref()
+        let cancel_url = request
+            .cancel_url
+            .as_deref()
             .unwrap_or("https://example.com/pay/cancel");
 
         let snap_body = json!({
@@ -157,43 +180,50 @@ impl PaymentPlugin for MidtransPaymentPlugin {
             .map_err(|e| anyhow!("midtrans: snap request failed: {e}"))?;
 
         let http_status = resp.status();
-        let body: Value  = resp.json().await
+        let body: Value = resp
+            .json()
+            .await
             .map_err(|e| anyhow!("midtrans: snap response parse error: {e}"))?;
 
         if !http_status.is_success() {
-            let msg = body["error_messages"].as_array()
+            let msg = body["error_messages"]
+                .as_array()
                 .and_then(|a| a.first())
                 .and_then(|v| v.as_str())
                 .unwrap_or("unknown");
             bail!("midtrans: API {http_status}: {msg}");
         }
 
-        let snap_token   = body["token"].as_str().unwrap_or("").to_string();
+        let snap_token = body["token"].as_str().unwrap_or("").to_string();
         let redirect_url = body["redirect_url"].as_str().map(String::from);
 
         Ok(Invoice {
-            provider:     self.provider_key().into(),
-            invoice_id:   invoice_uid,
-            payment_url:  redirect_url,
+            provider: self.provider_key().into(),
+            invoice_id: invoice_uid,
+            payment_url: redirect_url,
             amount_cents: request.amount_cents,
-            currency:     "IDR".into(),
-            status:       PaymentStatus::Pending,
-            raw:          json!({ "snap_token": snap_token }),
+            currency: "IDR".into(),
+            status: PaymentStatus::Pending,
+            raw: json!({ "snap_token": snap_token }),
         })
     }
 
     async fn confirm_payment(&self, request: ConfirmPaymentRequest) -> Result<PaymentResult> {
         if !self.config.configured {
-            bail!("Midtrans plugin not configured: {:?}", self.config.missing_env);
+            bail!(
+                "Midtrans plugin not configured: {:?}",
+                self.config.missing_env
+            );
         }
 
-        let payload = request.webhook_payload
+        let payload = request
+            .webhook_payload
             .ok_or_else(|| anyhow!("midtrans: no webhook payload"))?;
 
-        let order_id     = payload["order_id"].as_str().unwrap_or("");
-        let status_code  = payload["status_code"].as_str().unwrap_or("");
+        let order_id = payload["order_id"].as_str().unwrap_or("");
+        let status_code = payload["status_code"].as_str().unwrap_or("");
         let gross_amount = payload["gross_amount"].as_str().unwrap_or("0");
-        let sig_from_mt  = payload["signature_key"].as_str().unwrap_or("");
+        let sig_from_mt = payload["signature_key"].as_str().unwrap_or("");
 
         let expected = self.verify_signature(order_id, status_code, gross_amount);
         if expected != sig_from_mt {
@@ -201,17 +231,17 @@ impl PaymentPlugin for MidtransPaymentPlugin {
         }
 
         let txn_status = payload["transaction_status"].as_str().unwrap_or("");
-        let fraud      = payload["fraud_status"].as_str().unwrap_or("accept");
+        let fraud = payload["fraud_status"].as_str().unwrap_or("accept");
 
         let status = match (txn_status, fraud) {
             ("capture", "accept") | ("capture", "challenge") | ("settlement", _) => {
                 PaymentStatus::Paid
             }
             ("deny", _) | ("failure", _) => PaymentStatus::Failed,
-            ("cancel", _)                => PaymentStatus::Cancelled,
-            ("expire", _)                => PaymentStatus::Expired,
-            ("pending", _)               => PaymentStatus::Pending,
-            _                            => PaymentStatus::Unknown,
+            ("cancel", _) => PaymentStatus::Cancelled,
+            ("expire", _) => PaymentStatus::Expired,
+            ("pending", _) => PaymentStatus::Pending,
+            _ => PaymentStatus::Unknown,
         };
 
         let transaction_id = payload["transaction_id"].as_str().map(String::from);
@@ -224,13 +254,13 @@ impl PaymentPlugin for MidtransPaymentPlugin {
             .unwrap_or(0);
 
         Ok(PaymentResult {
-            provider:          self.provider_key().into(),
-            invoice_id:        order_id.into(),
+            provider: self.provider_key().into(),
+            invoice_id: order_id.into(),
             transaction_id,
             status,
             paid_amount_cents: paid_amount,
-            currency:          "IDR".into(),
-            raw:               payload,
+            currency: "IDR".into(),
+            raw: payload,
         })
     }
 }

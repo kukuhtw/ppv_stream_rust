@@ -9,14 +9,14 @@ pub struct Config {
     pub bind: String,
 
     // ===== Direktori =====
-    pub upload_dir: String,   // lokasi file asli hasil upload
-    pub media_dir: String,    // lokasi hasil transcode VOD (HLS siap)
-    pub tmp_dir: String,      // lokasi file sementara
-    pub public_dir: String,   // lokasi static/public (opsional)
+    pub upload_dir: String, // lokasi file asli hasil upload
+    pub media_dir: String,  // lokasi hasil transcode VOD (HLS siap)
+    pub tmp_dir: String,    // lokasi file sementara
+    pub public_dir: String, // lokasi static/public (opsional)
 
     // ===== Alias lama / compat =====
-    pub storage_dir: String,  // alias lama untuk upload_dir
-    pub hls_root: String,     // root session HLS on-the-fly (stream.rs)
+    pub storage_dir: String, // alias lama untuk upload_dir
+    pub hls_root: String,    // root session HLS on-the-fly (stream.rs)
 
     // ===== Parameter HLS & watermark =====
     pub hls_segment_seconds: u32,
@@ -39,9 +39,9 @@ pub struct Config {
     // ===== X402 =====
     pub x402_contract: String,
     pub x402_admin_wallet: String,
-    pub x402_rpc_wss: String,      // untuk watcher (WebSocket RPC)
-    pub x402_chain_id: u64,        // chain default (mis: 137)
-    pub x402_deadline_secs: u64,   // payment window in seconds (default 900 = 15 min)
+    pub x402_rpc_wss: String,    // untuk watcher (WebSocket RPC)
+    pub x402_chain_id: u64,      // chain default (mis: 137)
+    pub x402_deadline_secs: u64, // payment window in seconds (default 900 = 15 min)
 
     // ===== Revenue split =====
     /// Creator share in basis points (0–10000). Default 9000 = 90%.
@@ -188,9 +188,17 @@ impl Config {
             cfg.creator_split_bp,
             cfg.creator_split_bp / 100,
             cfg.x402_deadline_secs,
-            if cfg.x402_contract.is_empty() { "-" } else { &cfg.x402_contract },
+            if cfg.x402_contract.is_empty() {
+                "-"
+            } else {
+                &cfg.x402_contract
+            },
             cfg.x402_chain_id,
-            if cfg.x402_rpc_wss.is_empty() { "-" } else { "set" }
+            if cfg.x402_rpc_wss.is_empty() {
+                "-"
+            } else {
+                "set"
+            }
         );
 
         cfg
@@ -234,7 +242,11 @@ fn redacted(s: &str) -> String {
 
 fn parse_csv_list(s: String) -> Vec<String> {
     s.split(',')
-        .map(|x| x.trim().trim_matches(&[' ', '.', ';'][..]).to_ascii_lowercase())
+        .map(|x| {
+            x.trim()
+                .trim_matches(&[' ', '.', ';'][..])
+                .to_ascii_lowercase()
+        })
         .filter(|x| !x.is_empty())
         .collect()
 }

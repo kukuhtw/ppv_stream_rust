@@ -12,7 +12,11 @@
 //   withdrawal → balance held immediately (pending) → admin marks paid / rejects+refunds
 //   transfer   → instant, atomic, no admin needed; both sides get a ledger row
 
-use axum::{extract::{Query, State}, response::IntoResponse, Json};
+use axum::{
+    extract::{Query, State},
+    response::IntoResponse,
+    Json,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{PgPool, Row};
@@ -22,14 +26,14 @@ use crate::commission;
 use crate::config::Config;
 use crate::sessions;
 
-pub const MIN_DEPOSIT_CENTS:    i64 = 1_000;  // $10
-pub const MIN_WITHDRAWAL_CENTS: i64 = 5_000;  // $50
-pub const MIN_TRANSFER_CENTS:   i64 =   100;  // $1
+pub const MIN_DEPOSIT_CENTS: i64 = 1_000; // $10
+pub const MIN_WITHDRAWAL_CENTS: i64 = 5_000; // $50
+pub const MIN_TRANSFER_CENTS: i64 = 100; // $1
 
 #[derive(Clone)]
 pub struct WalletState {
     pub pool: PgPool,
-    pub cfg:  Config,
+    pub cfg: Config,
 }
 
 fn cents_to_display(c: i64) -> String {
@@ -38,13 +42,10 @@ fn cents_to_display(c: i64) -> String {
 
 // ─── GET /api/wallet/balance ─────────────────────────────────────────────────
 
-pub async fn wallet_balance(
-    State(st): State<WalletState>,
-    cookies:   Cookies,
-) -> impl IntoResponse {
+pub async fn wallet_balance(State(st): State<WalletState>, cookies: Cookies) -> impl IntoResponse {
     let (uid, _) = match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await {
         Some(v) => v,
-        None    => return Json(json!({"ok": false, "error": "not logged in"})),
+        None => return Json(json!({"ok": false, "error": "not logged in"})),
     };
 
     let row = sqlx::query("SELECT balance_cents FROM users WHERE id = $1")
@@ -54,7 +55,7 @@ pub async fn wallet_balance(
 
     let bal: i64 = match row {
         Ok(Some(r)) => r.try_get("balance_cents").unwrap_or(0),
-        _           => 0,
+        _ => 0,
     };
 
     Json(json!({
@@ -73,25 +74,25 @@ pub struct TxnQuery {
 
 #[derive(Serialize)]
 struct TxnRow {
-    id:            i64,
-    txn_type:      String,
-    amount_cents:  i64,
+    id: i64,
+    txn_type: String,
+    amount_cents: i64,
     balance_after: i64,
-    status:        String,
-    ref_username:  Option<String>,
-    note:          Option<String>,
-    admin_note:    Option<String>,
-    created_at:    String,
+    status: String,
+    ref_username: Option<String>,
+    note: Option<String>,
+    admin_note: Option<String>,
+    created_at: String,
 }
 
 pub async fn wallet_transactions(
     State(st): State<WalletState>,
-    cookies:   Cookies,
-    Query(q):  Query<TxnQuery>,
+    cookies: Cookies,
+    Query(q): Query<TxnQuery>,
 ) -> impl IntoResponse {
     let (uid, _) = match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await {
         Some(v) => v,
-        None    => return Json(json!({"ok": false, "error": "not logged in"})),
+        None => return Json(json!({"ok": false, "error": "not logged in"})),
     };
 
     let limit = q.limit.unwrap_or(50).min(200);
@@ -105,7 +106,7 @@ pub async fn wallet_transactions(
            LEFT JOIN users u2 ON u2.id = wt.ref_user_id
            WHERE wt.user_id = $1
            ORDER BY wt.created_at DESC
-           LIMIT $2"#
+           LIMIT $2"#,
     )
     .bind(&uid)
     .bind(limit)
@@ -113,21 +114,27 @@ pub async fn wallet_transactions(
     .await;
 
     let rows = match rows {
-        Ok(r)  => r,
+        Ok(r) => r,
         Err(e) => return Json(json!({"ok": false, "error": format!("db: {e}")})),
     };
 
-    let items: Vec<TxnRow> = rows.iter().map(|r| TxnRow {
-        id:            r.try_get("id").unwrap_or(0),
-        txn_type:      r.try_get("txn_type").unwrap_or_default(),
-        amount_cents:  r.try_get("amount_cents").unwrap_or(0),
-        balance_after: r.try_get("balance_after").unwrap_or(0),
-        status:        r.try_get("status").unwrap_or_default(),
-        ref_username:  r.try_get("ref_username").unwrap_or(None),
-        note:          r.try_get("note").unwrap_or(None),
-        admin_note:    r.try_get("admin_note").unwrap_or(None),
-        created_at:    r.try_get::<Option<String>, _>("created_at").unwrap_or(None).unwrap_or_default(),
-    }).collect();
+    let items: Vec<TxnRow> = rows
+        .iter()
+        .map(|r| TxnRow {
+            id: r.try_get("id").unwrap_or(0),
+            txn_type: r.try_get("txn_type").unwrap_or_default(),
+            amount_cents: r.try_get("amount_cents").unwrap_or(0),
+            balance_after: r.try_get("balance_after").unwrap_or(0),
+            status: r.try_get("status").unwrap_or_default(),
+            ref_username: r.try_get("ref_username").unwrap_or(None),
+            note: r.try_get("note").unwrap_or(None),
+            admin_note: r.try_get("admin_note").unwrap_or(None),
+            created_at: r
+                .try_get::<Option<String>, _>("created_at")
+                .unwrap_or(None)
+                .unwrap_or_default(),
+        })
+        .collect();
 
     Json(json!({"ok": true, "items": items}))
 }
@@ -137,17 +144,17 @@ pub async fn wallet_transactions(
 #[derive(Deserialize)]
 pub struct DepositPayload {
     pub amount_cents: i64,
-    pub note:         Option<String>,
+    pub note: Option<String>,
 }
 
 pub async fn wallet_deposit(
     State(st): State<WalletState>,
-    cookies:   Cookies,
-    Json(p):   Json<DepositPayload>,
+    cookies: Cookies,
+    Json(p): Json<DepositPayload>,
 ) -> impl IntoResponse {
     let (uid, _) = match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await {
         Some(v) => v,
-        None    => return Json(json!({"ok": false, "error": "not logged in"})),
+        None => return Json(json!({"ok": false, "error": "not logged in"})),
     };
 
     if p.amount_cents < MIN_DEPOSIT_CENTS {
@@ -170,7 +177,7 @@ pub async fn wallet_deposit(
         r#"INSERT INTO wallet_transactions
                (user_id, txn_type, amount_cents, balance_after, status, note)
            VALUES ($1, 'deposit', $2, $3, 'pending', $4)
-           RETURNING id"#
+           RETURNING id"#,
     )
     .bind(&uid)
     .bind(p.amount_cents)
@@ -197,17 +204,17 @@ pub async fn wallet_deposit(
 #[derive(Deserialize)]
 pub struct WithdrawPayload {
     pub amount_cents: i64,
-    pub note:         Option<String>,
+    pub note: Option<String>,
 }
 
 pub async fn wallet_withdraw(
     State(st): State<WalletState>,
-    cookies:   Cookies,
-    Json(p):   Json<WithdrawPayload>,
+    cookies: Cookies,
+    Json(p): Json<WithdrawPayload>,
 ) -> impl IntoResponse {
     let (uid, _) = match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await {
         Some(v) => v,
-        None    => return Json(json!({"ok": false, "error": "not logged in"})),
+        None => return Json(json!({"ok": false, "error": "not logged in"})),
     };
 
     if p.amount_cents < MIN_WITHDRAWAL_CENTS {
@@ -218,7 +225,7 @@ pub async fn wallet_withdraw(
     }
 
     let mut tx = match st.pool.begin().await {
-        Ok(t)  => t,
+        Ok(t) => t,
         Err(e) => return Json(json!({"ok": false, "error": format!("begin tx: {e}")})),
     };
 
@@ -229,7 +236,10 @@ pub async fn wallet_withdraw(
 
     let bal: i64 = match bal_row {
         Ok(Some(r)) => r.try_get("balance_cents").unwrap_or(0),
-        _ => { let _ = tx.rollback().await; return Json(json!({"ok": false, "error": "user not found"})); }
+        _ => {
+            let _ = tx.rollback().await;
+            return Json(json!({"ok": false, "error": "user not found"}));
+        }
     };
 
     if bal < p.amount_cents {
@@ -243,7 +253,10 @@ pub async fn wallet_withdraw(
     let new_bal = bal - p.amount_cents;
 
     if let Err(e) = sqlx::query("UPDATE users SET balance_cents = $1 WHERE id = $2")
-        .bind(new_bal).bind(&uid).execute(&mut *tx).await
+        .bind(new_bal)
+        .bind(&uid)
+        .execute(&mut *tx)
+        .await
     {
         let _ = tx.rollback().await;
         return Json(json!({"ok": false, "error": format!("db update: {e}")}));
@@ -253,9 +266,12 @@ pub async fn wallet_withdraw(
         r#"INSERT INTO wallet_transactions
                (user_id, txn_type, amount_cents, balance_after, status, note)
            VALUES ($1, 'withdrawal', $2, $3, 'pending', $4)
-           RETURNING id"#
+           RETURNING id"#,
     )
-    .bind(&uid).bind(p.amount_cents).bind(new_bal).bind(p.note.as_deref())
+    .bind(&uid)
+    .bind(p.amount_cents)
+    .bind(new_bal)
+    .bind(p.note.as_deref())
     .fetch_one(&mut *tx)
     .await;
 
@@ -282,19 +298,19 @@ pub async fn wallet_withdraw(
 
 #[derive(Deserialize)]
 pub struct TransferPayload {
-    pub to_username:  String,
+    pub to_username: String,
     pub amount_cents: i64,
-    pub note:         Option<String>,
+    pub note: Option<String>,
 }
 
 pub async fn wallet_transfer(
     State(st): State<WalletState>,
-    cookies:   Cookies,
-    Json(p):   Json<TransferPayload>,
+    cookies: Cookies,
+    Json(p): Json<TransferPayload>,
 ) -> impl IntoResponse {
     let (uid, _) = match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await {
         Some(v) => v,
-        None    => return Json(json!({"ok": false, "error": "not logged in"})),
+        None => return Json(json!({"ok": false, "error": "not logged in"})),
     };
 
     if p.amount_cents < MIN_TRANSFER_CENTS {
@@ -311,11 +327,11 @@ pub async fn wallet_transfer(
 
     let recip_row = match recip_row {
         Ok(Some(r)) => r,
-        Ok(None)    => return Json(json!({"ok": false, "error": "recipient not found"})),
-        Err(e)      => return Json(json!({"ok": false, "error": format!("db: {e}")})),
+        Ok(None) => return Json(json!({"ok": false, "error": "recipient not found"})),
+        Err(e) => return Json(json!({"ok": false, "error": format!("db: {e}")})),
     };
 
-    let recip_id:   String = recip_row.try_get("id").unwrap_or_default();
+    let recip_id: String = recip_row.try_get("id").unwrap_or_default();
     let recip_name: String = recip_row.try_get("username").unwrap_or_default();
 
     if recip_id == uid {
@@ -323,18 +339,28 @@ pub async fn wallet_transfer(
     }
 
     let mut tx = match st.pool.begin().await {
-        Ok(t)  => t,
+        Ok(t) => t,
         Err(e) => return Json(json!({"ok": false, "error": format!("begin tx: {e}")})),
     };
 
     // Lock both rows in deterministic order to prevent deadlock
-    let (id_a, id_b) = if uid < recip_id { (uid.clone(), recip_id.clone()) } else { (recip_id.clone(), uid.clone()) };
+    let (id_a, id_b) = if uid < recip_id {
+        (uid.clone(), recip_id.clone())
+    } else {
+        (recip_id.clone(), uid.clone())
+    };
     let _ = sqlx::query("SELECT id FROM users WHERE id IN ($1, $2) ORDER BY id FOR UPDATE")
-        .bind(&id_a).bind(&id_b).fetch_all(&mut *tx).await;
+        .bind(&id_a)
+        .bind(&id_b)
+        .fetch_all(&mut *tx)
+        .await;
 
     let sender_bal: i64 = sqlx::query("SELECT balance_cents FROM users WHERE id = $1")
-        .bind(&uid).fetch_optional(&mut *tx).await
-        .ok().flatten()
+        .bind(&uid)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten()
         .map(|r: sqlx::postgres::PgRow| r.try_get("balance_cents").unwrap_or(0))
         .unwrap_or(0);
 
@@ -347,21 +373,36 @@ pub async fn wallet_transfer(
     }
 
     let recip_bal: i64 = sqlx::query("SELECT balance_cents FROM users WHERE id = $1")
-        .bind(&recip_id).fetch_optional(&mut *tx).await
-        .ok().flatten()
+        .bind(&recip_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten()
         .map(|r: sqlx::postgres::PgRow| r.try_get("balance_cents").unwrap_or(0))
         .unwrap_or(0);
 
     let sender_new = sender_bal - p.amount_cents;
-    let recip_new  = recip_bal  + p.amount_cents;
+    let recip_new = recip_bal + p.amount_cents;
 
     if let Err(e) = sqlx::query("UPDATE users SET balance_cents = $1 WHERE id = $2")
-        .bind(sender_new).bind(&uid).execute(&mut *tx).await
-    { let _ = tx.rollback().await; return Json(json!({"ok": false, "error": format!("db sender: {e}")})); }
+        .bind(sender_new)
+        .bind(&uid)
+        .execute(&mut *tx)
+        .await
+    {
+        let _ = tx.rollback().await;
+        return Json(json!({"ok": false, "error": format!("db sender: {e}")}));
+    }
 
     if let Err(e) = sqlx::query("UPDATE users SET balance_cents = $1 WHERE id = $2")
-        .bind(recip_new).bind(&recip_id).execute(&mut *tx).await
-    { let _ = tx.rollback().await; return Json(json!({"ok": false, "error": format!("db recipient: {e}")})); }
+        .bind(recip_new)
+        .bind(&recip_id)
+        .execute(&mut *tx)
+        .await
+    {
+        let _ = tx.rollback().await;
+        return Json(json!({"ok": false, "error": format!("db recipient: {e}")}));
+    }
 
     if let Err(e) = sqlx::query(
         "INSERT INTO wallet_transactions (user_id,txn_type,amount_cents,balance_after,status,ref_user_id,note) VALUES ($1,'transfer_out',$2,$3,'completed',$4,$5)"
@@ -376,7 +417,7 @@ pub async fn wallet_transfer(
     { let _ = tx.rollback().await; return Json(json!({"ok": false, "error": format!("ledger in: {e}")})); }
 
     match tx.commit().await {
-        Ok(_)  => Json(json!({
+        Ok(_) => Json(json!({
             "ok": true,
             "balance_cents":   sender_new,
             "balance_display": cents_to_display(sender_new),
@@ -400,12 +441,12 @@ pub struct WalletPayPayload {
 
 pub async fn wallet_pay_video(
     State(st): State<WalletState>,
-    cookies:   Cookies,
-    Json(p):   Json<WalletPayPayload>,
+    cookies: Cookies,
+    Json(p): Json<WalletPayPayload>,
 ) -> impl IntoResponse {
     let (uid, _) = match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await {
         Some(v) => v,
-        None    => return Json(json!({"ok": false, "error": "not logged in"})),
+        None => return Json(json!({"ok": false, "error": "not logged in"})),
     };
 
     if p.video_id.is_empty() {
@@ -415,7 +456,7 @@ pub async fn wallet_pay_video(
     // Load video and creator info
     let video_row = sqlx::query(
         "SELECT v.price_cents, v.owner_id, u.username AS owner_username \
-         FROM videos v JOIN users u ON u.id = v.owner_id WHERE v.id = $1 LIMIT 1"
+         FROM videos v JOIN users u ON u.id = v.owner_id WHERE v.id = $1 LIMIT 1",
     )
     .bind(&p.video_id)
     .fetch_optional(&st.pool)
@@ -423,13 +464,13 @@ pub async fn wallet_pay_video(
 
     let video_row = match video_row {
         Ok(Some(r)) => r,
-        Ok(None)    => return Json(json!({"ok": false, "error": "video not found"})),
-        Err(e)      => return Json(json!({"ok": false, "error": format!("db: {e}")})),
+        Ok(None) => return Json(json!({"ok": false, "error": "video not found"})),
+        Err(e) => return Json(json!({"ok": false, "error": format!("db: {e}")})),
     };
 
-    let price_cents:     i64    = video_row.try_get("price_cents").unwrap_or(0);
-    let owner_id:        String = video_row.try_get("owner_id").unwrap_or_default();
-    let owner_username:  String = video_row.try_get("owner_username").unwrap_or_default();
+    let price_cents: i64 = video_row.try_get("price_cents").unwrap_or(0);
+    let owner_id: String = video_row.try_get("owner_id").unwrap_or_default();
+    let owner_username: String = video_row.try_get("owner_username").unwrap_or_default();
 
     if owner_id == uid {
         return Json(json!({"ok": false, "error": "you own this video"}));
@@ -439,13 +480,13 @@ pub async fn wallet_pay_video(
     }
 
     // Check already purchased
-    let already: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM purchases WHERE user_id = $1 AND video_id = $2"
-    )
-    .bind(&uid).bind(&p.video_id)
-    .fetch_one(&st.pool)
-    .await
-    .unwrap_or(0);
+    let already: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM purchases WHERE user_id = $1 AND video_id = $2")
+            .bind(&uid)
+            .bind(&p.video_id)
+            .fetch_one(&st.pool)
+            .await
+            .unwrap_or(0);
 
     if already > 0 {
         return Json(json!({"ok": false, "error": "already purchased"}));
@@ -461,25 +502,34 @@ pub async fn wallet_pay_video(
         .unwrap_or_default();
 
     // Creator split (basis points, e.g. 9000 = 90%)
-    let creator_cut = (price_cents as i128)
-        .saturating_mul(st.cfg.creator_split_bp as i128)
-        / 10_000;
+    let creator_cut =
+        (price_cents as i128).saturating_mul(st.cfg.creator_split_bp as i128) / 10_000;
     let creator_cut = creator_cut as i64;
 
     let mut tx = match st.pool.begin().await {
-        Ok(t)  => t,
+        Ok(t) => t,
         Err(e) => return Json(json!({"ok": false, "error": format!("begin tx: {e}")})),
     };
 
     // Lock buyer + creator rows in deterministic order
-    let (id_a, id_b) = if uid < owner_id { (uid.clone(), owner_id.clone()) } else { (owner_id.clone(), uid.clone()) };
+    let (id_a, id_b) = if uid < owner_id {
+        (uid.clone(), owner_id.clone())
+    } else {
+        (owner_id.clone(), uid.clone())
+    };
     let _ = sqlx::query("SELECT id FROM users WHERE id IN ($1, $2) ORDER BY id FOR UPDATE")
-        .bind(&id_a).bind(&id_b).fetch_all(&mut *tx).await;
+        .bind(&id_a)
+        .bind(&id_b)
+        .fetch_all(&mut *tx)
+        .await;
 
     // Check buyer balance
     let buyer_bal: i64 = sqlx::query("SELECT balance_cents FROM users WHERE id = $1")
-        .bind(&uid).fetch_optional(&mut *tx).await
-        .ok().flatten()
+        .bind(&uid)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten()
         .map(|r: sqlx::postgres::PgRow| r.try_get("balance_cents").unwrap_or(0))
         .unwrap_or(0);
 
@@ -494,23 +544,38 @@ pub async fn wallet_pay_video(
 
     // Read creator balance
     let creator_bal: i64 = sqlx::query("SELECT balance_cents FROM users WHERE id = $1")
-        .bind(&owner_id).fetch_optional(&mut *tx).await
-        .ok().flatten()
+        .bind(&owner_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .ok()
+        .flatten()
         .map(|r: sqlx::postgres::PgRow| r.try_get("balance_cents").unwrap_or(0))
         .unwrap_or(0);
 
-    let buyer_new   = buyer_bal   - price_cents;
+    let buyer_new = buyer_bal - price_cents;
     let creator_new = creator_bal + creator_cut;
 
     // Deduct buyer
     if let Err(e) = sqlx::query("UPDATE users SET balance_cents = $1 WHERE id = $2")
-        .bind(buyer_new).bind(&uid).execute(&mut *tx).await
-    { let _ = tx.rollback().await; return Json(json!({"ok": false, "error": format!("db buyer: {e}")})); }
+        .bind(buyer_new)
+        .bind(&uid)
+        .execute(&mut *tx)
+        .await
+    {
+        let _ = tx.rollback().await;
+        return Json(json!({"ok": false, "error": format!("db buyer: {e}")}));
+    }
 
     // Credit creator
     if let Err(e) = sqlx::query("UPDATE users SET balance_cents = $1 WHERE id = $2")
-        .bind(creator_new).bind(&owner_id).execute(&mut *tx).await
-    { let _ = tx.rollback().await; return Json(json!({"ok": false, "error": format!("db creator: {e}")})); }
+        .bind(creator_new)
+        .bind(&owner_id)
+        .execute(&mut *tx)
+        .await
+    {
+        let _ = tx.rollback().await;
+        return Json(json!({"ok": false, "error": format!("db creator: {e}")}));
+    }
 
     // Ledger: buyer side (payment)
     if let Err(e) = sqlx::query(
@@ -553,9 +618,17 @@ pub async fn wallet_pay_video(
             // Best-effort affiliate commission (separate tx; does not fail the purchase)
             if let Some(ref_username) = p.ref_code.as_deref().filter(|s| !s.is_empty()) {
                 if let Err(e) = commission::process_affiliate_commission(
-                    &st.pool, &p.video_id, &uid, &owner_id,
-                    price_cents, ref_username, "wallet", None,
-                ).await {
+                    &st.pool,
+                    &p.video_id,
+                    &uid,
+                    &owner_id,
+                    price_cents,
+                    ref_username,
+                    "wallet",
+                    None,
+                )
+                .await
+                {
                     tracing::warn!("affiliate commission skipped: {e}");
                 }
             }

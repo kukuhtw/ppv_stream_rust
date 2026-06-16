@@ -106,9 +106,12 @@ pub async fn faststart_mp4(input: &str, output: &str) -> Result<()> {
 pub async fn ffprobe_duration(input: &str) -> Option<f64> {
     let mut cmd = Command::new("ffprobe");
     cmd.args([
-        "-v", "error",
-        "-show_entries", "format=duration",
-        "-of", "default=noprint_wrappers=1:nokey=1",
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
         input,
     ])
     .stdin(Stdio::null())
@@ -133,10 +136,14 @@ pub async fn ffprobe_duration(input: &str) -> Option<f64> {
 pub async fn ffprobe_dimensions(input: &str) -> Option<(u32, u32)> {
     let mut cmd = Command::new("ffprobe");
     cmd.args([
-        "-v", "error",
-        "-select_streams", "v:0",
-        "-show_entries", "stream=width,height",
-        "-of", "csv=p=0:s=x",
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=width,height",
+        "-of",
+        "csv=p=0:s=x",
         input,
     ])
     .stdin(Stdio::null())
@@ -164,10 +171,14 @@ pub async fn ffprobe_dimensions(input: &str) -> Option<(u32, u32)> {
 pub async fn ffprobe_has_audio(input: &str) -> bool {
     let mut cmd = Command::new("ffprobe");
     cmd.args([
-        "-v", "error",
-        "-select_streams", "a:0",
-        "-show_entries", "stream=index",
-        "-of", "csv=p=0",
+        "-v",
+        "error",
+        "-select_streams",
+        "a:0",
+        "-show_entries",
+        "stream=index",
+        "-of",
+        "csv=p=0",
         input,
     ])
     .stdin(Stdio::null())
@@ -217,16 +228,14 @@ pub async fn encode_hls_abr(
     let g = (24 * seg_seconds.max(1)) as i32;
     let seg_str = seg_seconds.to_string();
 
-    let split_labels: Vec<String> = (0..n).map(|i| format!("[v{i}]")) .collect();
-    let vouts: Vec<String> = (0..n).map(|i| format!("[vout{i}]")) .collect();
+    let split_labels: Vec<String> = (0..n).map(|i| format!("[v{i}]")).collect();
+    let vouts: Vec<String> = (0..n).map(|i| format!("[vout{i}]")).collect();
     let split_part = format!("[0:v]split={}{labels}", n, labels = split_labels.join(""));
     let scale_parts: Vec<String> = ladder
         .iter()
         .enumerate()
         .map(|(i, h)| {
-            format!(
-                "[v{i}]scale=-2:{h}:force_original_aspect_ratio=decrease:eval=frame[vout{i}]"
-            )
+            format!("[v{i}]scale=-2:{h}:force_original_aspect_ratio=decrease:eval=frame[vout{i}]")
         })
         .collect();
     let filter_complex = format!("{};{}", split_part, scale_parts.join(";"));

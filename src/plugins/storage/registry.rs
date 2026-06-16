@@ -30,10 +30,7 @@ impl StorageRegistry {
                     Arc::new(p)
                 }
                 Err(e) => {
-                    tracing::error!(
-                        "storage: {} init failed — {e}; falling back to local",
-                        name
-                    );
+                    tracing::error!("storage: {} init failed — {e}; falling back to local", name);
                     Arc::new(LocalStoragePlugin::from_env())
                 }
             },

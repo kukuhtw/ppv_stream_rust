@@ -19,14 +19,14 @@ use crate::plugins::storage::traits::StoragePlugin;
 
 pub struct LocalStoragePlugin {
     base_path: String,
-    base_url:  String,
+    base_url: String,
 }
 
 impl LocalStoragePlugin {
     pub fn from_env() -> Self {
         Self {
             base_path: std::env::var("STORAGE_LOCAL_PATH").unwrap_or_else(|_| "storage".into()),
-            base_url:  std::env::var("BASE_URL").unwrap_or_else(|_| "http://localhost:8080".into()),
+            base_url: std::env::var("BASE_URL").unwrap_or_else(|_| "http://localhost:8080".into()),
         }
     }
 
@@ -37,12 +37,20 @@ impl LocalStoragePlugin {
 
 #[async_trait]
 impl StoragePlugin for LocalStoragePlugin {
-    fn backend_name(&self) -> &'static str { "local" }
-    fn is_local(&self)     -> bool          { true }
+    fn backend_name(&self) -> &'static str {
+        "local"
+    }
+    fn is_local(&self) -> bool {
+        true
+    }
 
     // Files live on the local filesystem already — nothing to upload.
-    async fn put_file(&self, _key: &str, _path: &Path) -> Result<()> { Ok(()) }
-    async fn put_dir(&self, _key_prefix: &str, _local_dir: &Path) -> Result<usize> { Ok(0) }
+    async fn put_file(&self, _key: &str, _path: &Path) -> Result<()> {
+        Ok(())
+    }
+    async fn put_dir(&self, _key_prefix: &str, _local_dir: &Path) -> Result<usize> {
+        Ok(0)
+    }
 
     async fn get_url(&self, key: &str) -> String {
         format!("{}/storage/{}", self.base_url.trim_end_matches('/'), key)

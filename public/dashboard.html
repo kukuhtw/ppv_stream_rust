@@ -180,6 +180,44 @@
     </div>
   </div>
 
+  <div class="card shadow-sm mb-4">
+    <div class="card-header d-flex align-items-center gap-2">
+      <span class="fw-semibold me-auto">Chat</span>
+      <button id="supportChatBtn" class="btn btn-sm btn-outline-primary" type="button">Chat Admin</button>
+    </div>
+    <div class="card-body">
+      <div class="row g-4">
+        <div class="col-lg-4">
+          <label for="chatUserSearch" class="form-label">Start chat with another user</label>
+          <input id="chatUserSearch" class="form-control mb-2" placeholder="Search username or email">
+          <div id="chatSearchResults" class="list-group small mb-3"></div>
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <h6 class="mb-0">Your conversations</h6>
+            <button id="chatRefreshBtn" class="btn btn-sm btn-outline-secondary" type="button">Refresh</button>
+          </div>
+          <div id="chatConversations" class="list-group small"></div>
+        </div>
+        <div class="col-lg-8">
+          <div class="border rounded-3 p-3 bg-body-tertiary">
+            <div class="d-flex align-items-center justify-content-between gap-3 mb-3">
+              <div>
+                <div id="chatTitle" class="fw-semibold">Select a conversation</div>
+                <div id="chatMeta" class="text-body-secondary small">Messages are recorded in the database.</div>
+              </div>
+            </div>
+            <div id="chatMessages" class="border rounded-3 bg-body overflow-auto p-3 mb-3" style="height:320px">
+              <div class="text-body-secondary small">No conversation selected yet.</div>
+            </div>
+            <form id="chatForm" class="d-flex gap-2">
+              <input id="chatMessageInput" class="form-control" placeholder="Type a message" maxlength="4000" disabled>
+              <button id="chatSendBtn" class="btn btn-primary" type="submit" disabled>Send</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -189,7 +227,10 @@
   try {
     const j = await fetch('/api/me').then(r=>r.json());
     const el = document.getElementById('userbar');
-    if (j.ok && j.user) el.innerHTML = `<b>${esc(j.user.username)}</b> &lt;${esc(j.user.email)}&gt;`;
+    if (j.ok && j.user) {
+      window.currentMe = j.user;
+      el.innerHTML = `<b>${esc(j.user.username)}</b> &lt;${esc(j.user.email)}&gt;`;
+    }
     else location.href = '/public/auth/login.html';
   } catch {}
 })();
@@ -369,8 +410,193 @@ document.getElementById('mine').addEventListener('submit', async e => {
   } catch(err) { alert('Error: ' + err); }
 });
 
+const chatState = {
+  conversations: [],
+  activeConversationId: '',
+  pollHandle: null,
+  searchHandle: null,
+};
+
+function fmtChatTime(value) {
+  if (!value) return '';
+  return String(value).replace('T', ' ').slice(0, 16);
+}
+
+function setChatComposerEnabled(enabled) {
+  document.getElementById('chatMessageInput').disabled = !enabled;
+  document.getElementById('chatSendBtn').disabled = !enabled;
+}
+
+function renderChatConversations() {
+  const box = document.getElementById('chatConversations');
+  if (!chatState.conversations.length) {
+    box.innerHTML = '<div class="text-body-secondary small">No conversations yet.</div>';
+    return;
+  }
+  box.innerHTML = chatState.conversations.map(c => {
+    const active = c.id === chatState.activeConversationId ? 'active' : '';
+    const preview = c.last_message ? esc(c.last_message.slice(0, 70)) : '<span class="text-body-secondary">No messages yet.</span>';
+    const when = fmtChatTime(c.last_message_at || c.created_at);
+    return `<button type="button" class="list-group-item list-group-item-action ${active}" data-chat-open="${esc(c.id)}">
+      <div class="d-flex justify-content-between align-items-start gap-2">
+        <div class="fw-semibold text-start">${esc(c.title || 'Conversation')}</div>
+        <small class="text-body-secondary">${esc(when)}</small>
+      </div>
+      <div class="text-body-secondary small text-start">${preview}</div>
+    </button>`;
+  }).join('');
+}
+
+async function loadChatConversations(preferredId) {
+  try {
+    const j = await fetch('/api/chat/conversations').then(r => r.json());
+    if (!j.ok) return;
+    chatState.conversations = Array.isArray(j.conversations) ? j.conversations : [];
+    if (preferredId) chatState.activeConversationId = preferredId;
+    if (!chatState.activeConversationId && chatState.conversations.length) {
+      chatState.activeConversationId = chatState.conversations[0].id;
+    }
+    if (chatState.activeConversationId && !chatState.conversations.some(c => c.id === chatState.activeConversationId)) {
+      chatState.activeConversationId = chatState.conversations[0]?.id || '';
+    }
+    renderChatConversations();
+    if (chatState.activeConversationId) await openConversation(chatState.activeConversationId, true);
+  } catch {}
+}
+
+async function openConversation(conversationId, preserveScroll = false) {
+  const convo = chatState.conversations.find(c => c.id === conversationId);
+  chatState.activeConversationId = conversationId;
+  renderChatConversations();
+  document.getElementById('chatTitle').textContent = convo?.title || 'Conversation';
+  document.getElementById('chatMeta').textContent = convo?.conversation_type === 'admin_support'
+    ? 'Support chat with admin. Every message is stored in the database.'
+    : 'Direct chat between users. Every message is stored in the database.';
+  setChatComposerEnabled(true);
+  const box = document.getElementById('chatMessages');
+  const shouldStickToBottom = !preserveScroll || Math.abs(box.scrollHeight - box.scrollTop - box.clientHeight) < 32;
+  box.innerHTML = '<div class="text-body-secondary small">Loading messages...</div>';
+  try {
+    const j = await fetch(`/api/chat/conversations/${encodeURIComponent(conversationId)}/messages`).then(r => r.json());
+    if (!j.ok) {
+      box.innerHTML = `<div class="text-danger small">${esc(j.error || 'Failed to load messages')}</div>`;
+      return;
+    }
+    const messages = Array.isArray(j.messages) ? j.messages : [];
+    if (!messages.length) {
+      box.innerHTML = '<div class="text-body-secondary small">No messages yet. Start the conversation.</div>';
+      if (shouldStickToBottom) box.scrollTop = box.scrollHeight;
+      return;
+    }
+    box.innerHTML = messages.map(m => {
+      const align = m.is_self ? 'text-end' : 'text-start';
+      const bubble = m.is_self ? 'bg-primary text-white ms-auto' : 'bg-body-secondary';
+      const name = m.is_self ? 'You' : `${m.sender_username}${m.sender_is_admin ? ' (Admin)' : ''}`;
+      return `<div class="${align} mb-2">
+        <div class="small text-body-secondary mb-1">${esc(name)} · ${esc(fmtChatTime(m.created_at))}</div>
+        <div class="d-inline-block rounded-3 px-3 py-2 ${bubble}" style="max-width:85%; white-space:pre-wrap">${esc(m.body)}</div>
+      </div>`;
+    }).join('');
+    if (shouldStickToBottom) box.scrollTop = box.scrollHeight;
+  } catch (err) {
+    box.innerHTML = `<div class="text-danger small">${esc(String(err))}</div>`;
+  }
+}
+
+async function ensureSupportChat() {
+  try {
+    const j = await fetch('/api/chat/conversations/support', { method: 'POST' }).then(r => r.json());
+    if (!j.ok) return alert('Failed to open admin chat: ' + (j.error || 'unknown'));
+    await loadChatConversations(j.conversation_id);
+  } catch (err) {
+    alert('Failed to open admin chat: ' + err);
+  }
+}
+
+async function searchChatUsers() {
+  const q = document.getElementById('chatUserSearch').value.trim();
+  const box = document.getElementById('chatSearchResults');
+  if (!q) {
+    box.innerHTML = '';
+    return;
+  }
+  try {
+    const j = await fetch('/api/chat/users?' + new URLSearchParams({ q })).then(r => r.json());
+    const users = Array.isArray(j.users) ? j.users : [];
+    if (!users.length) {
+      box.innerHTML = '<div class="text-body-secondary small">No matching users.</div>';
+      return;
+    }
+    box.innerHTML = users.map(u => `<button type="button" class="list-group-item list-group-item-action" data-chat-user="${esc(u.id)}">
+      <div class="fw-semibold">${esc(u.username)}</div>
+      <div class="text-body-secondary">${esc(u.email)}</div>
+    </button>`).join('');
+  } catch {
+    box.innerHTML = '<div class="text-danger small">Search failed.</div>';
+  }
+}
+
+async function startDirectChat(targetUserId) {
+  try {
+    const j = await fetch('/api/chat/conversations/direct', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target_user_id: targetUserId })
+    }).then(r => r.json());
+    if (!j.ok) return alert('Failed to start chat: ' + (j.error || 'unknown'));
+    document.getElementById('chatUserSearch').value = '';
+    document.getElementById('chatSearchResults').innerHTML = '';
+    await loadChatConversations(j.conversation_id);
+  } catch (err) {
+    alert('Failed to start chat: ' + err);
+  }
+}
+
+document.getElementById('supportChatBtn').addEventListener('click', ensureSupportChat);
+document.getElementById('chatRefreshBtn').addEventListener('click', () => loadChatConversations(chatState.activeConversationId));
+document.getElementById('chatConversations').addEventListener('click', e => {
+  const btn = e.target.closest('[data-chat-open]');
+  if (btn) openConversation(btn.dataset.chatOpen);
+});
+document.getElementById('chatSearchResults').addEventListener('click', e => {
+  const btn = e.target.closest('[data-chat-user]');
+  if (btn) startDirectChat(btn.dataset.chatUser);
+});
+document.getElementById('chatUserSearch').addEventListener('input', () => {
+  clearTimeout(chatState.searchHandle);
+  chatState.searchHandle = setTimeout(searchChatUsers, 250);
+});
+document.getElementById('chatForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  if (!chatState.activeConversationId) return;
+  const input = document.getElementById('chatMessageInput');
+  const body = input.value.trim();
+  if (!body) return;
+  const btn = document.getElementById('chatSendBtn');
+  btn.disabled = true;
+  try {
+    const j = await fetch(`/api/chat/conversations/${encodeURIComponent(chatState.activeConversationId)}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ body })
+    }).then(r => r.json());
+    if (!j.ok) return alert('Failed to send message: ' + (j.error || 'unknown'));
+    input.value = '';
+    await loadChatConversations(chatState.activeConversationId);
+  } catch (err) {
+    alert('Failed to send message: ' + err);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 (async () => { await loadMyVideos(); await renderMyVideos(); })();
 document.getElementById('refreshBtn').addEventListener('click', async () => { await loadMyVideos(); await renderMyVideos(); });
+setChatComposerEnabled(false);
+loadChatConversations();
+chatState.pollHandle = setInterval(() => {
+  loadChatConversations(chatState.activeConversationId);
+}, 8000);
 </script>
 </body>
 </html>

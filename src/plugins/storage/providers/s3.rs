@@ -21,28 +21,29 @@
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use bytes::Bytes;
-use object_store::{aws::AmazonS3Builder, ObjectStore, PutPayload};
 use object_store::path::Path as ObjPath;
+use object_store::{aws::AmazonS3Builder, ObjectStore, PutPayload};
 use std::path::Path;
 use std::sync::Arc;
 
 use crate::plugins::storage::traits::StoragePlugin;
 
 pub struct S3StoragePlugin {
-    store:      Arc<dyn ObjectStore>,
-    bucket:     String,
-    region:     String,
-    endpoint:   String,
+    store: Arc<dyn ObjectStore>,
+    bucket: String,
+    region: String,
+    endpoint: String,
     public_url: Option<String>,
 }
 
 impl S3StoragePlugin {
     pub fn from_env() -> Result<Self> {
-        let bucket     = std::env::var("S3_BUCKET").context("S3_BUCKET is required for s3/minio storage backend")?;
-        let region     = std::env::var("S3_REGION").unwrap_or_else(|_| "us-east-1".into());
+        let bucket = std::env::var("S3_BUCKET")
+            .context("S3_BUCKET is required for s3/minio storage backend")?;
+        let region = std::env::var("S3_REGION").unwrap_or_else(|_| "us-east-1".into());
         let access_key = std::env::var("S3_ACCESS_KEY").unwrap_or_default();
         let secret_key = std::env::var("S3_SECRET_KEY").unwrap_or_default();
-        let endpoint   = std::env::var("S3_ENDPOINT").unwrap_or_default();
+        let endpoint = std::env::var("S3_ENDPOINT").unwrap_or_default();
         let path_style = std::env::var("S3_PATH_STYLE").ok().as_deref() == Some("true");
         let public_url = std::env::var("S3_PUBLIC_URL").ok();
 
@@ -66,10 +67,12 @@ impl S3StoragePlugin {
             }
         }
 
-        let store = builder.build().context("failed to build S3 object store client")?;
+        let store = builder
+            .build()
+            .context("failed to build S3 object store client")?;
 
         Ok(Self {
-            store:      Arc::new(store),
+            store: Arc::new(store),
             bucket,
             region,
             endpoint,
@@ -114,8 +117,12 @@ impl S3StoragePlugin {
 
 #[async_trait]
 impl StoragePlugin for S3StoragePlugin {
-    fn backend_name(&self) -> &'static str { "s3" }
-    fn is_local(&self)     -> bool          { false }
+    fn backend_name(&self) -> &'static str {
+        "s3"
+    }
+    fn is_local(&self) -> bool {
+        false
+    }
 
     async fn put_file(&self, key: &str, path: &Path) -> Result<()> {
         let data: Vec<u8> = tokio::fs::read(path)
@@ -151,14 +158,22 @@ impl StoragePlugin for S3StoragePlugin {
         }
         // 2. Custom endpoint (MinIO path-style)
         if !self.endpoint.is_empty() {
-            return format!("{}/{}/{key}", self.endpoint.trim_end_matches('/'), self.bucket);
+            return format!(
+                "{}/{}/{key}",
+                self.endpoint.trim_end_matches('/'),
+                self.bucket
+            );
         }
         // 3. AWS S3 virtual-hosted-style
-        format!("https://{}.s3.{}.amazonaws.com/{key}", self.bucket, self.region)
+        format!(
+            "https://{}.s3.{}.amazonaws.com/{key}",
+            self.bucket, self.region
+        )
     }
 
     async fn get_to_file(&self, key: &str, dest: &Path) -> Result<()> {
-        let result = self.store
+        let result = self
+            .store
             .get(&Self::obj_path(key))
             .await
             .with_context(|| format!("S3 get {key}"))?;

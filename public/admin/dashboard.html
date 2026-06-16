@@ -84,6 +84,35 @@
     </div>
   </div>
 
+  <div class="card shadow-sm mb-4">
+    <div class="card-header d-flex align-items-center gap-2">
+      <span class="fw-semibold me-auto">User Support Chat</span>
+      <button id="adminChatRefreshBtn" class="btn btn-sm btn-outline-secondary" type="button">Refresh</button>
+    </div>
+    <div class="card-body">
+      <div class="row g-4">
+        <div class="col-lg-4">
+          <div id="adminChatConversations" class="list-group small"></div>
+        </div>
+        <div class="col-lg-8">
+          <div class="border rounded-3 p-3 bg-body-tertiary">
+            <div class="mb-3">
+              <div id="adminChatTitle" class="fw-semibold">Select a support thread</div>
+              <div id="adminChatMeta" class="text-body-secondary small">All support messages are stored in the database.</div>
+            </div>
+            <div id="adminChatMessages" class="border rounded-3 bg-body overflow-auto p-3 mb-3" style="height:320px">
+              <div class="text-body-secondary small">No support thread selected yet.</div>
+            </div>
+            <form id="adminChatForm" class="d-flex gap-2">
+              <input id="adminChatInput" class="form-control" placeholder="Reply to user" maxlength="4000" disabled>
+              <button id="adminChatSendBtn" class="btn btn-danger" type="submit" disabled>Send</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Recent payments -->
   <div class="card shadow-sm">
     <div class="card-header d-flex align-items-center gap-2">
@@ -115,8 +144,127 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 document.getElementById('logoutBtn').addEventListener('click', async () => {
-  await fetch('/auth/logout', { method:'POST' }).catch(()=>{});
-  location.href = '/public/auth/login.html';
+  await fetch('/admin/logout', { method:'POST' }).catch(()=>{});
+  location.href = '/public/admin/login.html';
+});
+
+const adminChatState = {
+  conversations: [],
+  activeConversationId: '',
+  pollHandle: null,
+};
+
+function fmtChatTime(value) {
+  if (!value) return '';
+  return String(value).replace('T', ' ').slice(0, 16);
+}
+
+function setAdminChatComposerEnabled(enabled) {
+  document.getElementById('adminChatInput').disabled = !enabled;
+  document.getElementById('adminChatSendBtn').disabled = !enabled;
+}
+
+function renderAdminChatConversations() {
+  const box = document.getElementById('adminChatConversations');
+  if (!adminChatState.conversations.length) {
+    box.innerHTML = '<div class="text-body-secondary small">No support chats yet.</div>';
+    return;
+  }
+  box.innerHTML = adminChatState.conversations.map(c => {
+    const active = c.id === adminChatState.activeConversationId ? 'active' : '';
+    const preview = c.last_message ? esc(c.last_message.slice(0, 70)) : '<span class="text-body-secondary">No messages yet.</span>';
+    return `<button type="button" class="list-group-item list-group-item-action ${active}" data-admin-chat-open="${esc(c.id)}">
+      <div class="d-flex justify-content-between align-items-start gap-2">
+        <div class="fw-semibold text-start">${esc(c.title || 'Support')}</div>
+        <small class="text-body-secondary">${esc(fmtChatTime(c.last_message_at || c.created_at))}</small>
+      </div>
+      <div class="text-body-secondary small text-start">${preview}</div>
+    </button>`;
+  }).join('');
+}
+
+async function loadAdminChatConversations(preferredId) {
+  try {
+    const j = await fetch('/api/chat/conversations').then(r => r.json());
+    if (!j.ok) return;
+    adminChatState.conversations = Array.isArray(j.conversations) ? j.conversations : [];
+    if (preferredId) adminChatState.activeConversationId = preferredId;
+    if (!adminChatState.activeConversationId && adminChatState.conversations.length) {
+      adminChatState.activeConversationId = adminChatState.conversations[0].id;
+    }
+    if (adminChatState.activeConversationId && !adminChatState.conversations.some(c => c.id === adminChatState.activeConversationId)) {
+      adminChatState.activeConversationId = adminChatState.conversations[0]?.id || '';
+    }
+    renderAdminChatConversations();
+    if (adminChatState.activeConversationId) await openAdminConversation(adminChatState.activeConversationId, true);
+  } catch {}
+}
+
+async function openAdminConversation(conversationId, preserveScroll = false) {
+  const convo = adminChatState.conversations.find(c => c.id === conversationId);
+  adminChatState.activeConversationId = conversationId;
+  renderAdminChatConversations();
+  document.getElementById('adminChatTitle').textContent = convo?.title || 'Support';
+  document.getElementById('adminChatMeta').textContent = convo?.counterpart?.email
+    ? `User email: ${convo.counterpart.email}`
+    : 'All support messages are stored in the database.';
+  setAdminChatComposerEnabled(true);
+  const box = document.getElementById('adminChatMessages');
+  const shouldStickToBottom = !preserveScroll || Math.abs(box.scrollHeight - box.scrollTop - box.clientHeight) < 32;
+  box.innerHTML = '<div class="text-body-secondary small">Loading messages...</div>';
+  try {
+    const j = await fetch(`/api/chat/conversations/${encodeURIComponent(conversationId)}/messages`).then(r => r.json());
+    if (!j.ok) {
+      box.innerHTML = `<div class="text-danger small">${esc(j.error || 'Failed to load messages')}</div>`;
+      return;
+    }
+    const messages = Array.isArray(j.messages) ? j.messages : [];
+    if (!messages.length) {
+      box.innerHTML = '<div class="text-body-secondary small">No messages yet.</div>';
+      return;
+    }
+    box.innerHTML = messages.map(m => {
+      const align = m.is_self ? 'text-end' : 'text-start';
+      const bubble = m.is_self ? 'bg-danger text-white ms-auto' : 'bg-body-secondary';
+      const senderLabel = m.is_self ? 'Admin' : m.sender_username;
+      return `<div class="${align} mb-2">
+        <div class="small text-body-secondary mb-1">${esc(senderLabel)} · ${esc(fmtChatTime(m.created_at))}</div>
+        <div class="d-inline-block rounded-3 px-3 py-2 ${bubble}" style="max-width:85%; white-space:pre-wrap">${esc(m.body)}</div>
+      </div>`;
+    }).join('');
+    if (shouldStickToBottom) box.scrollTop = box.scrollHeight;
+  } catch (err) {
+    box.innerHTML = `<div class="text-danger small">${esc(String(err))}</div>`;
+  }
+}
+
+document.getElementById('adminChatRefreshBtn').addEventListener('click', () => loadAdminChatConversations(adminChatState.activeConversationId));
+document.getElementById('adminChatConversations').addEventListener('click', e => {
+  const btn = e.target.closest('[data-admin-chat-open]');
+  if (btn) openAdminConversation(btn.dataset.adminChatOpen);
+});
+document.getElementById('adminChatForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  if (!adminChatState.activeConversationId) return;
+  const input = document.getElementById('adminChatInput');
+  const body = input.value.trim();
+  if (!body) return;
+  const btn = document.getElementById('adminChatSendBtn');
+  btn.disabled = true;
+  try {
+    const j = await fetch(`/api/chat/conversations/${encodeURIComponent(adminChatState.activeConversationId)}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ body })
+    }).then(r => r.json());
+    if (!j.ok) return alert('Failed to send message: ' + (j.error || 'unknown'));
+    input.value = '';
+    await loadAdminChatConversations(adminChatState.activeConversationId);
+  } catch (err) {
+    alert('Failed to send message: ' + err);
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 (async function init(){
@@ -157,6 +305,11 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
     ).join('');
   } catch(e) { document.getElementById('recentBody').innerHTML = `<tr><td colspan="6" class="text-danger">${esc(String(e))}</td></tr>`; }
 })();
+setAdminChatComposerEnabled(false);
+loadAdminChatConversations();
+adminChatState.pollHandle = setInterval(() => {
+  loadAdminChatConversations(adminChatState.activeConversationId);
+}, 8000);
 </script>
 </body>
 </html>

@@ -20,7 +20,7 @@ use std::str::FromStr;
 #[derive(Clone)]
 pub struct UsersState {
     pub pool: PgPool,
-    pub cfg:  Config,
+    pub cfg: Config,
 }
 
 #[derive(Serialize)]
@@ -96,8 +96,8 @@ pub async fn get_my_profile(State(st): State<UsersState>, cookies: Cookies) -> i
 #[derive(Deserialize)]
 pub struct UpdateProfileForm {
     pub bank_account: String,
-    pub wallet_account: String,        // alamat EVM (boleh kosong)
-    pub wallet_chain_id: Option<i64>,  // chainId preferensi kreator (boleh null)
+    pub wallet_account: String,       // alamat EVM (boleh kosong)
+    pub wallet_chain_id: Option<i64>, // chainId preferensi kreator (boleh null)
     pub whatsapp: String,
     pub profile_desc: String,
 }
@@ -153,7 +153,7 @@ pub async fn update_my_profile(
         wallet_to_save.as_str(),
         f.whatsapp.trim(),
         f.profile_desc.trim(),
-        f.wallet_chain_id  // Option<i64> → akan menjadi NULL jika None
+        f.wallet_chain_id // Option<i64> → akan menjadi NULL jika None
     )
     .execute(&st.pool)
     .await;

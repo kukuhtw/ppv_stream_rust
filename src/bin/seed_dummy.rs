@@ -32,13 +32,12 @@ async fn main() -> Result<()> {
         let email_lc = email.to_ascii_lowercase();
 
         // Cek exist dengan query runtime (ini sudah runtime, bukan macro !)
-        let exists: Option<i32> = sqlx::query_scalar::<_, i32>(
-            r#"SELECT 1 FROM users WHERE email = $1 LIMIT 1"#,
-        )
-        .bind(&email_lc)
-        .fetch_optional(&pool)
-        .await
-        .context("query exists")?;
+        let exists: Option<i32> =
+            sqlx::query_scalar::<_, i32>(r#"SELECT 1 FROM users WHERE email = $1 LIMIT 1"#)
+                .bind(&email_lc)
+                .fetch_optional(&pool)
+                .await
+                .context("query exists")?;
 
         if exists.is_some() {
             println!("[seed] skip existing {}", email_lc);
@@ -66,12 +65,12 @@ async fn main() -> Result<()> {
             ON CONFLICT (email) DO NOTHING
             "#,
         )
-        .bind(&uid)               // $1
-        .bind(username.trim())    // $2
-        .bind(&email_lc)          // $3
-        .bind(&hash)              // $4
-        .bind(0i32)               // $5
-        .bind(&now_rfc3339)       // $6
+        .bind(&uid) // $1
+        .bind(username.trim()) // $2
+        .bind(&email_lc) // $3
+        .bind(&hash) // $4
+        .bind(0i32) // $5
+        .bind(&now_rfc3339) // $6
         .execute(&pool)
         .await
         .with_context(|| format!("insert user {}", username))?;

@@ -3,12 +3,12 @@
 use anyhow::Result;
 use ethers::prelude::*;
 use ethers::providers::{Provider, Ws};
+use hex;
 use sqlx::{PgPool, Row}; // Row diperlukan untuk row.get::<T,_>()
+use std::time::Duration;
 use tokio::time::sleep;
 use tokio_stream::StreamExt;
 use tracing::{error, info};
-use std::time::Duration;
-use hex;
 
 // Pakai JSON ABI agar parser stabil
 abigen!(
@@ -60,7 +60,10 @@ async fn watch_once(pool: &PgPool, wss_url: &str, contract_addr: Address) -> Res
                 let payer = format!("{:?}", ev.payer); // atau ev.payer.encode_hex::<String>()
                 let video_id = ev.video_id.clone();
 
-                info!("💰 Paid: hash={}, payer={}, video_id={}", invoice_hash, payer, video_id);
+                info!(
+                    "💰 Paid: hash={}, payer={}, video_id={}",
+                    invoice_hash, payer, video_id
+                );
 
                 if let Err(e) = handle_paid_event(pool, &invoice_hash, &payer, &video_id).await {
                     error!("⚠️ handle_paid_event error: {}", e);
@@ -76,7 +79,12 @@ async fn watch_once(pool: &PgPool, wss_url: &str, contract_addr: Address) -> Res
     Ok(())
 }
 
-async fn handle_paid_event(pool: &PgPool, invoice_hash: &str, payer: &str, video_id: &str) -> Result<()> {
+async fn handle_paid_event(
+    pool: &PgPool,
+    invoice_hash: &str,
+    payer: &str,
+    video_id: &str,
+) -> Result<()> {
     // gunakan sqlx::query (runtime-checked) agar build tidak perlu akses DB
     let rec = sqlx::query(
         r#"SELECT id, user_id 
@@ -104,13 +112,12 @@ async fn handle_paid_event(pool: &PgPool, invoice_hash: &str, payer: &str, video
         .await?;
 
         // Ambil username user
-        let uname = sqlx::query_scalar::<_, Option<String>>(
-            r#"SELECT username FROM users WHERE id=$1"#,
-        )
-        .bind(&user_id)
-        .fetch_one(pool)
-        .await?
-        .unwrap_or_default();
+        let uname =
+            sqlx::query_scalar::<_, Option<String>>(r#"SELECT username FROM users WHERE id=$1"#)
+                .bind(&user_id)
+                .fetch_one(pool)
+                .await?
+                .unwrap_or_default();
 
         if !uname.is_empty() {
             // purchases (idempotent)
@@ -137,7 +144,10 @@ async fn handle_paid_event(pool: &PgPool, invoice_hash: &str, payer: &str, video
 
             info!("✅ Access granted for {} on video {}", uname, video_id);
         } else {
-            info!("ℹ️ Invoice matched but username not found (user_id={})", user_id);
+            info!(
+                "ℹ️ Invoice matched but username not found (user_id={})",
+                user_id
+            );
         }
     } else {
         error!("⚠️ No matching invoice for hash {}", invoice_hash);

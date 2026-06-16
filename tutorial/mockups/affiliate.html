@@ -6,20 +6,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    .callout { position:absolute; background:#ffc107; color:#000; font-size:.7rem; font-weight:700; padding:2px 6px; border-radius:4px; white-space:nowrap; z-index:10; }
-    .annotated { position:relative; }
-    .mockup-banner { background:#0d6efd; color:#fff; font-size:.75rem; padding:4px 12px; text-align:center; letter-spacing:.08em; }
-    .badge-x402   { background:#6f42c1; color:#fff; }
-    .badge-wallet { background:#0dcaf0; color:#000; }
-    .badge-fiat   { background:#198754; color:#fff; }
+    .callout { position: absolute; background: #ffc107; color: #000; font-size: .7rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; white-space: nowrap; z-index: 10; }
+    .annotated { position: relative; }
+    .mockup-banner { background: #0d6efd; color: #fff; font-size: .75rem; padding: 4px 12px; text-align: center; letter-spacing: .08em; }
+    .badge-x402 { background: #6f42c1; color: #fff; }
+    .badge-wallet { background: #0dcaf0; color: #000; }
+    .badge-fiat { background: #198754; color: #fff; }
   </style>
 </head>
 <body>
-<div class="mockup-banner">TUTORIAL MOCKUP — Affiliate Program</div>
+<div class="mockup-banner">TUTORIAL MOCKUP - Affiliate Program</div>
 
 <nav class="navbar navbar-expand-md bg-body-tertiary shadow-sm border-bottom">
   <div class="container">
-    <a class="navbar-brand fw-bold" href="#">🎬 PPV Stream</a>
+    <a class="navbar-brand fw-bold" href="#">PPV Stream</a>
     <div class="collapse navbar-collapse show">
       <ul class="navbar-nav me-auto">
         <li class="nav-item"><a class="nav-link" href="#">Browse</a></li>
@@ -29,7 +29,7 @@
       </ul>
       <div class="d-flex align-items-center gap-2">
         <span class="badge bg-secondary">alice &lt;alice@example.com&gt;</span>
-        <button class="btn btn-sm btn-outline-secondary">☀️</button>
+        <button class="btn btn-sm btn-outline-secondary">Theme</button>
         <button class="btn btn-sm btn-outline-danger">Logout</button>
       </div>
     </div>
@@ -38,79 +38,91 @@
 
 <div class="container py-4 pb-5">
   <h1 class="mb-1 fs-4 fw-bold">Affiliate Program</h1>
-  <p class="text-body-secondary small mb-4">Earn commissions by referring buyers to videos.</p>
+  <p class="text-body-secondary small mb-4">Creators can set commission percentage per video, and affiliates can earn automatically from referral links.</p>
 
-  <!-- Summary -->
   <div class="row g-3 mb-4 annotated">
-    <span class="callout" style="top:-20px;left:0">① Summary stats — total earnings, this month, referrals, referral code</span>
+    <span class="callout" style="top:-20px;left:0">1 Summary stats</span>
     <div class="col-6 col-md-3"><div class="card shadow-sm text-center p-3"><div class="text-body-secondary small">Total Earnings</div><div class="fs-4 fw-bold text-success">$18.50</div></div></div>
     <div class="col-6 col-md-3"><div class="card shadow-sm text-center p-3"><div class="text-body-secondary small">This Month</div><div class="fs-4 fw-bold">$5.00</div></div></div>
     <div class="col-6 col-md-3"><div class="card shadow-sm text-center p-3"><div class="text-body-secondary small">Total Referrals</div><div class="fs-4 fw-bold">7</div></div></div>
     <div class="col-6 col-md-3"><div class="card shadow-sm text-center p-3"><div class="text-body-secondary small">Your Referral Code</div><div class="fs-5 fw-bold font-monospace">alice</div></div></div>
   </div>
 
-  <!-- Tabs -->
   <ul class="nav nav-tabs mb-3 annotated">
-    <span class="callout" style="top:-20px;left:0">② Tabs — Earnings / My Videos / Get Links</span>
+    <span class="callout" style="top:-20px;left:0">2 Tabs - Earnings / Creator Settings / Get Links</span>
     <li class="nav-item"><button class="nav-link active">Earnings</button></li>
-    <li class="nav-item"><button class="nav-link">My Videos</button></li>
+    <li class="nav-item"><button class="nav-link">Creator Settings</button></li>
     <li class="nav-item"><button class="nav-link">Get Links</button></li>
   </ul>
 
-  <!-- Earnings tab -->
   <div class="card shadow-sm mb-4 annotated">
-    <span class="callout" style="top:-18px;left:0">③ Commission history — each referral purchase</span>
+    <span class="callout" style="top:-18px;left:0">3 Commission history</span>
     <div class="card-header fw-semibold">Commission History</div>
     <div class="card-body p-0">
       <table class="table table-hover mb-0" style="font-size:.85rem">
         <thead class="table-light"><tr><th>Date</th><th>Video</th><th>Buyer</th><th>Commission</th><th>Method</th><th>Status</th></tr></thead>
         <tbody>
-          <tr>
-            <td class="text-nowrap">2025-06-10 09:00</td>
-            <td>Advanced Rust Tutorial</td>
-            <td>dave</td>
-            <td class="fw-semibold text-success">+$1.00</td>
-            <td><span class="badge badge-x402">x402</span></td>
-            <td><span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">paid</span></td>
-          </tr>
-          <tr>
-            <td class="text-nowrap">2025-06-08 15:22</td>
-            <td>Design Fundamentals</td>
-            <td>eve</td>
-            <td class="fw-semibold text-success">+$1.50</td>
-            <td><span class="badge badge-wallet">Wallet</span></td>
-            <td><span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">paid</span></td>
-          </tr>
-          <tr>
-            <td class="text-nowrap">2025-06-05 11:14</td>
-            <td>Marketing Mastery</td>
-            <td>frank</td>
-            <td class="fw-semibold text-success">+$2.50</td>
-            <td><span class="badge badge-fiat">Bank</span></td>
-            <td><span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">paid</span></td>
-          </tr>
+          <tr><td class="text-nowrap">2025-06-10 09:00</td><td>Advanced Rust Tutorial</td><td>dave</td><td class="fw-semibold text-success">+$1.00</td><td><span class="badge badge-x402">x402</span></td><td><span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">paid</span></td></tr>
+          <tr><td class="text-nowrap">2025-06-08 15:22</td><td>Design Fundamentals</td><td>eve</td><td class="fw-semibold text-success">+$1.50</td><td><span class="badge badge-wallet">Wallet</span></td><td><span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">paid</span></td></tr>
         </tbody>
       </table>
     </div>
   </div>
 
-  <!-- Get Links tab preview -->
+  <div class="card shadow-sm mb-4 annotated">
+    <span class="callout" style="top:-18px;left:0">4 Creator settings per paid video</span>
+    <div class="card-header fw-semibold">Creator Affiliate Settings</div>
+    <div class="card-body">
+      <div class="border rounded-3 p-3 mb-3">
+        <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+          <div>
+            <div class="fw-semibold">Advanced Rust Tutorial</div>
+            <div class="text-body-secondary small">Price: $10.00 | Video ID: <code>vid_abc123</code></div>
+          </div>
+          <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">Program enabled</span>
+        </div>
+        <div class="row g-3 align-items-end">
+          <div class="col-md-4">
+            <label class="form-label">Commission Percentage</label>
+            <div class="input-group">
+              <input class="form-control" value="10">
+              <span class="input-group-text">%</span>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="form-check form-switch mt-4">
+              <input class="form-check-input" type="checkbox" checked>
+              <label class="form-check-label">Enable affiliate program</label>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <button class="btn btn-primary w-100">Save Settings</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="card shadow-sm annotated">
-    <span class="callout" style="top:-18px;left:0">④ Generate referral link — pick video, copy URL, share anywhere</span>
+    <span class="callout" style="top:-18px;left:0">5 Generate referral link and see program status</span>
     <div class="card-header fw-semibold">Generate Referral Link</div>
     <div class="card-body">
       <div class="row g-3 mb-3">
         <div class="col-md-6">
-          <label for="m1" class="form-label">Select Video</label>
-          <select id="m1" class="form-select"><option selected>Advanced Rust Tutorial</option><option>Design Fundamentals</option></select>
+          <label class="form-label">Select Video</label>
+          <select class="form-select"><option selected>Advanced Rust Tutorial - alice</option><option>Design Fundamentals - bob</option></select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Program Status</label>
+          <input class="form-control" readonly value="Enabled - 10% commission">
         </div>
       </div>
-      <label for="m2" class="form-label fw-semibold">Your Referral Link</label>
+      <label class="form-label fw-semibold">Your Referral Link</label>
       <div class="input-group mb-3">
-        <input id="m2" type="text" class="form-control font-monospace" readonly value="https://yourplatform.com/public/watch.html?video_id=vid_abc123&amp;ref=alice">
+        <input type="text" class="form-control font-monospace" readonly value="https://yourplatform.com/public/watch.html?video_id=vid_abc123&amp;ref=alice">
         <button class="btn btn-outline-secondary">Copy</button>
       </div>
-      <p class="text-body-secondary small">Commission is credited to your wallet instantly after each confirmed purchase.</p>
+      <p class="text-body-secondary small">Commission is credited to your wallet after each confirmed purchase.</p>
     </div>
   </div>
 </div>

@@ -25,7 +25,6 @@ fn b64_decode_to_string(s: &str) -> Option<String> {
     String::from_utf8(bytes).ok()
 }
 
-
 fn sign_sid(sid: &str, secret: &[u8]) -> String {
     let mut mac = HmacSha256::new_from_slice(secret).expect("HMAC key");
     mac.update(sid.as_bytes());
@@ -52,19 +51,19 @@ fn parse_and_verify_cookie(val: &str, secret: &[u8]) -> Option<String> {
     Some(sid)
 }
 
-
 /// Buat session baru + set cookie bertanda tangan.
 /// TTL diambil dari cfg.session_token_ttl (detik).
 pub async fn create_session(
-    pool: &PgPool, 
-    cfg: &Config, 
-    user_id: &str, 
-    is_admin: bool, 
-    cookies: &Cookies) -> sqlx::Result<()>
- {
+    pool: &PgPool,
+    cfg: &Config,
+    user_id: &str,
+    is_admin: bool,
+    cookies: &Cookies,
+) -> sqlx::Result<()> {
     let sid = Uuid::new_v4().to_string();
     let now = Utc::now();
-    let ttl = ChronoDuration::seconds(cfg.session_token_ttl as i64).max(ChronoDuration::seconds(60));
+    let ttl =
+        ChronoDuration::seconds(cfg.session_token_ttl as i64).max(ChronoDuration::seconds(60));
     let exp = now + ttl;
 
     sqlx::query!(
@@ -106,7 +105,11 @@ pub async fn destroy_session(pool: &PgPool, cfg: &Config, cookies: &Cookies) -> 
 }
 
 /// Returns Some((user_id, is_admin)) jika cookie valid & belum expired.
-pub async fn current_user_id(pool: &PgPool, cfg: &Config, cookies: &Cookies) -> Option<(String, bool)> {
+pub async fn current_user_id(
+    pool: &PgPool,
+    cfg: &Config,
+    cookies: &Cookies,
+) -> Option<(String, bool)> {
     let raw = cookies.get(COOKIE_NAME)?.value().to_string();
     let sid = parse_and_verify_cookie(&raw, &cfg.hmac_secret)?;
 

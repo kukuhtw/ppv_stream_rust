@@ -30,7 +30,11 @@ impl X402PaymentPlugin {
     }
 
     pub fn from_env_with_pool(pool: Option<PgPool>) -> Self {
-        let required = ["X402_CONTRACT_ADDRESS", "X402_RPC_HTTP", "X402_ADMIN_PRIVKEY"];
+        let required = [
+            "X402_CONTRACT_ADDRESS",
+            "X402_RPC_HTTP",
+            "X402_ADMIN_PRIVKEY",
+        ];
         let chain_id = env_or("X402_CHAIN_ID", "evm");
         let rpc_http = std::env::var("X402_RPC_HTTP").ok();
         let mut missing = missing_env(&required);
@@ -60,13 +64,19 @@ impl X402PaymentPlugin {
 }
 
 impl Default for X402PaymentPlugin {
-    fn default() -> Self { Self::from_env() }
+    fn default() -> Self {
+        Self::from_env()
+    }
 }
 
 #[async_trait::async_trait]
 impl PaymentPlugin for X402PaymentPlugin {
-    fn provider_key(&self) -> &'static str { "x402" }
-    fn display_name(&self) -> &'static str { "x402" }
+    fn provider_key(&self) -> &'static str {
+        "x402"
+    }
+    fn display_name(&self) -> &'static str {
+        "x402"
+    }
     fn capability(&self) -> PaymentPluginCapability {
         PaymentPluginCapability {
             provider: self.provider_key().to_string(),
@@ -85,7 +95,10 @@ impl PaymentPlugin for X402PaymentPlugin {
 
     async fn create_invoice(&self, request: CreateInvoiceRequest) -> Result<Invoice> {
         if !self.config.configured {
-            bail!("x402 plugin configuration is incomplete: {:?}", self.config.missing_env);
+            bail!(
+                "x402 plugin configuration is incomplete: {:?}",
+                self.config.missing_env
+            );
         }
 
         let pool = self
@@ -173,7 +186,9 @@ impl PaymentPlugin for X402PaymentPlugin {
         let invoice_uid_hash_hex = format!("{:#066x}", invoice_uid_bytes32);
         let token_amount_decimal = BigDecimal::from_str(&token_amount_wei.to_string())
             .unwrap_or_else(|_| BigDecimal::from(0));
-        let creator_id = video_metadata.try_get::<String, _>("owner_id").unwrap_or_default();
+        let creator_id = video_metadata
+            .try_get::<String, _>("owner_id")
+            .unwrap_or_default();
 
         sqlx::query(
             r#"
@@ -275,7 +290,10 @@ impl PaymentPlugin for X402PaymentPlugin {
 
     async fn confirm_payment(&self, _request: ConfirmPaymentRequest) -> Result<PaymentResult> {
         if !self.config.configured {
-            bail!("x402 plugin configuration is incomplete: {:?}", self.config.missing_env);
+            bail!(
+                "x402 plugin configuration is incomplete: {:?}",
+                self.config.missing_env
+            );
         }
         bail!("x402 plugin confirmation is not enabled yet. Use legacy POST /api/pay/x402/confirm for now")
     }
