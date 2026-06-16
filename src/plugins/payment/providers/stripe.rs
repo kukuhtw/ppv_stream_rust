@@ -79,7 +79,7 @@ impl StripePaymentPlugin {
         mac.update(&signed);
         let computed = hex::encode(mac.finalize().into_bytes());
 
-        if v1_sigs.iter().any(|s| *s == computed.as_str()) {
+        if v1_sigs.contains(&computed.as_str()) {
             Ok(())
         } else {
             bail!("stripe: Stripe-Signature verification failed")
