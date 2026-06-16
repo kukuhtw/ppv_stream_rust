@@ -6,6 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="/public/styles.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"></script>
   <script src="/public/theme.js"></script>
 </head>
@@ -34,8 +36,8 @@
 </nav>
 
 <div class="container py-4 pb-5" id="mainContent">
-  <div class="skeleton mb-3" style="height:2rem;max-width:400px"></div>
-  <div class="skeleton mb-4" style="height:1rem;max-width:300px"></div>
+  <div class="skeleton mb-3" style="height:2rem;max-width:420px"></div>
+  <div class="skeleton mb-4" style="height:1rem;max-width:320px"></div>
   <div class="skeleton" style="height:360px"></div>
 </div>
 
@@ -44,17 +46,36 @@
 const params = new URLSearchParams(location.search);
 const VIDEO_ID = params.get('video_id') || '';
 const REF = params.get('ref') || '';
-let USD_TO_IDR = 17000;
-let fmtIdr = new Intl.NumberFormat('id-ID');
-let currentUser = null;
 
-(async function () {
+let USD_TO_IDR = 17000;
+let currentUser = null;
+let currentVideo = null;
+let paymentOptions = null;
+const fmtIdr = new Intl.NumberFormat('id-ID');
+
+function esc(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function showPayAlert(type, msg) {
+  const el = document.getElementById('payAlert');
+  if (!el) return;
+  el.className = `alert alert-${type}`;
+  el.textContent = msg;
+}
+
+(async function initUserBar() {
   try {
     const j = await fetch('/api/me').then(r => r.json());
     const el = document.getElementById('userbar');
     if (j.ok && j.user) {
-      el.innerHTML = `<b>${esc(j.user.username)}</b> &lt;${esc(j.user.email)}&gt;`;
       currentUser = j.user;
+      el.innerHTML = `<b>${esc(j.user.username)}</b> &lt;${esc(j.user.email)}&gt;`;
     } else {
       el.innerHTML = `<a href="/public/auth/login.html" class="text-white">Sign In</a>`;
     }
@@ -62,7 +83,7 @@ let currentUser = null;
 })();
 
 document.getElementById('logoutBtn').addEventListener('click', async () => {
-  await fetch('/auth/logout', { method: 'POST' }).catch(() => {});
+  await fetch('/auth/logout', { method:'POST' }).catch(() => {});
   location.href = '/public/auth/login.html?status=ok';
 });
 
@@ -78,43 +99,38 @@ async function init() {
     if (k.usd_to_idr) USD_TO_IDR = k.usd_to_idr;
   } catch {}
 
-  let video;
   try {
-    const j = await fetch('/api/video?' + new URLSearchParams({ id: VIDEO_ID })).then(r => r.json());
-    if (!j.ok || !j.video) throw new Error(j.error || 'Video not found');
-    video = j.video;
-  } catch (e) {
-    document.getElementById('mainContent').innerHTML = `<p class="text-danger">Error loading video: ${esc(String(e))}</p>`;
+    const videosResp = await fetch('/api/videos').then(r => r.json());
+    const videos = Array.isArray(videosResp.videos) ? videosResp.videos : [];
+    currentVideo = videos.find(v => String(v.id) === VIDEO_ID) || null;
+    if (!currentVideo) throw new Error('Video not found');
+  } catch (err) {
+    document.getElementById('mainContent').innerHTML = `<p class="text-danger">Error loading video: ${esc(String(err))}</p>`;
     return;
   }
 
-  let hasAccess = false;
   try {
-    const j = await fetch('/api/check_access?' + new URLSearchParams({ video_id: VIDEO_ID })).then(r => r.json());
-    hasAccess = j.ok && j.has_access;
+    paymentOptions = await fetch('/api/pay/all_options?' + new URLSearchParams({ video_id: VIDEO_ID })).then(r => r.json());
+  } catch {
+    paymentOptions = null;
+  }
+
+  let playResp = null;
+  try {
+    const resp = await fetch('/api/request_play?' + new URLSearchParams({ video_id: VIDEO_ID }));
+    playResp = await resp.json();
   } catch {}
 
-  let affiliateProgram = { has_affiliate: false, commission_pct: 0 };
-  try {
-    const j = await fetch('/api/affiliate/program?' + new URLSearchParams({ video_id: VIDEO_ID })).then(r => r.json());
-    if (j.ok) {
-      affiliateProgram = {
-        has_affiliate: Boolean(j.has_affiliate),
-        commission_pct: Number(j.commission_pct || 0)
-      };
-    }
-  } catch {}
+  renderPage(playResp);
+}
 
+function renderPage(playResp) {
+  const video = currentVideo;
   const priceCents = video.price_cents || 0;
-  const isFree = priceCents === 0;
   const priceUsd = (priceCents / 100).toFixed(2);
   const priceIdr = 'Rp ' + fmtIdr.format(Math.round(priceCents / 100 * USD_TO_IDR));
-  const affiliateBadge = affiliateProgram.has_affiliate
-    ? `&nbsp;•&nbsp; <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">${esc(String(affiliateProgram.commission_pct))}% affiliate program</span>`
-    : '';
-  const referralBadge = REF
-    ? `&nbsp;•&nbsp; <span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">via ${esc(REF)}</span>`
-    : '';
+  const affiliateEnabled = !!(paymentOptions && paymentOptions.ok && paymentOptions.video_id);
+  const hasAccess = !!(playResp && playResp.ok && playResp.playlist);
 
   let html = `
     <div class="mb-3">
@@ -123,20 +139,16 @@ async function init() {
     <h1 class="fs-4 fw-bold mb-1">${esc(video.title)}</h1>
     <p class="text-body-secondary small mb-2">
       by <strong>${esc(video.owner_name || '-')}</strong>
-      ${priceCents > 0 ? `&nbsp;•&nbsp; <span class="fw-semibold text-primary">$${priceUsd} (${priceIdr})</span>` : '<span class="badge bg-success">Free</span>'}
-      ${affiliateBadge}
-      ${referralBadge}
-    </p>`;
+      ${priceCents > 0 ? ` | <span class="fw-semibold text-primary">$${priceUsd} (${priceIdr})</span>` : '<span class="badge bg-success">Free</span>'}
+      ${REF ? ` | <span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">ref ${esc(REF)}</span>` : ''}
+    </p>
+  `;
 
-  if (affiliateProgram.has_affiliate) {
-    html += `<div class="alert alert-info py-2 small mb-4">This video has an active affiliate program. Referrers earn <strong>${esc(String(affiliateProgram.commission_pct))}%</strong> for each confirmed purchase.</div>`;
+  if (affiliateEnabled && REF) {
+    html += `<div class="alert alert-info py-2 small mb-4">This visit includes affiliate referral code <strong>${esc(REF)}</strong>.</div>`;
   }
 
-  if (hasAccess || isFree) {
-    html += renderPlayer(video);
-  } else {
-    html += renderLocked(priceUsd, priceIdr);
-  }
+  html += hasAccess ? renderPlayer(playResp.playlist) : renderLocked(priceUsd, priceIdr);
 
   if (video.description) {
     html += `<div class="card shadow-sm mt-4"><div class="card-body"><h6 class="fw-semibold mb-2">About this video</h6><p class="mb-0 small text-body-secondary">${esc(video.description)}</p></div></div>`;
@@ -144,21 +156,24 @@ async function init() {
 
   document.getElementById('mainContent').innerHTML = html;
 
-  if (hasAccess || isFree) startPlayer(video);
-  else bindPaymentTabs(video, priceCents);
+  if (hasAccess) {
+    startPlayer(playResp.playlist);
+  } else {
+    bindLockedState();
+  }
 }
 
-function renderPlayer(video) {
+function renderPlayer(playlistUrl) {
   return `
     <div class="ratio ratio-16x9 rounded overflow-hidden bg-black mb-3 shadow">
-      <video id="hlsPlayer" controls playsinline class="w-100 h-100"></video>
+      <video id="hlsPlayer" controls playsinline class="w-100 h-100" data-playlist="${esc(playlistUrl)}"></video>
     </div>`;
 }
 
-function startPlayer(video) {
+function startPlayer(playlistUrl) {
   const player = document.getElementById('hlsPlayer');
   if (!player) return;
-  const src = `/stream/${esc(video.id)}/playlist.m3u8`;
+  const src = playlistUrl;
   if (Hls.isSupported()) {
     const hls = new Hls();
     hls.loadSource(src);
@@ -174,110 +189,160 @@ function renderLocked(priceUsd, priceIdr) {
   return `
     <div class="ratio ratio-16x9 rounded overflow-hidden bg-black mb-4 shadow d-flex align-items-center justify-content-center">
       <div class="text-center text-white p-4">
-        <div style="font-size:3rem">Locked</div>
-        <div class="mt-2 fw-semibold">This video requires payment to unlock</div>
+        <div class="fs-2 fw-bold">Locked</div>
+        <div class="mt-2">Purchase this video to unlock playback.</div>
         <div class="text-secondary small">$${esc(priceUsd)} | ${esc(priceIdr)}</div>
       </div>
     </div>
     <div class="card shadow-sm mb-4">
-      <div class="card-header fw-semibold">Unlock This Video - $${esc(priceUsd)}</div>
+      <div class="card-header fw-semibold">Unlock This Video</div>
       <div class="card-body">
-        <ul class="nav nav-tabs mb-3" id="payTabs">
-          <li class="nav-item"><button class="nav-link active" data-pay="wallet" onclick="switchPay('wallet')">Wallet</button></li>
-          <li class="nav-item"><button class="nav-link" data-pay="x402" onclick="switchPay('x402')">Crypto (x402)</button></li>
-          <li class="nav-item"><button class="nav-link" data-pay="fiat" onclick="switchPay('fiat')">Bank Transfer</button></li>
-        </ul>
         <div id="payAlert" class="d-none mb-3"></div>
-        <div id="pay-wallet">
-          <p class="small text-body-secondary">Pay from your PPV Stream wallet balance. Fast and instant.</p>
-          <div class="mb-2 small">Balance: <strong id="walletBal">Loading...</strong></div>
-          <button class="btn btn-primary" onclick="payWallet()">Pay $${esc(priceUsd)} from Wallet</button>
-        </div>
-        <div id="pay-x402" class="d-none">
-          <p class="small text-body-secondary">Pay with USDC on a supported EVM chain. Confirmation is automatic.</p>
-          <button class="btn btn-primary" onclick="payX402()">Pay $${esc(priceUsd)} via Crypto</button>
-          <div id="x402Instructions" class="mt-3 d-none p-3 rounded border font-monospace small"></div>
-        </div>
-        <div id="pay-fiat" class="d-none">
-          <p class="small text-body-secondary">Transfer via bank or QRIS. Access is granted after admin confirms payment.</p>
-          <div id="fiatInfo" class="mb-3 small text-body-secondary">Loading seller payment info...</div>
-          <div class="row g-3">
-            <div class="col-md-4">
-              <label for="fiatAmt" class="form-label">Amount Sent (IDR)</label>
-              <input id="fiatAmt" type="number" min="1000" class="form-control" placeholder="e.g. 170000">
-            </div>
-            <div class="col-12">
-              <button class="btn btn-primary" onclick="payFiat()">Confirm Manual Payment</button>
-            </div>
-          </div>
-        </div>
+        <div id="lockedSummary" class="small text-body-secondary mb-3"></div>
+        <ul class="nav nav-tabs mb-3" id="payTabs"></ul>
+        <div id="payPanels"></div>
       </div>
     </div>`;
 }
 
+async function bindLockedState() {
+  const summary = document.getElementById('lockedSummary');
+  if (!currentUser) {
+    summary.innerHTML = `You need to <a href="/public/auth/login.html">sign in</a> before buying or viewing this video.`;
+  } else if (paymentOptions?.already_purchased) {
+    summary.textContent = 'Your purchase is already recorded. Reload the page if playback has not started yet.';
+  } else {
+    summary.textContent = 'Choose one of the enabled payment methods below.';
+  }
+
+  const tabs = [];
+  const panels = [];
+
+  if (paymentOptions?.wallet?.available) {
+    tabs.push(`<li class="nav-item"><button class="nav-link active" data-pay="wallet" onclick="switchPay('wallet')">Wallet</button></li>`);
+    panels.push(`
+      <div id="pay-wallet">
+        <p class="small text-body-secondary">Instant purchase using your platform wallet balance.</p>
+        <div class="mb-2 small">Balance: <strong>${esc(paymentOptions.wallet.balance_display || '-') }</strong></div>
+        <button class="btn btn-primary" onclick="payWallet()">Pay with Wallet</button>
+      </div>
+    `);
+  }
+
+  if (paymentOptions?.x402?.available) {
+    tabs.push(`<li class="nav-item"><button class="nav-link ${tabs.length ? '' : 'active'}" data-pay="x402" onclick="switchPay('x402')">Blockchain x402</button></li>`);
+    const tokens = Array.isArray(paymentOptions.x402.tokens) ? paymentOptions.x402.tokens : [];
+    panels.push(`
+      <div id="pay-x402" class="${tabs[0].includes('wallet') ? 'd-none' : ''}">
+        <p class="small text-body-secondary">Create an x402 invoice, then complete the onchain payment using your EVM wallet.</p>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label for="x402Token" class="form-label">Token</label>
+            <select id="x402Token" class="form-select">
+              ${tokens.map((token, index) => `<option value="${index}">${esc(token.chain)} | ${esc(token.symbol)} | chain ${esc(token.chain_id)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label for="x402Payer" class="form-label">Your Wallet Address</label>
+            <input id="x402Payer" class="form-control font-monospace" placeholder="0x...">
+          </div>
+          <div class="col-12">
+            <button class="btn btn-primary" onclick="payX402()">Create x402 Invoice</button>
+          </div>
+        </div>
+        <div id="x402Instructions" class="mt-3 d-none p-3 rounded border bg-body-tertiary small"></div>
+      </div>
+    `);
+  }
+
+  if (paymentOptions?.fiat?.available) {
+    tabs.push(`<li class="nav-item"><button class="nav-link ${tabs.length ? '' : 'active'}" data-pay="fiat" onclick="switchPay('fiat')">Payment Gateway</button></li>`);
+    const providers = Array.isArray(paymentOptions.fiat.providers) ? paymentOptions.fiat.providers : [];
+    panels.push(`
+      <div id="pay-fiat" class="${tabs.length > 1 ? 'd-none' : ''}">
+        <p class="small text-body-secondary">Create a hosted invoice using one of the enabled providers.</p>
+        <div class="d-flex flex-wrap gap-2">
+          ${providers.map(provider => `<button class="btn btn-outline-primary" onclick="startProviderPayment('${esc(provider)}')">${esc(provider)}</button>`).join('')}
+        </div>
+        <div id="fiatInfo" class="small text-body-secondary mt-3"></div>
+      </div>
+    `);
+  }
+
+  if (!tabs.length) {
+    document.getElementById('payTabs').outerHTML = '<div class="alert alert-warning mb-0">No payment method is currently enabled for this video.</div>';
+    document.getElementById('payPanels').innerHTML = '';
+  } else {
+    document.getElementById('payTabs').innerHTML = tabs.join('');
+    document.getElementById('payPanels').innerHTML = panels.join('');
+  }
+
+  try {
+    const profile = await fetch('/api/user_profile?' + new URLSearchParams({ user_id: currentVideo.owner_id })).then(r => r.json());
+    const info = document.getElementById('fiatInfo');
+    if (info && profile.ok && profile.profile) {
+      const p = profile.profile;
+      info.innerHTML = `
+        Creator payout profile:
+        ${p.bank_account ? `<div>Bank: <code>${esc(p.bank_account)}</code></div>` : ''}
+        ${p.whatsapp ? `<div>WhatsApp: <code>${esc(p.whatsapp)}</code></div>` : ''}
+      `;
+    }
+  } catch {}
+}
+
 function switchPay(tab) {
   ['wallet', 'x402', 'fiat'].forEach(t => {
-    document.getElementById('pay-' + t).classList.toggle('d-none', t !== tab);
+    const panel = document.getElementById('pay-' + t);
+    if (panel) panel.classList.toggle('d-none', t !== tab);
   });
   document.querySelectorAll('#payTabs .nav-link').forEach(b => b.classList.toggle('active', b.dataset.pay === tab));
 }
 
-function bindPaymentTabs(video, priceCents) {
-  fetch('/api/wallet/balance').then(r => r.json()).then(j => {
-    const el = document.getElementById('walletBal');
-    if (el) el.textContent = j.ok ? '$' + ((j.balance_cents || 0) / 100).toFixed(2) : '-';
-  }).catch(() => {});
-
-  fetch('/api/profile_public?' + new URLSearchParams({ owner_id: video.owner_id })).then(r => r.json()).then(j => {
-    const el = document.getElementById('fiatInfo');
-    if (!el) return;
-    if (j.ok && j.profile) {
-      const p = j.profile;
-      el.innerHTML = `Transfer <strong>Rp ${fmtIdr.format(Math.round(priceCents / 100 * USD_TO_IDR))}</strong> to:<br>` +
-        (p.bank_account ? `Bank: <code>${esc(p.bank_account)}</code><br>` : '') +
-        (p.whatsapp ? `WhatsApp: <code>${esc(p.whatsapp)}</code><br>` : '') +
-        '<span class="text-warning">After payment, confirm below. Access is granted after seller verification.</span>';
-    } else {
-      el.textContent = 'Seller has not configured payment info. Contact them directly.';
-    }
-  }).catch(() => {});
-}
-
 async function payWallet() {
-  const btn = event.currentTarget;
-  btn.disabled = true;
-  btn.textContent = 'Processing...';
-  const alert = document.getElementById('payAlert');
-  alert.className = 'd-none';
+  const alertBox = document.getElementById('payAlert');
+  alertBox.className = 'd-none';
   try {
-    const j = await fetch('/api/pay_wallet', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ video_id: VIDEO_ID, ref: REF })
+    const j = await fetch('/api/wallet/pay', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ video_id: VIDEO_ID, ref_code: REF || null })
     }).then(r => r.json());
-    if (j.ok) {
-      showPayAlert('success', 'Payment successful. Loading video...');
-      setTimeout(() => location.reload(), 1500);
-    } else showPayAlert('danger', 'Failed: ' + (j.error || 'unknown'));
-  } catch (e) {
-    showPayAlert('danger', 'Error: ' + e.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Pay from Wallet';
+    if (!j.ok) {
+      showPayAlert('danger', 'Failed: ' + (j.error || 'unknown'));
+      return;
+    }
+    showPayAlert('success', j.message || 'Payment successful. Reloading...');
+    setTimeout(() => location.reload(), 1200);
+  } catch (err) {
+    showPayAlert('danger', 'Error: ' + err.message);
   }
 }
 
 async function payX402() {
-  const btn = event.currentTarget;
-  btn.disabled = true;
-  btn.textContent = 'Preparing...';
-  const alert = document.getElementById('payAlert');
-  alert.className = 'd-none';
+  const payer = document.getElementById('x402Payer').value.trim();
+  if (!/^0x[a-fA-F0-9]{40}$/.test(payer)) {
+    showPayAlert('danger', 'Enter a valid EVM wallet address.');
+    return;
+  }
+  const tokenIndex = parseInt(document.getElementById('x402Token').value, 10);
+  const token = paymentOptions?.x402?.tokens?.[tokenIndex];
+  if (!token) {
+    showPayAlert('danger', 'Token configuration not found.');
+    return;
+  }
   try {
-    const j = await fetch('/api/pay_x402_init', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ video_id: VIDEO_ID, ref: REF })
+    const j = await fetch('/api/pay/x402/start', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        video_id: VIDEO_ID,
+        chain_id: token.chain_id,
+        symbol: token.symbol,
+        token_address: token.erc20 || null,
+        payer_address: payer,
+        ref_code: REF || null
+      })
     }).then(r => r.json());
     if (!j.ok) {
       showPayAlert('danger', 'Failed: ' + (j.error || 'unknown'));
@@ -285,46 +350,48 @@ async function payX402() {
     }
     const box = document.getElementById('x402Instructions');
     box.classList.remove('d-none');
-    box.innerHTML = `Send <strong>${j.amount} USDC</strong> to <code>${esc(j.address)}</code> on chain <code>${esc(String(j.chain_id))}</code>.<br>Invoice: <code>${esc(j.invoice_uid)}</code><br><span class="text-body-secondary">Confirmation is automatic. Refresh this page after payment.</span>`;
-    showPayAlert('info', 'Send payment to the address above. The page will unlock automatically after confirmation.');
-  } catch (e) {
-    showPayAlert('danger', 'Error: ' + e.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Pay via Crypto';
+    box.innerHTML = `
+      <div><strong>Invoice UID:</strong> <code>${esc(j.invoice_uid)}</code></div>
+      <div><strong>Contract:</strong> <code>${esc(j.x402_contract)}</code></div>
+      <div><strong>Creator Wallet:</strong> <code>${esc(j.creator_wallet)}</code></div>
+      <div><strong>Token:</strong> ${esc(j.symbol)} on chain ${esc(j.chain_id)}</div>
+      <div><strong>Amount (wei/base units):</strong> <code>${esc(j.amount_wei)}</code></div>
+      <div class="mt-2 text-body-secondary">Use these values in your EVM payment flow, then confirm the transaction from your wallet tooling.</div>
+    `;
+    showPayAlert('info', 'x402 invoice created. Complete the onchain payment using the returned contract parameters.');
+  } catch (err) {
+    showPayAlert('danger', 'Error: ' + err.message);
   }
 }
 
-async function payFiat() {
-  const amtEl = document.getElementById('fiatAmt');
-  const amt = parseInt(amtEl.value, 10);
-  if (!amt || amt < 1000) return alert('Enter the amount you transferred (min Rp 1,000).');
-  const btn = event.currentTarget;
-  btn.disabled = true;
-  btn.textContent = 'Submitting...';
-  const alert = document.getElementById('payAlert');
-  alert.className = 'd-none';
+async function startProviderPayment(provider) {
   try {
-    const j = await fetch('/api/pay_fiat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ video_id: VIDEO_ID, amount_idr: amt, ref: REF })
+    const j = await fetch(`/api/pay/${encodeURIComponent(provider)}/start`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        user_id: currentUser?.id || '',
+        video_id: VIDEO_ID,
+        amount_cents: currentVideo.price_cents || 0,
+        currency: 'USD',
+        buyer_email: currentUser?.email || null,
+        affiliate_ref: REF || null,
+        success_url: location.href,
+        cancel_url: location.href
+      })
     }).then(r => r.json());
-    if (j.ok) showPayAlert('success', 'Payment submitted. Access will be granted after the seller confirms receipt.');
-    else showPayAlert('danger', 'Failed: ' + (j.error || 'unknown'));
-  } catch (e) {
-    showPayAlert('danger', 'Error: ' + e.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Confirm Manual Payment';
+    if (!j.ok) {
+      showPayAlert('danger', 'Failed: ' + (j.error || 'unknown'));
+      return;
+    }
+    if (j.payment_url) {
+      location.href = j.payment_url;
+      return;
+    }
+    showPayAlert('success', 'Invoice created: ' + (j.invoice_uid || j.invoice_id || 'ready'));
+  } catch (err) {
+    showPayAlert('danger', 'Error: ' + err.message);
   }
-}
-
-function showPayAlert(type, msg) {
-  const el = document.getElementById('payAlert');
-  if (!el) return;
-  el.className = `alert alert-${type}`;
-  el.textContent = msg;
 }
 </script>
 </body>
