@@ -6,6 +6,9 @@ on:
       - main
   pull_request:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   rust-check:
     name: Format, check, and test
@@ -50,17 +53,27 @@ jobs:
       - name: Show Rust version
         run: rustc --version && cargo --version
 
-      - name: Apply SQL files when available
+      - name: Apply SQL and migration files when available
         shell: bash
         run: |
-          if [ -d sql ]; then
-            for file in sql/*.sql; do
+          apply_sql_dir() {
+            local dir="$1"
+            if [ ! -d "$dir" ]; then
+              return 0
+            fi
+
+            shopt -s nullglob
+            for file in "$dir"/*.sql; do
               if [ -f "$file" ]; then
                 echo "Applying $file"
                 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$file"
               fi
             done
-          fi
+            shopt -u nullglob
+          }
+
+          apply_sql_dir sql
+          apply_sql_dir migrations
 
       - name: Check formatting
         run: cargo fmt --all -- --check
