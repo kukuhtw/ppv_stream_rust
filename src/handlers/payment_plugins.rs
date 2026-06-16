@@ -135,11 +135,16 @@ async fn create_invoice_with_provider(
         );
     };
 
+    // Always derive the buyer from the authenticated session. The incoming JSON
+    // still carries legacy fields such as `user_id`, but the server does not
+    // trust them for authorization or billing decisions.
     let Some((buyer_id, _)) = sessions::current_user_id(&state.pool, &state.cfg, &cookies).await
     else {
         return Json(json!({"ok": false, "error": "not logged in"}));
     };
 
+    // Load the authoritative price and ownership data from the database so the
+    // client cannot tamper with invoice totals or buy its own content.
     let video_row = sqlx::query!(
         "SELECT title, owner_id AS creator_id, price_cents FROM videos WHERE id = $1",
         payload.video_id
@@ -172,6 +177,8 @@ async fn create_invoice_with_provider(
             .ok()
             .flatten();
 
+    // Persist a local invoice first so webhook reconciliation and audit trails
+    // always have an internal identifier, even before the provider responds.
     let invoice_uid = Uuid::new_v4().to_string();
 
     let insert_result = sqlx::query!(
@@ -202,6 +209,8 @@ async fn create_invoice_with_provider(
             .await;
     }
 
+    // Augment provider metadata with server-controlled values. This keeps later
+    // reconciliation tied to our own invoice and video records.
     let mut metadata = payload.metadata;
     metadata.insert("invoice_uid".into(), invoice_uid.clone());
     metadata.insert("video_title".into(), video_title);
@@ -336,6 +345,9 @@ pub async fn handle_webhook(
         signature_headers: sig_headers,
     };
 
+    // Delegate signature verification and payload interpretation to the
+    // provider plugin, then apply our own local idempotency and entitlement
+    // rules to the normalized result.
     let result = match plugin.confirm_payment(request).await {
         Ok(r) => r,
         Err(e) => {
@@ -380,6 +392,8 @@ pub async fn handle_webhook(
         }
     };
 
+    // Ignore replayed webhooks once the invoice has already been finalized as
+    // paid. This prevents duplicate entitlement grants and disbursement logic.
     if inv.status == "paid" && inv.paid_at.is_some() {
         tracing::info!(
             "fiat webhook replay ignored: provider={provider} uid={invoice_uid} already paid"
@@ -463,6 +477,8 @@ pub async fn handle_webhook(
         }
     }
 
+    // Auto-disburse only once for providers that support it natively. A replay
+    // or repeated callback should not produce multiple creator payouts.
     if provider == "xendit" && inv.disbursed_at.is_none() {
         use crate::plugins::payment::providers::xendit::XenditPaymentPlugin;
 

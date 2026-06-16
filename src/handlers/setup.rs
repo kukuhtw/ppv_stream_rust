@@ -27,6 +27,9 @@ pub async fn setup_admin(
     State(st): State<SetupState>,
     Query(q): Query<SetupQuery>,
 ) -> Html<String> {
+    // This endpoint is intentionally single-purpose and temporary: it exists
+    // only to bootstrap the first admin account when an explicit token is
+    // configured at deploy time.
     let Some(required) = &st.token else {
         warn!(
             action = "setup_admin_blocked",
@@ -44,6 +47,8 @@ pub async fn setup_admin(
         return Html("<h1>Unauthorized</h1><p>Invalid or missing token.</p>".into());
     }
 
+    // Once any admin exists, bootstrap must permanently shut itself off to
+    // avoid becoming an alternate account-recovery path.
     let admin_count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM users WHERE is_admin = 1")
         .fetch_one(&st.pool)
         .await
@@ -72,7 +77,8 @@ pub async fn setup_admin(
         Err(_) => return Html("<h1>Error</h1><p>Failed to hash password.</p>".into()),
     };
 
-    // Sudah ada user dengan email tsb?
+    // If the bootstrap email already belongs to an existing account, promote
+    // that account instead of silently creating a duplicate identity.
     match sqlx::query!(r#"SELECT id FROM users WHERE email=$1"#, email_norm)
         .fetch_optional(&st.pool)
         .await

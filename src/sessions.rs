@@ -12,6 +12,9 @@ use sha2::Sha256;
 
 type HmacSha256 = Hmac<Sha256>;
 
+// The browser only stores an opaque session identifier plus an HMAC signature.
+// Session authority still lives in the database, which allows expiration and
+// revocation without exposing trust decisions to the client.
 const COOKIE_NAME: &str = "ppv_session";
 
 fn b64(s: &str) -> String {
@@ -83,7 +86,8 @@ pub async fn create_session(
     let mut c = Cookie::new(COOKIE_NAME, build_cookie_value(&sid, &cfg.hmac_secret));
     c.set_http_only(true);
     c.set_path("/");
-    // Default aman untuk web apps
+    // Default to browser-safe cookie behavior: inaccessible to JavaScript,
+    // sent site-locally, and marked secure when the deployment runs on HTTPS.
     c.set_same_site(tower_cookies::cookie::SameSite::Lax);
     let secure_cookie = std::env::var("SESSION_COOKIE_SECURE")
         .ok()
@@ -123,6 +127,9 @@ pub async fn current_user_id(
     cfg: &Config,
     cookies: &Cookies,
 ) -> Option<(String, bool)> {
+    // Trust the cookie only after both checks succeed:
+    // 1. the HMAC proves the cookie was issued by this server
+    // 2. the backing session row still exists and has not expired
     let raw = cookies.get(COOKIE_NAME)?.value().to_string();
     let sid = parse_and_verify_cookie(&raw, &cfg.hmac_secret)?;
 

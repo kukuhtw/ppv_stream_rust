@@ -17,6 +17,9 @@ use once_cell::sync::Lazy;
 
 use crate::config::Config;
 
+// Simple in-memory buckets for low-cost abuse protection on sensitive endpoints.
+// This is process-local, so it is best treated as a first layer rather than a
+// complete distributed rate-limiting solution.
 static RATE_LIMIT_STORE: Lazy<Mutex<HashMap<String, VecDeque<Instant>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
@@ -28,6 +31,9 @@ pub async fn browser_csrf_guard(
     req: Request,
     next: Next,
 ) -> Result<Response, Response> {
+    // For browser session traffic, require same-origin hints on state-changing
+    // requests. This helps block classic CSRF attempts without affecting
+    // anonymous reads or non-browser clients that do not carry the session cookie.
     if should_enforce_same_origin(&req) {
         let headers = req.headers();
         let origin_ok = headers
@@ -59,11 +65,15 @@ pub async fn browser_csrf_guard(
 }
 
 pub async fn basic_rate_limit(cfg: Config, req: Request, next: Next) -> Result<Response, Response> {
+    // Apply a narrow rate limit only to high-risk POST routes such as login,
+    // registration, and password changes. This keeps the behavior predictable
+    // while reducing brute-force and credential-stuffing pressure.
     if should_rate_limit(req.uri(), req.method()) {
         let client_key = client_fingerprint(&req, cfg.trust_proxy_headers);
         let key = format!("{}:{}", req.uri().path(), client_key);
         let now = Instant::now();
 
+        // Keep a sliding window of recent attempts for each route + client key.
         let mut store = RATE_LIMIT_STORE.lock().expect("rate limit mutex poisoned");
         let bucket = store.entry(key).or_default();
         while let Some(ts) = bucket.front() {
@@ -94,6 +104,9 @@ pub async fn basic_rate_limit(cfg: Config, req: Request, next: Next) -> Result<R
 }
 
 pub async fn security_headers(req: Request, next: Next) -> Response {
+    // Attach a conservative set of browser-facing security headers to every
+    // response. These defaults reduce common UI embedding and content-sniffing
+    // risks without depending on per-handler logic.
     let path = req.uri().path().to_string();
     let mut response = next.run(req).await;
     let headers = response.headers_mut();
@@ -121,6 +134,9 @@ pub async fn security_headers(req: Request, next: Next) -> Response {
     );
 
     if !headers.contains_key(CACHE_CONTROL) && should_default_no_store(&path) {
+        // Dynamic pages and JSON responses should not be cached by default,
+        // but static assets and health checks are excluded so normal browser
+        // and CDN behavior still works where appropriate.
         headers.insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
     }
 
@@ -128,6 +144,8 @@ pub async fn security_headers(req: Request, next: Next) -> Response {
 }
 
 fn should_enforce_same_origin(req: &Request) -> bool {
+    // Payment routes are excluded here because some gateway flows and webhooks
+    // do not behave like same-origin browser form submissions.
     matches!(
         *req.method(),
         Method::POST | Method::PUT | Method::PATCH | Method::DELETE
@@ -144,6 +162,8 @@ fn has_session_cookie(req: &Request) -> bool {
 }
 
 fn same_origin(candidate: &str, base_url: &str) -> bool {
+    // Compare normalized origins and also allow full URLs that begin with the
+    // configured base URL, such as Referer values that include a path.
     let normalize = |value: &str| value.trim().trim_end_matches('/').to_ascii_lowercase();
     let expected = normalize(base_url);
     let current = normalize(candidate);
@@ -177,6 +197,9 @@ fn should_default_no_store(path: &str) -> bool {
 }
 
 fn client_fingerprint(req: &Request, trust_proxy_headers: bool) -> String {
+    // Only trust forwarded IP headers when the deployment explicitly says it is
+    // behind a trusted proxy. Otherwise, fall back to a coarse user-agent key
+    // instead of accepting spoofable client IP headers from the public internet.
     if trust_proxy_headers {
         if let Some(value) = req
             .headers()
