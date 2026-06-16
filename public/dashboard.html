@@ -1,481 +1,374 @@
-<!-- public/dashboard.html -->
 <!doctype html>
-<html lang="id">
+<html lang="en" data-bs-theme="dark">
 <head>
   <meta charset="utf-8">
-  <title>Dashboard</title>
+  <title>Dashboard — PPV Stream</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="/public/styles.css">
+  <script src="/public/theme.js"></script>
 </head>
-<body class="bg-light">
+<body>
 
-<!-- Navbar -->
-<nav class="navbar navbar-expand-md navbar-light bg-white shadow-sm">
+<nav class="navbar navbar-expand-md bg-body-tertiary shadow-sm border-bottom">
   <div class="container">
-    <a class="navbar-brand fw-bold" href="/public/browse.html">🎬 PPV Stream</a>
-    <button class="navbar-toggler" type="button"
-            data-bs-toggle="collapse" data-bs-target="#mainNav" aria-controls="mainNav"
-            aria-expanded="false" aria-label="Toggle navigation">
+    <a class="navbar-brand fw-bold" href="/public/browse.html" data-platform="brand">🎬 PPV Stream</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
       <span class="navbar-toggler-icon"></span>
     </button>
     <div class="collapse navbar-collapse" id="mainNav">
-      <ul class="navbar-nav me-auto mb-2 mb-md-0">
+      <ul class="navbar-nav me-auto">
         <li class="nav-item"><a class="nav-link" href="/public/browse.html">Browse</a></li>
-        <li class="nav-item"><a class="nav-link active" aria-current="page" href="/public/dashboard.html">Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link active fw-semibold" href="/public/dashboard.html">Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link" href="/public/wallet.html">Wallet</a></li>
+        <li class="nav-item"><a class="nav-link" href="/public/affiliate.html">Affiliate</a></li>
       </ul>
       <div class="d-flex align-items-center gap-2 mt-2 mt-md-0">
-        <span id="userbar" class="badge bg-secondary">Memuat user…</span>
-        <button id="logoutBtn" class="btn btn-sm btn-outline-danger" type="button">Logout</button>
+        <span id="userbar" class="badge bg-secondary">Loading…</span>
+        <button class="btn btn-sm btn-outline-secondary" onclick="toggleTheme()" id="themeToggle">☀️</button>
+        <button id="logoutBtn" class="btn btn-sm btn-outline-danger">Logout</button>
       </div>
     </div>
   </div>
 </nav>
 
 <div class="container py-4 pb-5">
+  <h1 class="mb-1 fs-4 fw-bold">Dashboard</h1>
+  <p class="text-body-secondary small mb-4">Manage your content, profile, and access control.</p>
 
-  <h1 class="mb-4">Dashboard Pengguna</h1>
-
-  <!-- ===== Intro ===== -->
+  <!-- Profile -->
   <div class="card shadow-sm mb-4">
-    <div class="card-body">
-      <p class="mb-1">Selamat datang di platform streaming video berbayar! Upload video Anda, tetapkan harga, dan dapatkan penghasilan dari penonton.</p>
-      <p class="mb-0 text-muted small">Tip: tekan <kbd>F</kbd> di halaman Tonton untuk toggle fullscreen.</p>
-    </div>
-  </div>
-
-  <!-- ===== Edit Profile ===== -->
-  <div class="card shadow-sm mb-4">
-    <div class="card-header fw-semibold">Edit Profile &amp; Kontak</div>
+    <div class="card-header fw-semibold">Profile &amp; Payout Info</div>
     <div class="card-body">
       <form id="profileForm">
-        <div class="mb-3">
-          <label for="profileEmail" class="form-label">Email</label>
-          <input id="profileEmail" name="email" type="email" class="form-control" readonly disabled>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label for="pEmail" class="form-label">Email</label>
+            <input id="pEmail" name="email" type="email" class="form-control" readonly disabled>
+          </div>
+          <div class="col-md-6">
+            <label for="pWhatsapp" class="form-label">WhatsApp Number</label>
+            <input id="pWhatsapp" name="whatsapp" class="form-control" placeholder="e.g. 628123456789">
+          </div>
+          <div class="col-md-6">
+            <label for="pBank" class="form-label">Bank Account <span class="text-body-secondary small">(for fiat payouts)</span></label>
+            <input id="pBank" name="bank_account" class="form-control" placeholder="e.g. BCA 1234567890 a/n Name">
+          </div>
+          <div class="col-md-6">
+            <label for="pWallet" class="form-label">EVM Wallet <span class="text-body-secondary small">(for crypto payouts)</span></label>
+            <input id="pWallet" name="wallet_account" class="form-control font-monospace" placeholder="0x… (42 chars)"
+                   pattern="^$|^0x[a-fA-F0-9]{40}$" title="Leave blank or enter a valid EVM address">
+          </div>
+          <div class="col-md-6">
+            <label for="chainSel" class="form-label">Preferred Chain</label>
+            <select name="wallet_chain_id" id="chainSel" class="form-select">
+              <option value="">(Select chain)</option>
+              <option value="6342">Mega Testnet (6342)</option>
+              <option value="137">Polygon Mainnet (137)</option>
+              <option value="1">Ethereum Mainnet (1)</option>
+            </select>
+          </div>
+          <div class="col-12">
+            <label for="pBio" class="form-label">Profile Bio</label>
+            <textarea id="pBio" name="profile_desc" rows="3" class="form-control" placeholder="Describe yourself or how buyers should confirm payment."></textarea>
+          </div>
+          <div class="col-12">
+            <button class="btn btn-primary">Save Profile</button>
+          </div>
         </div>
-        <div class="mb-3">
-          <label for="profileWhatsapp" class="form-label">Nomor WhatsApp</label>
-          <input id="profileWhatsapp" name="whatsapp" class="form-control" placeholder="contoh: 62812xxxxxxx">
-        </div>
-        <div class="mb-3">
-          <label for="profileBank" class="form-label">Rekening Bank</label>
-          <input id="profileBank" name="bank_account" class="form-control" placeholder="BCA 1234567890 a/n Nama">
-        </div>
-        <div class="mb-3">
-          <label for="profileWallet" class="form-label">Creator EVM Wallet (payout)</label>
-          <input id="profileWallet" name="wallet_account" class="form-control font-monospace"
-                 placeholder="0x1234...abcd (42 chars)"
-                 pattern="^$|^0x[a-fA-F0-9]{40}$"
-                 title="Kosongkan, atau isi alamat EVM valid: 0x diikuti 40 karakter heksadesimal">
-        </div>
-        <div class="mb-3">
-          <label for="wallet_chain_id" class="form-label">Preferred Chain</label>
-          <select id="wallet_chain_id" name="wallet_chain_id" class="form-select">
-            <option value="">(Pilih chain)</option>
-            <option value="6342">Mega Testnet (6342)</option>
-            <option value="137">Polygon Mainnet (137)</option>
-            <option value="1">Ethereum Mainnet (1)</option>
-          </select>
-        </div>
-        <div class="mb-3">
-          <label for="profileDesc" class="form-label">Deskripsi Profil</label>
-          <textarea id="profileDesc" name="profile_desc" rows="3" class="form-control"
-                    placeholder="Tuliskan deskripsi singkat tentang Anda atau cara konfirmasi transfer."></textarea>
-        </div>
-        <button class="btn btn-primary">Simpan Profile</button>
       </form>
-      <p class="text-muted small mt-2 mb-0">Informasi ini akan muncul di halaman video Anda agar penonton bisa melakukan transfer &amp; konfirmasi langsung.</p>
     </div>
   </div>
 
-  <!-- ===== Ganti Password ===== -->
+  <!-- Change Password -->
   <div class="card shadow-sm mb-4">
-    <div class="card-header fw-semibold">Ganti Password</div>
+    <div class="card-header fw-semibold">Change Password</div>
     <div class="card-body">
       <div id="pwAlert" class="d-none mb-3"></div>
       <form id="changePassForm" autocomplete="off">
-        <div class="mb-3">
-          <label for="cpCurrent" class="form-label">Password Saat Ini</label>
-          <div class="input-group">
-            <input id="cpCurrent" name="current_password" type="password" class="form-control"
-                   autocomplete="current-password" required placeholder="Password lama Anda">
-            <button class="btn btn-outline-secondary" type="button" data-toggle-pass="cpCurrent">Lihat</button>
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label for="cpCurrent" class="form-label">Current Password</label>
+            <div class="input-group">
+              <input id="cpCurrent" name="current_password" type="password" class="form-control" required placeholder="Current password">
+              <button class="btn btn-outline-secondary" type="button" data-toggle-pass="cpCurrent">Show</button>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <label for="cpNew" class="form-label">New Password</label>
+            <div class="input-group">
+              <input id="cpNew" name="new_password" type="password" class="form-control" required placeholder="Min. 8 chars">
+              <button class="btn btn-outline-secondary" type="button" data-toggle-pass="cpNew">Show</button>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <label for="cpConfirm" class="form-label">Confirm New Password</label>
+            <input id="cpConfirm" type="password" class="form-control" required placeholder="Repeat new password">
+          </div>
+          <div class="col-12">
+            <button class="btn btn-warning" type="submit">Update Password</button>
           </div>
         </div>
-        <div class="mb-3">
-          <label for="cpNew" class="form-label">Password Baru</label>
-          <div class="input-group">
-            <input id="cpNew" name="new_password" type="password" class="form-control"
-                   autocomplete="new-password" required placeholder="Min. 8 karakter">
-            <button class="btn btn-outline-secondary" type="button" data-toggle-pass="cpNew">Lihat</button>
-          </div>
-        </div>
-        <div class="mb-3">
-          <label for="cpConfirm" class="form-label">Konfirmasi Password Baru</label>
-          <input id="cpConfirm" type="password" class="form-control"
-                 autocomplete="new-password" required placeholder="Ulangi password baru">
-        </div>
-        <button class="btn btn-warning" type="submit">Ubah Password</button>
       </form>
     </div>
   </div>
 
-  <!-- ===== Video Saya & Akses ===== -->
+  <!-- My Videos -->
   <div class="card shadow-sm mb-4">
     <div class="card-header d-flex align-items-center gap-2">
-      <span class="fw-semibold me-auto">Video Saya &amp; Akses</span>
-      <button id="refreshBtn" class="btn btn-sm btn-outline-secondary" type="button">↻ Refresh</button>
+      <span class="fw-semibold me-auto">My Videos &amp; Access</span>
+      <button id="refreshBtn" class="btn btn-sm btn-outline-secondary">↻ Refresh</button>
     </div>
     <div class="card-body">
-      <div id="mine" class="text-muted">Memuat…</div>
+      <div id="mine" class="text-body-secondary">Loading…</div>
     </div>
   </div>
 
-  <!-- ===== Upload ===== -->
+  <!-- Upload -->
   <div class="card shadow-sm mb-4">
     <div class="card-header fw-semibold">Upload Video</div>
     <div class="card-body">
       <form id="uploadForm" enctype="multipart/form-data">
-        <div class="mb-3">
-          <label for="uploadTitle" class="form-label">Judul</label>
-          <input id="uploadTitle" name="title" class="form-control" value="Untitled" required maxlength="160">
+        <div class="row g-3">
+          <div class="col-md-8">
+            <label for="upTitle" class="form-label">Title</label>
+            <input id="upTitle" name="title" class="form-control" value="Untitled" required maxlength="160">
+          </div>
+          <div class="col-md-4">
+            <label for="upPrice" class="form-label">Price (cents) <span class="text-body-secondary small">0 = free</span></label>
+            <input id="upPrice" name="price_cents" type="number" min="0" value="0" class="form-control" required>
+          </div>
+          <div class="col-12">
+            <label for="upDesc" class="form-label">Description <span class="text-body-secondary small">(optional)</span></label>
+            <textarea id="upDesc" name="description" rows="2" class="form-control" placeholder="Brief summary of this video…"></textarea>
+          </div>
+          <div class="col-12">
+            <label for="upFile" class="form-label">MP4 File</label>
+            <input id="upFile" name="file" type="file" accept="video/mp4" class="form-control" required>
+          </div>
+          <div class="col-12">
+            <button class="btn btn-primary" type="submit">Upload</button>
+            <span class="text-body-secondary small ms-3">MP4 only. Transcoding to HLS happens automatically.</span>
+          </div>
         </div>
-        <div class="mb-3">
-          <label for="uploadDesc" class="form-label">Deskripsi <span class="text-muted">(opsional)</span></label>
-          <textarea id="uploadDesc" name="description" rows="3" class="form-control"
-                    placeholder="Tuliskan ringkasan video…"></textarea>
-        </div>
-        <div class="mb-3">
-          <label for="uploadPrice" class="form-label">Harga (cents)</label>
-          <input id="uploadPrice" name="price_cents" type="number" min="0" value="0"
-                 class="form-control" required>
-        </div>
-        <div class="mb-3">
-          <label for="uploadFile" class="form-label">File MP4</label>
-          <input id="uploadFile" name="file" type="file" accept="video/mp4" class="form-control" required>
-        </div>
-        <button class="btn btn-primary" type="submit">Upload</button>
       </form>
-      <p class="text-muted small mt-2 mb-0">Catatan: pastikan file berformat MP4.</p>
     </div>
   </div>
 
-  <!-- ===== Allowlist ===== -->
+  <!-- Allowlist -->
   <div class="card shadow-sm mb-4">
-    <div class="card-header fw-semibold">Grant Akses (Allowlist)</div>
+    <div class="card-header fw-semibold">Grant Access (Allowlist)</div>
     <div class="card-body">
       <form id="allow">
-        <div class="mb-3">
-          <label for="videoSelect" class="form-label">Video</label>
-          <select id="videoSelect" class="form-select" required></select>
-          <input type="hidden" name="video_id" id="videoIdHidden">
-          <small id="videoIdEcho" class="text-muted"></small>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label for="videoSelect" class="form-label">Video</label>
+            <select id="videoSelect" class="form-select" required></select>
+            <input type="hidden" name="video_id" id="videoIdHidden">
+            <small id="videoIdEcho" class="text-body-secondary"></small>
+          </div>
+          <div class="col-md-6">
+            <label for="usernameInp" class="form-label">Username to grant access</label>
+            <input id="usernameInp" name="username" class="form-control" required placeholder="username">
+            <div id="lookup" class="text-body-secondary small mt-1"></div>
+          </div>
+          <div class="col-12">
+            <button class="btn btn-primary">Grant Access</button>
+          </div>
         </div>
-        <div class="mb-3">
-          <label for="usernameInp" class="form-label">Username yg diizinkan</label>
-          <input id="usernameInp" name="username" class="form-control" required>
-          <div id="lookup" class="text-muted small mt-1"></div>
-        </div>
-        <button class="btn btn-primary">Tambah</button>
       </form>
     </div>
   </div>
 
-</div><!-- /container -->
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-// ===== util =====
-function toast(msg, ok=true){ alert((ok ? "OK: " : "GAGAL: ") + msg); }
+// ── user bar + logout ──
+(async function() {
+  try {
+    const j = await fetch('/api/me').then(r=>r.json());
+    const el = document.getElementById('userbar');
+    if (j.ok && j.user) el.innerHTML = `<b>${esc(j.user.username)}</b> &lt;${esc(j.user.email)}&gt;`;
+    else location.href = '/public/auth/login.html';
+  } catch {}
+})();
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  await fetch('/auth/logout', { method:'POST' }).catch(()=>{});
+  location.href = '/public/auth/login.html?status=ok';
+});
+
+// ── password show/hide ──
+document.querySelectorAll('[data-toggle-pass]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const inp = document.getElementById(btn.dataset.togglePass);
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+    btn.textContent = inp.type === 'password' ? 'Show' : 'Hide';
+  });
+});
+
+// ── change password ──
+document.getElementById('changePassForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const current = document.getElementById('cpCurrent').value;
+  const newPass  = document.getElementById('cpNew').value;
+  const confirm  = document.getElementById('cpConfirm').value;
+  const alert    = document.getElementById('pwAlert');
+  alert.className = 'd-none';
+  if (newPass !== confirm) return showPwAlert('danger', 'Passwords do not match.');
+  if (newPass.length < 8)  return showPwAlert('danger', 'New password must be at least 8 characters.');
+  const btn = e.submitter; btn.disabled = true; btn.textContent = 'Updating…';
+  try {
+    const j = await fetch('/api/change_password', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ current_password:current, new_password:newPass }) }).then(r=>r.json());
+    if (j.ok) { showPwAlert('success', 'Password updated successfully! A confirmation email has been sent.'); e.target.reset(); }
+    else showPwAlert('danger', 'Failed: ' + (j.error || 'Unknown error'));
+  } catch(err) { showPwAlert('danger', 'Error: ' + err.message); }
+  finally { btn.disabled=false; btn.textContent='Update Password'; }
+});
 function showPwAlert(type, msg) {
   const el = document.getElementById('pwAlert');
   el.className = `alert alert-${type}`;
   el.textContent = msg;
 }
 
-// ===== Toggle password visibility =====
-document.querySelectorAll('[data-toggle-pass]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const inp = document.getElementById(btn.dataset.togglePass);
-    inp.type = inp.type === 'password' ? 'text' : 'password';
-    btn.textContent = inp.type === 'password' ? 'Lihat' : 'Sembunyikan';
-  });
-});
-
-// ===== Ganti Password =====
-document.getElementById('changePassForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const current = document.getElementById('cpCurrent').value;
-  const newPass  = document.getElementById('cpNew').value;
-  const confirm  = document.getElementById('cpConfirm').value;
-  const pwAlert  = document.getElementById('pwAlert');
-  pwAlert.className = 'd-none';
-
-  if (newPass !== confirm) {
-    showPwAlert('danger', 'Konfirmasi password tidak cocok.');
-    return;
-  }
-  if (newPass.length < 8) {
-    showPwAlert('danger', 'Password baru minimal 8 karakter.');
-    return;
-  }
-
-  const btn = e.submitter;
-  btn.disabled = true;
-  btn.textContent = 'Memproses...';
-
-  try {
-    const r = await fetch('/api/change_password', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ current_password: current, new_password: newPass }),
-    });
-    const j = await r.json();
-    if (j.ok) {
-      showPwAlert('success', 'Password berhasil diubah! Notifikasi dikirim ke email Anda.');
-      e.target.reset();
-    } else {
-      showPwAlert('danger', 'Gagal: ' + (j.error || 'Unknown error'));
-    }
-  } catch (err) {
-    showPwAlert('danger', 'Error: ' + err.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Ubah Password';
-  }
-});
-function escapeHtml(s){
-  return String(s ?? '')
-    .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;').replaceAll("'", '&#039;');
-}
-
-// ===== user bar =====
-(async function loadMe(){
-  try {
-    const r = await fetch('/api/me');
-    const j = await r.json();
-    const el = document.getElementById('userbar');
-    if(j.ok && j.user){
-      el.innerHTML = `<b>${escapeHtml(j.user.username)}</b> &lt;${escapeHtml(j.user.email)}&gt;`;
-    } else {
-      el.innerHTML = `<a href="/public/auth/login.html">Login</a>`;
-    }
-  } catch {
-    document.getElementById('userbar').textContent='(gagal memuat)';
-  }
-})();
-
-// ===== Logout =====
-document.getElementById('logoutBtn').addEventListener('click', async () => {
-  try {
-    await fetch('/auth/logout', { method: 'POST' });
-    location.href = '/public/auth/login.html?status=ok';
-  } catch {
-    location.href = '/public/auth/login.html';
-  }
-});
-
-// ================= Edit Profile =================
+// ── profile ──
 (async function initProfile(){
   try {
-    const r = await fetch('/api/profile');
-    const j = await r.json();
-    if(j.ok && j.profile){
+    const j = await fetch('/api/profile').then(r=>r.json());
+    if (j.ok && j.profile) {
       const f = document.getElementById('profileForm');
-      f.email.value         = j.profile.email         || '';
-      f.whatsapp.value      = j.profile.whatsapp       || '';
-      f.bank_account.value  = j.profile.bank_account   || '';
-      f.wallet_account.value= j.profile.wallet_account || '';
-      f.profile_desc.value  = j.profile.profile_desc   || '';
-      const sel = document.getElementById('wallet_chain_id');
-      if (sel && j.profile.wallet_chain_id != null) sel.value = String(j.profile.wallet_chain_id);
+      f.email.value          = j.profile.email          || '';
+      f.whatsapp.value       = j.profile.whatsapp        || '';
+      f.bank_account.value   = j.profile.bank_account    || '';
+      f.wallet_account.value = j.profile.wallet_account  || '';
+      f.profile_desc.value   = j.profile.profile_desc    || '';
+      const sel = document.getElementById('chainSel');
+      if (j.profile.wallet_chain_id != null) sel.value = String(j.profile.wallet_chain_id);
     }
   } catch {}
-  document.getElementById('profileForm').addEventListener('submit', async (e)=>{
+  document.getElementById('profileForm').addEventListener('submit', async e => {
     e.preventDefault();
     const fd = new FormData(e.target);
     fd.delete('email');
     const addr = (fd.get('wallet_account')||'').toString().trim();
-    if (addr && !/^0x[a-fA-F0-9]{40}$/.test(addr))
-      return toast('Wallet harus alamat EVM valid: 0x + 40 hex', false);
-    const body = new URLSearchParams(fd);
+    if (addr && !/^0x[a-fA-F0-9]{40}$/.test(addr)) return alert('Invalid EVM wallet address.');
     try {
-      const r = await fetch('/api/profile_update', {
-        method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body
-      });
-      const j = await r.json().catch(async()=>({ok:false,error:await r.text()}));
-      toast(j.ok ? 'Profile tersimpan' : 'Gagal: '+(j.error||'unknown'), j.ok);
-    } catch(err){ toast('Gagal: '+err, false); }
+      const j = await fetch('/api/profile_update', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams(fd) }).then(r=>r.json());
+      alert(j.ok ? 'Profile saved!' : 'Failed: ' + (j.error || 'unknown'));
+    } catch(err) { alert('Error: ' + err); }
   });
 })();
 
-// ================= Upload =================
-document.getElementById('uploadForm').onsubmit = async (e) => {
+// ── upload ──
+document.getElementById('uploadForm').onsubmit = async e => {
   e.preventDefault();
-  const formData = new FormData(e.target);
   try {
-    const r = await fetch('/api/upload', { method: 'POST', body: formData });
-    const j = (r.headers.get('content-type')||'').includes('application/json')
-      ? await r.json() : { error: await r.text() };
-    if (!r.ok || j.ok === false) return toast(`Upload gagal: ${j.error || 'unknown error'}`, false);
-    toast(`Upload sukses. Video ID: ${j.video_id}`);
+    const j = await fetch('/api/upload', { method:'POST', body: new FormData(e.target) }).then(r=>r.json());
+    if (j.ok === false) return alert('Upload failed: ' + (j.error || 'unknown'));
+    alert('Upload successful! Video ID: ' + j.video_id);
     e.target.reset();
     await loadMyVideos(); await renderMyVideos();
-  } catch (e2) { toast(`Upload gagal: ${e2}`, false); }
+  } catch(e2) { alert('Upload failed: ' + e2); }
 };
 
-// ================= Allowlist =================
-const allowForm   = document.getElementById('allow');
+// ── allowlist ──
 const videoSelect = document.getElementById('videoSelect');
-const videoHidden = document.getElementById('videoIdHidden');
-const videoEcho   = document.getElementById('videoIdEcho');
-const usernameInp = document.getElementById('usernameInp');
-const lookupBox   = document.getElementById('lookup');
-
-function syncVideoIdEcho(){
+videoSelect.addEventListener('change', syncVideoIdEcho);
+function syncVideoIdEcho() {
   const vid = videoSelect.value || '';
-  videoHidden.value = vid;
-  if (vid) {
-    videoEcho.innerHTML = `video_id: ${escapeHtml(vid)} <button class="btn btn-sm btn-outline-secondary py-0 px-1" type="button" id="copyVidBtn">Copy</button>`;
-    document.getElementById('copyVidBtn').onclick = async () => {
-      try { await navigator.clipboard.writeText(vid); toast('Video ID disalin'); } catch {}
-    };
-  } else {
-    videoEcho.textContent = '';
-  }
+  document.getElementById('videoIdHidden').value = vid;
+  const echo = document.getElementById('videoIdEcho');
+  if (vid) echo.innerHTML = `video_id: ${esc(vid)} <button class="btn btn-sm btn-outline-secondary py-0 px-1" type="button" onclick="navigator.clipboard.writeText('${esc(vid)}')">Copy</button>`;
+  else echo.textContent = '';
 }
 
-async function loadMyVideos(){
+async function loadMyVideos() {
   try {
-    const r = await fetch('/api/my_videos');
-    const j = await r.json();
-    if (j.ok && Array.isArray(j.videos) && j.videos.length) {
-      videoSelect.innerHTML = j.videos.map(v =>
-        `<option value="${v.id}">${escapeHtml(v.title)} — ${v.id}</option>`).join('');
-    } else {
-      videoSelect.innerHTML = '<option value="">(Belum ada video)</option>';
-    }
-  } catch {
-    videoSelect.innerHTML = '<option value="">Gagal load video</option>';
-  }
+    const j = await fetch('/api/my_videos').then(r=>r.json());
+    if (j.ok && Array.isArray(j.videos) && j.videos.length)
+      videoSelect.innerHTML = j.videos.map(v => `<option value="${esc(v.id)}">${esc(v.title)} — ${esc(v.id)}</option>`).join('');
+    else videoSelect.innerHTML = '<option value="">(No videos yet)</option>';
+  } catch { videoSelect.innerHTML = '<option value="">Failed to load</option>'; }
   syncVideoIdEcho();
 }
 
-videoSelect.addEventListener('change', syncVideoIdEcho);
-
-let t;
-usernameInp.addEventListener('input', () => {
-  clearTimeout(t);
-  const u = usernameInp.value.trim();
-  lookupBox.textContent = '';
+let lookupTimer;
+document.getElementById('usernameInp').addEventListener('input', () => {
+  clearTimeout(lookupTimer);
+  const u = document.getElementById('usernameInp').value.trim();
+  const box = document.getElementById('lookup');
+  box.textContent = '';
   if (!u) return;
-  t = setTimeout(async () => {
+  lookupTimer = setTimeout(async () => {
     try {
-      const r = await fetch('/api/user_lookup?' + new URLSearchParams({ username: u }));
-      const j = await r.json();
-      lookupBox.textContent = (j.ok && j.user) ? `→ user_id: ${j.user.id}` : '→ user tidak ditemukan';
-    } catch { lookupBox.textContent = '→ gagal lookup user'; }
+      const j = await fetch('/api/user_lookup?' + new URLSearchParams({ username: u })).then(r=>r.json());
+      box.textContent = (j.ok && j.user) ? `✓ Found: ${j.user.id}` : '✗ User not found';
+    } catch { box.textContent = '✗ Lookup failed'; }
   }, 300);
 });
 
-allowForm.onsubmit = async (e) => {
+document.getElementById('allow').onsubmit = async e => {
   e.preventDefault();
-  const uname = usernameInp.value.trim();
-  const vid   = videoHidden.value.trim();
-  if (!vid)   return toast('Pilih video terlebih dahulu (video_id kosong).', false);
-  if (!uname) return toast('Isi username dulu.', false);
-
+  const uname = document.getElementById('usernameInp').value.trim();
+  const vid   = document.getElementById('videoIdHidden').value.trim();
+  if (!vid)   return alert('Select a video first.');
+  if (!uname) return alert('Enter a username.');
   try {
-    const r0 = await fetch('/api/user_lookup?' + new URLSearchParams({ username: uname }));
-    const j0 = await r0.json();
-    if (!(j0.ok && j0.user && j0.user.id)) {
-      lookupBox.textContent = '→ user tidak ditemukan';
-      return toast('Gagal: user tidak ditemukan', false);
-    }
-  } catch {}
-
-  const body = new URLSearchParams(new FormData(allowForm));
-  try {
-    const r = await fetch('/api/allow', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
-    const j = await r.json().catch(async()=>({ok:false,error:await r.text()}));
-    if (!r.ok || j.ok === false) return toast(`Gagal allowlist: ${j.error||'unknown'}`, false);
-    if (typeof j.rows_affected === 'number' && j.rows_affected === 0) {
-      toast(`Allowlist: ${j.username} sudah ada untuk video ${j.video_id} (duplikat).`);
-    } else {
-      toast(`Allowlist sukses: ${j.username} → video ${j.video_id}`);
-    }
-    allowForm.reset(); lookupBox.textContent = ''; syncVideoIdEcho();
-    await renderMyVideos();
-  } catch (e2) { toast(`Gagal allowlist: ${e2}`, false); }
+    const j = await fetch('/api/allow', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams(new FormData(e.target)) }).then(r=>r.json());
+    alert(j.ok !== false ? `Access granted: ${j.username || uname} → ${j.video_id || vid}` : 'Failed: ' + (j.error||'unknown'));
+    if (j.ok !== false) { e.target.reset(); document.getElementById('lookup').textContent=''; syncVideoIdEcho(); await renderMyVideos(); }
+  } catch(e2) { alert('Error: ' + e2); }
 };
 
-// ================= Render "Video Saya" =================
+// ── render my videos ──
 async function renderMyVideos() {
   const box = document.getElementById('mine');
-  box.innerHTML = '<p>Memuat…</p>';
+  box.innerHTML = '<p class="text-body-secondary">Loading…</p>';
   try {
-    const r = await fetch('/api/my_videos');
-    const j = await r.json();
-    if (!j.ok) return void (box.innerHTML = `<p class="text-muted">Gagal memuat: ${j.error || 'unknown'}</p>`);
-    if (!Array.isArray(j.videos) || j.videos.length === 0)
-      return void (box.innerHTML = '<p class="text-muted">Belum ada video yang Anda unggah.</p>');
-
+    const j = await fetch('/api/my_videos').then(r=>r.json());
+    if (!j.ok) { box.innerHTML = `<p class="text-body-secondary">Failed: ${esc(j.error||'unknown')}</p>`; return; }
+    if (!Array.isArray(j.videos) || !j.videos.length) { box.innerHTML = '<p class="text-body-secondary">No videos uploaded yet.</p>'; return; }
     box.innerHTML = j.videos.map(v => {
-      const users    = (v.allow_users || []).map(u => `<code>${escapeHtml(u)}</code>`).join(', ');
-      const priceIDR = (v.price_cents/100).toLocaleString('id-ID');
-      return `
-        <div class="card mb-3">
-          <div class="card-body">
-            <h6 class="card-title fw-bold mb-1">${escapeHtml(v.title)}</h6>
-            <p class="text-muted small mb-1">ID: ${escapeHtml(v.id)} • Dibuat: ${escapeHtml(v.created_at)}</p>
-            <p class="mb-2">Harga sekarang: Rp ${priceIDR}</p>
-            <details class="mb-2">
-              <summary class="text-primary" style="cursor:pointer">Edit judul, deskripsi, dan harga (cent)</summary>
-              <form class="edit-form mt-3" data-video-id="${escapeHtml(v.id)}">
-                <input type="hidden" name="id" value="${escapeHtml(v.id)}">
-                <div class="mb-2">
-                  <label class="form-label small">Judul</label>
-                  <input name="title" class="form-control form-control-sm" required maxlength="160" value="${escapeHtml(v.title)}">
-                </div>
-                <div class="mb-2">
-                  <label class="form-label small">Deskripsi</label>
-                  <textarea name="description" rows="2" class="form-control form-control-sm">${escapeHtml(v.description || '')}</textarea>
-                </div>
-                <div class="mb-2">
-                  <label class="form-label small">Harga (cents)</label>
-                  <input name="price_cents" type="number" min="0" class="form-control form-control-sm" required value="${v.price_cents}">
-                </div>
-                <button class="btn btn-primary btn-sm" type="submit">Simpan Perubahan</button>
-              </form>
-            </details>
-            <details>
-              <summary class="text-secondary small" style="cursor:pointer">Allowlist (${v.allow_count})</summary>
-              <div class="mt-2 small">${users || '<span class="text-muted">(Belum ada user diizinkan)</span>'}</div>
-            </details>
-          </div>
-        </div>`;
+      const users = (v.allow_users||[]).map(u=>`<code>${esc(u)}</code>`).join(', ');
+      return `<div class="card mb-3"><div class="card-body">
+        <div class="d-flex align-items-start justify-content-between mb-1">
+          <h6 class="card-title fw-bold mb-0">${esc(v.title)}</h6>
+          <span class="badge ${v.hls_ready ? 'bg-success-subtle text-success-emphasis border border-success-subtle' : 'bg-warning-subtle text-warning-emphasis border border-warning-subtle'}" style="font-size:.65rem">${v.hls_ready ? '▶ Ready' : '⏳ Processing'}</span>
+        </div>
+        <p class="text-body-secondary small mb-2">ID: <code>${esc(v.id)}</code> &nbsp;•&nbsp; Created: ${esc(v.created_at)} &nbsp;•&nbsp; Price: <strong>$${((v.price_cents||0)/100).toFixed(2)}</strong></p>
+        <details class="mb-2">
+          <summary class="text-primary small" style="cursor:pointer">Edit title, description &amp; price</summary>
+          <form class="edit-form mt-3" data-video-id="${esc(v.id)}">
+            <input type="hidden" name="id" value="${esc(v.id)}">
+            <div class="row g-2">
+              <div class="col-md-8"><label class="form-label small">Title</label><input name="title" class="form-control form-control-sm" required maxlength="160" value="${esc(v.title)}"></div>
+              <div class="col-md-4"><label class="form-label small">Price (cents)</label><input name="price_cents" type="number" min="0" class="form-control form-control-sm" required value="${v.price_cents}"></div>
+              <div class="col-12"><label class="form-label small">Description</label><textarea name="description" rows="2" class="form-control form-control-sm">${esc(v.description||'')}</textarea></div>
+              <div class="col-12"><button class="btn btn-primary btn-sm" type="submit">Save Changes</button></div>
+            </div>
+          </form>
+        </details>
+        <details>
+          <summary class="text-body-secondary small" style="cursor:pointer">Allowlist (${v.allow_count||0})</summary>
+          <div class="mt-2 small">${users || '<span class="text-body-secondary">No manual grants yet.</span>'}</div>
+        </details>
+      </div></div>`;
     }).join('');
-  } catch (e) { box.innerHTML = `<p class="text-muted">Error: ${e}</p>`; }
+  } catch(e) { box.innerHTML = `<p class="text-body-secondary">Error: ${esc(String(e))}</p>`; }
 }
 
-document.getElementById('mine').addEventListener('submit', async (e) => {
+document.getElementById('mine').addEventListener('submit', async e => {
   const form = e.target.closest('form.edit-form');
   if (!form) return;
   e.preventDefault();
   const body = new URLSearchParams(new FormData(form));
-  const pc = Number(body.get('price_cents') || 0);
-  if (Number.isNaN(pc) || pc < 0) return toast('Harga (cents) harus >= 0', false);
   try {
-    const r   = await fetch('/api/video_update', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body });
-    const txt = await r.text();
-    let j; try { j = JSON.parse(txt); } catch { j = { ok:false, error: txt || 'non-JSON response' }; }
-    if (!r.ok || j.ok === false) toast('Gagal update: ' + (j.error || 'unknown'), false);
-    else { toast('Video berhasil diupdate'); await renderMyVideos(); await loadMyVideos(); }
-  } catch (err) { toast('Gagal update: ' + err, false); }
+    const j = await fetch('/api/video_update', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body }).then(r=>r.json());
+    if (j.ok === false) alert('Update failed: ' + (j.error||'unknown'));
+    else { alert('Video updated!'); await renderMyVideos(); await loadMyVideos(); }
+  } catch(err) { alert('Error: ' + err); }
 });
 
-// ===== Init =====
 (async () => { await loadMyVideos(); await renderMyVideos(); })();
 document.getElementById('refreshBtn').addEventListener('click', async () => { await loadMyVideos(); await renderMyVideos(); });
 </script>

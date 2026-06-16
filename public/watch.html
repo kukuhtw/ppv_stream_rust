@@ -1,576 +1,280 @@
-<!-- public/watch.html -->
 <!doctype html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 <head>
   <meta charset="utf-8">
-  <title>Watch</title>
+  <title>Watch — PPV Stream</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="/public/styles.css">
-  <style>
-    /* Payment tabs */
-    .pay-tabs { display:flex; gap:0; border-bottom:2px solid #dee2e6; margin-bottom:20px; }
-    .pay-tab  { padding:10px 20px; cursor:pointer; font-weight:500; border:none; background:none;
-                color:#6c757d; border-bottom:2px solid transparent; margin-bottom:-2px; transition:all .15s; }
-    .pay-tab:hover  { color:#495057; }
-    .pay-tab.active { color:#0d6efd; border-bottom-color:#0d6efd; }
-    .pay-panel { display:none; }
-    .pay-panel.active { display:block; }
-
-    /* Wallet balance chip */
-    .balance-chip { display:inline-block; background:#e8f5e9; color:#1b5e20;
-                    border:1px solid #a5d6a7; border-radius:20px; padding:4px 12px;
-                    font-size:.85rem; font-weight:600; }
-    .balance-chip.low { background:#fff3e0; color:#e65100; border-color:#ffcc80; }
-
-    /* Provider buttons */
-    .provider-btn { min-width:120px; text-transform:capitalize; }
-
-    /* Status message */
-    .pay-msg { border-radius:6px; padding:10px 14px; font-size:.87rem; margin-top:12px; display:none; }
-    .pay-msg.ok  { background:#d1fae5; color:#065f46; border:1px solid #6ee7b7; }
-    .pay-msg.err { background:#fee2e2; color:#7f1d1d; border:1px solid #fca5a5; }
-    .pay-msg.show { display:block; }
-  </style>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"></script>
+  <script src="/public/theme.js"></script>
 </head>
-<body class="bg-light">
+<body>
 
-<!-- Navbar -->
-<nav class="navbar navbar-expand-md navbar-light bg-white shadow-sm">
+<nav class="navbar navbar-expand-md bg-body-tertiary shadow-sm border-bottom">
   <div class="container">
-    <a class="navbar-brand fw-bold" href="/public/browse.html">🎬 PPV Stream</a>
-    <button class="navbar-toggler" type="button"
-            data-bs-toggle="collapse" data-bs-target="#mainNav">
+    <a class="navbar-brand fw-bold" href="/public/browse.html" data-platform="brand">🎬 PPV Stream</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
       <span class="navbar-toggler-icon"></span>
     </button>
     <div class="collapse navbar-collapse" id="mainNav">
-      <ul class="navbar-nav me-auto mb-2 mb-md-0">
+      <ul class="navbar-nav me-auto">
         <li class="nav-item"><a class="nav-link" href="/public/browse.html">Browse</a></li>
         <li class="nav-item"><a class="nav-link" href="/public/dashboard.html">Dashboard</a></li>
-        <li class="nav-item"><a class="nav-link" href="/public/wallet.html">💰 Wallet</a></li>
+        <li class="nav-item"><a class="nav-link" href="/public/wallet.html">Wallet</a></li>
+        <li class="nav-item"><a class="nav-link" href="/public/affiliate.html">Affiliate</a></li>
       </ul>
-      <span id="userbar" class="badge bg-secondary mt-2 mt-md-0">Loading…</span>
+      <div class="d-flex align-items-center gap-2 mt-2 mt-md-0">
+        <span id="userbar" class="badge bg-secondary">Loading…</span>
+        <button class="btn btn-sm btn-outline-secondary" onclick="toggleTheme()" id="themeToggle">☀️</button>
+        <button id="logoutBtn" class="btn btn-sm btn-outline-danger">Logout</button>
+      </div>
     </div>
   </div>
 </nav>
 
-<div class="container py-3 pb-5">
+<div class="container py-4 pb-5" id="mainContent">
+  <div class="skeleton mb-3" style="height:2rem;max-width:400px"></div>
+  <div class="skeleton mb-4" style="height:1rem;max-width:200px"></div>
+  <div class="skeleton" style="height:360px"></div>
+</div>
 
-  <!-- Meta -->
-  <div class="mb-2">
-    <a id="selfLink" class="text-muted small" href="#">This page</a>
-  </div>
-  <h1 id="title" class="h3 mb-1">Loading…</h1>
-  <p id="price" class="fw-semibold text-muted mb-1"></p>
-  <p id="desc" class="text-muted mb-3" style="white-space:pre-wrap"></p>
-
-  <!-- Player -->
-  <div class="player-wrap" id="wrap">
-    <video id="player" controls playsinline crossorigin="anonymous"></video>
-    <button id="fsBtn" class="fs-btn" type="button">Fullscreen</button>
-  </div>
-
-  <!-- ===== Payment Panel (shown when 403) ===== -->
-  <div id="payPanel" class="card shadow-sm mb-3 d-none">
-    <div class="card-body">
-      <h5 class="card-title mb-1">🔒 Access Locked</h5>
-      <p id="payPriceDisplay" class="text-muted small mb-3"></p>
-
-      <!-- Tabs -->
-      <div class="pay-tabs" id="payTabs"></div>
-
-      <!-- ── TAB: Wallet ── -->
-      <div class="pay-panel" id="panelWallet">
-        <p class="mb-2 small text-muted">
-          Pay instantly from your platform balance. No crypto wallet needed.
-        </p>
-        <div class="d-flex align-items-center gap-2 mb-3">
-          <span>Your balance:</span>
-          <span id="walletBalChip" class="balance-chip">—</span>
-          <a href="/public/wallet.html" class="btn btn-sm btn-outline-secondary">Top Up</a>
-        </div>
-        <button id="btnWalletPay" class="btn btn-success" type="button">
-          Pay with Wallet
-        </button>
-        <div class="pay-msg" id="walletMsg"></div>
-      </div>
-
-      <!-- ── TAB: Crypto X402 ── -->
-      <div class="pay-panel" id="panelX402">
-        <p class="mb-2 small text-muted">
-          Pay with your crypto wallet (MetaMask). Funds go directly on-chain.
-          Creator receives <span id="x402SplitNote">90%</span>, platform 10%.
-        </p>
-        <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
-          <div>
-            <label for="x402Token" class="form-label small text-muted mb-1">Token:</label>
-            <select id="x402Token" class="form-select form-select-sm" style="min-width:200px"></select>
-          </div>
-          <div class="align-self-end">
-            <button id="btnX402" class="btn btn-primary" type="button">
-              Pay with Crypto
-            </button>
-          </div>
-        </div>
-        <div class="pay-msg" id="x402Msg"></div>
-      </div>
-
-      <!-- ── TAB: Payment Gateway ── -->
-      <div class="pay-panel" id="panelFiat">
-        <p class="mb-2 small text-muted">
-          Pay with card or local payment (Stripe, PayPal, Midtrans, Xendit).
-          You will be redirected to the payment page.
-        </p>
-        <div id="fiatProviders" class="d-flex flex-wrap gap-2 mb-3"></div>
-        <div class="pay-msg" id="fiatMsg"></div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- Owner contact -->
-  <div id="ownerContact" class="card shadow-sm mb-3 d-none">
-    <div class="card-body">
-      <h5 class="card-title">Owner Contact</h5>
-      <div id="oc_body" style="white-space:pre-wrap"></div>
-    </div>
-  </div>
-
-  <!-- Owner edit form -->
-  <div id="ownerEdit" class="card shadow-sm mb-3 d-none">
-    <div class="card-body">
-      <h5 class="card-title">Edit Video</h5>
-      <form id="editForm">
-        <input type="hidden" name="video_id" id="ev_id">
-        <div class="mb-3">
-          <label for="ev_title" class="form-label">Title</label>
-          <input id="ev_title" name="title" class="form-control" required maxlength="160">
-        </div>
-        <div class="mb-3">
-          <label for="ev_desc" class="form-label">Description</label>
-          <textarea id="ev_desc" name="description" rows="3" class="form-control"></textarea>
-        </div>
-        <div class="mb-3">
-          <label for="ev_price_usd" class="form-label">Price (USD)</label>
-          <input id="ev_price_usd" type="number" min="0" step="0.01" class="form-control" placeholder="e.g. 1.99">
-          <input name="price_cents" id="ev_price_cents" type="hidden">
-        </div>
-        <button class="btn btn-primary" type="submit">Save Changes</button>
-      </form>
-      <p class="text-muted small mt-2 mb-0">Only the video owner can save changes.</p>
-    </div>
-  </div>
-
-</div><!-- /container -->
-
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
 <script>
-// ─── utils ───────────────────────────────────────────────────────────────────
-function esc(s){ return String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;"); }
-function toast(msg, ok=true){ alert((ok?'✅ ':'❌ ')+msg); }
-const numUSD = new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'});
-const numIDR = new Intl.NumberFormat('id-ID',{style:'currency',currency:'IDR',maximumFractionDigits:0});
-let USD_TO_IDR = 17000;
+const params    = new URLSearchParams(location.search);
+const VIDEO_ID  = params.get('video_id') || '';
+const REF       = params.get('ref')      || '';
+let   USD_TO_IDR = 17000;
+let   fmtIdr     = new Intl.NumberFormat('id-ID');
+let   currentUser = null;
 
-(async()=>{ try{ const r=await fetch('/api/kurs'); const j=await r.json(); if(j.usd_to_idr) USD_TO_IDR=Number(j.usd_to_idr)||USD_TO_IDR; }catch{} })();
-
-// user bar + resolve current user_id
-let CURRENT_USER = null;
-let REF_CODE = '';  // affiliate referral username from ?ref= URL param
-(async function loadMe(){
-  try{
-    const r=await fetch('/api/me'); const j=await r.json();
-    const el=document.getElementById('userbar');
-    if(j.ok && j.user){ CURRENT_USER=j.user; el.innerHTML=`<b>${esc(j.user.username)}</b> &lt;${esc(j.user.email)}&gt;`; }
-    else el.outerHTML=`<a href="/public/auth/login.html" class="btn btn-sm btn-outline-primary mt-2 mt-md-0">Log in</a>`;
-  }catch{ document.getElementById('userbar').textContent='(error)'; }
+// ── user bar + logout ──
+(async function(){
+  try {
+    const j = await fetch('/api/me').then(r=>r.json());
+    const el = document.getElementById('userbar');
+    if (j.ok && j.user) {
+      el.innerHTML = `<b>${esc(j.user.username)}</b> &lt;${esc(j.user.email)}&gt;`;
+      currentUser = j.user;
+    } else {
+      el.innerHTML = `<a href="/public/auth/login.html" class="text-white">Sign In</a>`;
+    }
+  } catch {}
 })();
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  await fetch('/auth/logout', { method:'POST' }).catch(()=>{});
+  location.href = '/public/auth/login.html?status=ok';
+});
 
-function renderOwnerContact(meta){
-  if(!meta) return;
-  const box=document.getElementById('ownerContact'), body=document.getElementById('oc_body');
-  const wa=(meta.owner_whatsapp||'').replace(/\D/g,'');
-  const lines=[`👤 ${esc(meta.owner_name)}`];
-  if(meta.owner_email)        lines.push(`✉️ ${esc(meta.owner_email)}`);
-  if(wa)                      lines.push(`📱 WhatsApp: ${esc(meta.owner_whatsapp)}${wa?' — https://wa.me/'+wa:''}`);
-  if(meta.owner_bank)         lines.push(`🏦 ${esc(meta.owner_bank)}`);
-  if(meta.owner_wallet)       lines.push(`💳 ${esc(meta.owner_wallet)}`);
-  if(meta.owner_profile_desc) lines.push(`\n${esc(meta.owner_profile_desc)}`);
-  if(lines.length){ body.textContent=lines.join('\n'); box.classList.remove('d-none'); }
+if (!VIDEO_ID) {
+  document.getElementById('mainContent').innerHTML = '<p class="text-danger">No video specified. <a href="/public/browse.html">Browse videos →</a></p>';
+} else {
+  init();
 }
 
-// ─── tabs ─────────────────────────────────────────────────────────────────────
-function activateTab(id){
-  document.querySelectorAll('.pay-tab').forEach(t=>t.classList.toggle('active', t.dataset.panel===id));
-  document.querySelectorAll('.pay-panel').forEach(p=>p.classList.toggle('active', p.id===id));
-}
+async function init() {
+  try { const k = await fetch('/api/kurs').then(r=>r.json()); if(k.usd_to_idr) USD_TO_IDR = k.usd_to_idr; } catch {}
 
-function buildTabs(opts){
-  const tabs=document.getElementById('payTabs');
-  tabs.innerHTML='';
-  const add=(label,panelId)=>{
-    const b=document.createElement('button');
-    b.className='pay-tab'; b.textContent=label; b.dataset.panel=panelId;
-    b.addEventListener('click',()=>activateTab(panelId));
-    tabs.appendChild(b);
-  };
-  if(opts.wallet?.balance_cents !== null) add('💰 Wallet','panelWallet');
-  if(opts.x402?.available)               add('🔗 Crypto (X402)','panelX402');
-  if(opts.fiat?.available)               add('💳 Payment Gateway','panelFiat');
-
-  // Activate best default tab
-  const firstActive =
-    (opts.wallet?.can_afford ? 'panelWallet' : null) ||
-    (opts.x402?.available    ? 'panelX402'   : null) ||
-    (opts.fiat?.available    ? 'panelFiat'   : null) ||
-    'panelWallet';
-  activateTab(firstActive);
-}
-
-function showMsg(id, ok, text){
-  const el=document.getElementById(id);
-  el.className=`pay-msg show ${ok?'ok':'err'}`;
-  el.textContent=text;
-}
-
-// ─── wallet pay ───────────────────────────────────────────────────────────────
-async function doWalletPay(videoId){
-  const btn=document.getElementById('btnWalletPay');
-  btn.disabled=true; btn.textContent='Processing…';
-  try{
-    const r=await fetch('/api/wallet/pay',{
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({video_id: videoId, ref_code: REF_CODE||undefined})
-    });
-    const j=await r.json();
-    if(j.ok){
-      showMsg('walletMsg',true,j.message||'Access granted!');
-      setTimeout(()=>location.reload(), 1200);
-    } else {
-      showMsg('walletMsg',false,j.error||'Payment failed.');
-      btn.disabled=false; btn.textContent='Pay with Wallet';
-    }
-  }catch(e){
-    showMsg('walletMsg',false,'Network error: '+e.message);
-    btn.disabled=false; btn.textContent='Pay with Wallet';
-  }
-}
-
-// ─── X402 / EVM helpers ───────────────────────────────────────────────────────
-const X402_ABI=[
-  "event Paid(bytes32 indexed invoiceUid,address indexed payer,address indexed creator,address admin,address token,uint256 amountWei,string videoId)",
-  "function payNativeSigned(bytes32,address,uint16,string,uint256,uint256,uint8,bytes32,bytes32) payable",
-  "function payERC20Signed(bytes32,address,uint256,address,uint16,string,uint256,uint256,uint8,bytes32,bytes32)"
-];
-const {isAddress, getAddress} = ethers.utils ? {...ethers,...ethers.utils} : ethers;
-const KNOWN_CHAINS={80002:{name:"Polygon Amoy Testnet",currency:{name:"MATIC",symbol:"MATIC",decimals:18},rpcUrls:["https://rpc-amoy.polygon.technology"],explorerUrls:["https://amoy.polygonscan.com"]}};
-const toHexChain=n=>'0x'+(Number(n)>>>0).toString(16);
-function pickErr(e){ return e?.error?.message||e?.error?.data?.message||e?.data?.message||e?.reason||e?.message||'Reverted'; }
-
-async function ensureNetwork(provider,inv){
-  const hex=toHexChain(inv.chain_id);
-  const meta=KNOWN_CHAINS[inv.chain_id]||{name:`Chain ${inv.chain_id}`,currency:{name:"Native",symbol:"NATIVE",decimals:18},rpcUrls:[],explorerUrls:[]};
-  try{ await provider.send("wallet_switchEthereumChain",[{chainId:hex}]); }
-  catch(e){
-    if(e?.code===4001) throw e;
-    if(e?.code===4902){
-      if(!meta.rpcUrls?.length) throw new Error(`No RPC URL for chain ${inv.chain_id}`);
-      await provider.send("wallet_addEthereumChain",[{chainId:hex,chainName:meta.name,nativeCurrency:meta.currency,rpcUrls:meta.rpcUrls,blockExplorerUrls:meta.explorerUrls}]);
-      await provider.send("wallet_switchEthereumChain",[{chainId:hex}]);
-    } else throw e;
-  }
-  await new Promise((res,rej)=>{
-    const eth=provider.provider||window.ethereum;
-    const t=setTimeout(()=>rej(new Error('Switch chain timed out')),8000);
-    provider.send('eth_chainId',[]).then(cid=>{
-      if((cid||'').toLowerCase()===hex.toLowerCase()){ clearTimeout(t); res(); return; }
-      const fn=newHex=>{ if((newHex||'').toLowerCase()===hex.toLowerCase()){ clearTimeout(t); eth?.removeListener?.('chainChanged',fn); res(); } };
-      eth?.on?.('chainChanged',fn);
-    }).catch(e2=>{ clearTimeout(t); rej(e2); });
-  });
-}
-
-async function createInvoice(videoId, choice, payer){
-  const r=await fetch('/api/pay/x402/start',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({video_id:videoId,chain_id:choice.chain_id,symbol:choice.symbol,token_address:choice.erc20,payer_address:payer,ref_code:REF_CODE||undefined})});
-  const inv=await r.json().catch(()=>({}));
-  if(!r.ok||inv.ok!==true) throw new Error(inv.error||'Failed to create invoice.');
-  return inv;
-}
-
-async function sendPayment(inv,provider,signer,payer){
-  if(!isAddress(inv.x402_contract)) throw new Error('Invalid X402 contract address.');
-  if(!isAddress(inv.creator_wallet)) throw new Error('Invalid creator wallet.');
-  const x402Addr=getAddress(inv.x402_contract), creatorAddr=getAddress(inv.creator_wallet);
-  const tokenAddr=inv.token_address?getAddress(inv.token_address):null;
-  if(!await provider.getCode(x402Addr)||await provider.getCode(x402Addr)==='0x') throw new Error('X402 not deployed on this chain.');
-  const contract=new ethers.Contract(x402Addr,X402_ABI,signer);
-  const uid32=inv.invoice_uid_bytes32||inv.invoice_uid;
-  const bp=Number(inv.split_creator_bp||9000);
-  const net=await provider.getNetwork();
-  if(Number(net.chainId)!==Number(inv.chain_id)) throw new Error(`Wrong network: wallet on ${net.chainId}, need ${inv.chain_id}`);
-  if(tokenAddr){
-    const erc20=new ethers.Contract(tokenAddr,["function allowance(address,address) view returns(uint256)","function approve(address,uint256) returns(bool)"],signer);
-    const need=ethers.BigNumber.from(inv.amount_wei);
-    if((await erc20.allowance(payer,x402Addr)).lt(need)){ const tx=await erc20.approve(x402Addr,need); await tx.wait(); }
-    const tx=await contract.payERC20Signed(uid32,tokenAddr,need,creatorAddr,bp,inv.video_id,ethers.BigNumber.from(inv.min_amount_wei),ethers.BigNumber.from(inv.deadline),inv.v,inv.r,inv.s,{gasLimit:300000});
-    return await tx.wait();
-  } else {
-    const tx=await contract.payNativeSigned(uid32,creatorAddr,bp,inv.video_id,ethers.BigNumber.from(inv.min_amount_wei),ethers.BigNumber.from(inv.deadline),inv.v,inv.r,inv.s,{value:ethers.BigNumber.from(inv.amount_wei),gasLimit:300000});
-    return await tx.wait();
-  }
-}
-
-async function payFlowX402(videoId, choice, btn){
-  if(!window.ethereum) return showMsg('x402Msg',false,'MetaMask not detected.');
-  let provider=new ethers.providers.Web3Provider(window.ethereum,'any');
-  await provider.send('eth_requestAccounts',[]);
-  let signer=provider.getSigner();
-  const payer=await signer.getAddress();
-  btn.disabled=true; btn.textContent='Processing…';
-  try{
-    const inv=await createInvoice(videoId,choice,payer);
-    await ensureNetwork(provider,inv);
-    provider=new ethers.providers.Web3Provider(window.ethereum,'any');
-    await provider.ready; signer=provider.getSigner();
-    await sendPayment(inv,provider,signer,payer);
-    showMsg('x402Msg',true,'Payment sent. Verifying access…');
-    for(let i=0;i<20;i++){
-      await new Promise(r=>setTimeout(r,2000));
-      if((await fetch(`/api/request_play?video_id=${encodeURIComponent(videoId)}`)).ok){ location.reload(); return; }
-    }
-    showMsg('x402Msg',true,'Payment succeeded — access pending. Please refresh in a few seconds.');
-  }catch(e){
-    const msg=(pickErr(e)||'').toLowerCase();
-    if(msg.includes('user rejected')||e?.code===4001) showMsg('x402Msg',false,'Transaction cancelled.');
-    else showMsg('x402Msg',false,'Failed: '+pickErr(e));
-  } finally {
-    btn.disabled=false; btn.textContent='Pay with Crypto';
-  }
-}
-
-// ─── fiat pay ─────────────────────────────────────────────────────────────────
-async function doFiatPay(videoId, provider, priceCents){
-  if(!CURRENT_USER){ showMsg('fiatMsg',false,'Please log in first.'); return; }
-  const btn=document.querySelector(`[data-fiat="${provider}"]`);
-  if(btn){ btn.disabled=true; btn.textContent='Redirecting…'; }
-  try{
-    const currency='USD';
-    const r=await fetch(`/api/pay/${encodeURIComponent(provider)}/start`,{
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({
-        user_id:       CURRENT_USER.id||CURRENT_USER.user_id||'',
-        video_id:      videoId,
-        amount_cents:  priceCents,
-        currency,
-        buyer_email:   CURRENT_USER.email||'',
-        success_url:   location.href,
-        cancel_url:    location.href,
-        affiliate_ref: REF_CODE||undefined,
-      })
-    });
-    const j=await r.json();
-    if(j.ok && j.invoice?.payment_url){
-      showMsg('fiatMsg',true,'Redirecting to payment page…');
-      setTimeout(()=>{ window.location.href=j.invoice.payment_url; }, 600);
-    } else {
-      showMsg('fiatMsg',false,j.error||'Failed to create invoice.');
-      if(btn){ btn.disabled=false; btn.textContent=provider; }
-    }
-  }catch(e){
-    showMsg('fiatMsg',false,'Network error: '+e.message);
-    if(btn){ btn.disabled=false; btn.textContent=provider; }
-  }
-}
-
-// ─── main payment panel ───────────────────────────────────────────────────────
-async function showPaymentPanel(videoId, meta){
-  // Fetch all options in one call
-  let opts={};
-  try{
-    const r=await fetch(`/api/pay/all_options?video_id=${encodeURIComponent(videoId)}`);
-    opts=await r.json();
-  }catch{}
-
-  const priceCents = opts.price_cents || meta?.price_cents || 0;
-  const usd = priceCents/100;
-  const idr = Math.round(usd*USD_TO_IDR);
-  document.getElementById('payPriceDisplay').textContent =
-    `Price: ${numUSD.format(usd)} (~${numIDR.format(idr)})`;
-
-  // Build tabs based on availability
-  buildTabs(opts);
-
-  // ── Wallet tab setup ──
-  const walletBal = opts.wallet?.balance_cents;
-  const chip=document.getElementById('walletBalChip');
-  if(walletBal !== null && walletBal !== undefined){
-    chip.textContent=`$${Math.floor(walletBal/100)}.${String(walletBal%100).padStart(2,'0')}`;
-    chip.classList.toggle('low', walletBal < priceCents);
-  } else {
-    chip.textContent='Not logged in';
-    chip.classList.add('low');
-  }
-  const btnWallet=document.getElementById('btnWalletPay');
-  if(!opts.wallet?.can_afford){
-    btnWallet.disabled=true;
-    btnWallet.title = walletBal===null ? 'Login required' : 'Insufficient balance — top up first';
-  }
-  btnWallet.addEventListener('click',()=>doWalletPay(videoId));
-
-  // ── X402 tab setup ──
-  const sel=document.getElementById('x402Token');
-  const tokens=Array.isArray(opts.x402?.tokens)?opts.x402.tokens:[];
-  sel.innerHTML=tokens.map(t=>{
-    const sym=(t.chain_id===80002&&!t.erc20)?'MATIC':(t.symbol);
-    return `<option value='${esc(JSON.stringify({chain_id:t.chain_id,symbol:t.symbol,erc20:t.erc20||null}))}'>
-      ${esc(t.chain)} • ${esc(sym)}${t.erc20?' (ERC-20)':''}
-    </option>`;
-  }).join('')||'<option>(no tokens configured)</option>';
-  if(tokens.length){
-    const usdc=tokens.findIndex(t=>t.symbol==='USDC');
-    if(usdc>=0) sel.selectedIndex=usdc;
-  }
-  // Creator split note
-  document.getElementById('x402SplitNote').textContent =
-    opts.x402?.split_creator_pct ? `${opts.x402.split_creator_pct}%` : '90%';
-
-  document.getElementById('btnX402').addEventListener('click',()=>{
-    const choice=sel.value?JSON.parse(sel.value):null;
-    if(!choice) return showMsg('x402Msg',false,'Select a token.');
-    payFlowX402(videoId,choice,document.getElementById('btnX402'));
-  });
-
-  // ── Fiat tab setup ──
-  const providers=Array.isArray(opts.fiat?.providers)?opts.fiat.providers:[];
-  const fiatWrap=document.getElementById('fiatProviders');
-  const providerLabels={stripe:'💳 Stripe',paypal:'🅿 PayPal',midtrans:'🏦 Midtrans',xendit:'🔵 Xendit'};
-  fiatWrap.innerHTML=providers.map(p=>`
-    <button class="btn btn-outline-primary provider-btn" data-fiat="${esc(p)}"
-            onclick="doFiatPay('${esc(videoId)}','${esc(p)}',${priceCents})">
-      ${providerLabels[p]||esc(p)}
-    </button>
-  `).join('')||'<p class="text-muted small">No payment gateway configured by admin.</p>';
-
-  // Show referral notice if buyer arrived via affiliate link
-  if(REF_CODE){
-    const notice=document.createElement('div');
-    notice.className='alert alert-info py-2 small mb-0 mt-2';
-    notice.innerHTML=`🔗 Referred by <strong>@${esc(REF_CODE)}</strong>. They earn a commission when you purchase.`;
-    document.getElementById('payPanel').querySelector('.card-body').appendChild(notice);
-  }
-
-  document.getElementById('payPanel').classList.remove('d-none');
-}
-
-// ─── page init ────────────────────────────────────────────────────────────────
-(async()=>{
-  const p=new URLSearchParams(location.search);
-  const vid=p.get('video_id');
-  if(!vid) return document.body.insertAdjacentHTML('beforeend','<div class="container py-3"><p>video_id is missing</p></div>');
-
-  // Capture affiliate referral code from URL (?ref=USERNAME)
-  REF_CODE = p.get('ref') || '';
-
-  document.getElementById('selfLink').href='/public/watch.html?video_id='+encodeURIComponent(vid);
-
-  // Load video meta
-  let meta=null;
-  try{
-    const vr=await fetch('/api/videos'); const vj=await vr.json();
-    if(vr.ok&&vj.videos) meta=vj.videos.find(x=>x.id===vid)||null;
-  }catch{}
-
-  const titleEl=document.getElementById('title');
-  const descEl=document.getElementById('desc');
-  const priceEl=document.getElementById('price');
-
-  if(meta){
-    titleEl.textContent=meta.title||'(Untitled)';
-    descEl.textContent=(meta.description||'').trim()||'(No description)';
-    const usd=(Number(meta.price_cents||0)/100)||0;
-    const idr=Math.round(usd*USD_TO_IDR);
-    priceEl.textContent=`💰 Price: ${numUSD.format(usd)} (~${numIDR.format(idr)}) • Owner: ${meta.owner_name}`;
-    renderOwnerContact(meta);
-  }
-
-  // Try playback
-  const req=await fetch(`/api/request_play?video_id=${encodeURIComponent(vid)}`);
-  const play=await req.json().catch(()=>({}));
-
-  if(req.status===403){
-    await showPaymentPanel(vid, meta);
+  let video;
+  try {
+    const j = await fetch('/api/video?' + new URLSearchParams({ id: VIDEO_ID })).then(r=>r.json());
+    if (!j.ok || !j.video) throw new Error(j.error || 'Video not found');
+    video = j.video;
+  } catch(e) {
+    document.getElementById('mainContent').innerHTML = `<p class="text-danger">Error loading video: ${esc(String(e))}</p>`;
     return;
   }
-  if(!req.ok) return alert(play.error||'Failed to request playback.');
 
-  // Play video
-  const video=document.getElementById('player');
-  const src=play.playlist;
-  if(Hls.isSupported()){
-    const hls=new Hls({autoStartLoad:true});
-    hls.loadSource(src); hls.attachMedia(video);
-    hls.on(Hls.Events.ERROR,(_,d)=>{
-      if(d?.fatal){
-        if(d.type===Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
-        else if(d.type===Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
-        else { hls.destroy(); video.src=src; }
-      }
-    });
-  } else if(video.canPlayType('application/vnd.apple.mpegurl')){
-    video.src=src;
+  // check access
+  let hasAccess = false;
+  try {
+    const j = await fetch('/api/check_access?' + new URLSearchParams({ video_id: VIDEO_ID })).then(r=>r.json());
+    hasAccess = j.ok && j.has_access;
+  } catch {}
+
+  const priceCents = video.price_cents || 0;
+  const isFree     = priceCents === 0;
+  const priceUsd   = (priceCents/100).toFixed(2);
+  const priceIdr   = 'Rp ' + fmtIdr.format(Math.round(priceCents/100*USD_TO_IDR));
+
+  let html = `
+    <div class="mb-3">
+      <a href="/public/browse.html" class="text-body-secondary text-decoration-none small">← Back to Browse</a>
+    </div>
+    <h1 class="fs-4 fw-bold mb-1">${esc(video.title)}</h1>
+    <p class="text-body-secondary small mb-3">
+      by <strong>${esc(video.owner_name||'—')}</strong>
+      ${priceCents > 0 ? `&nbsp;•&nbsp; <span class="fw-semibold text-primary">$${priceUsd} (${priceIdr})</span>` : '<span class="badge bg-success">Free</span>'}
+      ${REF ? `&nbsp;•&nbsp; <span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">via ${esc(REF)}</span>` : ''}
+    </p>`;
+
+  if (hasAccess || isFree) {
+    html += renderPlayer(video);
   } else {
-    document.querySelector('.container').insertAdjacentHTML('beforeend','<p>Your browser does not support HLS.</p>');
+    html += renderLocked(video, priceUsd, priceIdr);
   }
 
-  // Fullscreen
-  const wrap=document.getElementById('wrap'), fsBtn=document.getElementById('fsBtn');
-  async function toggleFS(){ const inFS=document.fullscreenElement===wrap||document.webkitFullscreenElement===wrap; if(inFS)(document.exitFullscreen||document.webkitExitFullscreen)?.call(document); else(wrap.requestFullscreen||wrap.webkitRequestFullscreen)?.call(wrap); }
-  fsBtn.addEventListener('click',toggleFS);
-  addEventListener('keydown',e=>{ if(e.key==='f') toggleFS(); });
-  function onFSChange(){ const a=document.fullscreenElement===wrap||document.webkitFullscreenElement===wrap; fsBtn.textContent=a?'Exit Fullscreen':'Fullscreen'; }
-  document.addEventListener('fullscreenchange',onFSChange);
-  document.addEventListener('webkitfullscreenchange',onFSChange);
+  if (video.description) {
+    html += `<div class="card shadow-sm mt-4"><div class="card-body"><h6 class="fw-semibold mb-2">About this video</h6><p class="mb-0 small text-body-secondary">${esc(video.description)}</p></div></div>`;
+  }
 
-  // Owner edit section
-  let isOwner=false, myMeta=null;
-  try{
-    const mr=await fetch('/api/my_videos'); const mj=await mr.json();
-    if(mr.ok&&mj.ok&&Array.isArray(mj.videos)){ myMeta=mj.videos.find(v=>v.id===vid)||null; isOwner=!!myMeta; }
-  }catch{}
+  document.getElementById('mainContent').innerHTML = html;
 
-  if(isOwner){
-    const box=document.getElementById('ownerEdit'), f=document.getElementById('editForm');
-    const ev_id=document.getElementById('ev_id'), ev_title=document.getElementById('ev_title');
-    const ev_desc=document.getElementById('ev_desc'), ev_price_cents=document.getElementById('ev_price_cents');
-    const ev_price_usd=document.getElementById('ev_price_usd');
-    const seed=myMeta||meta||{};
-    ev_id.value=vid; ev_title.value=seed.title||''; ev_desc.value=seed.description||'';
-    const seed_usd=(Number(seed.price_cents||0)/100)||0;
-    ev_price_usd.value=seed_usd>0?seed_usd.toFixed(2):'';
+  if (hasAccess || isFree) {
+    startPlayer(video);
+  } else {
+    bindPaymentTabs(video, priceCents, priceUsd);
+  }
+}
+
+function renderPlayer(video) {
+  return `
+    <div class="ratio ratio-16x9 rounded overflow-hidden bg-black mb-3 shadow">
+      <video id="hlsPlayer" controls playsinline class="w-100 h-100"></video>
+    </div>`;
+}
+
+function startPlayer(video) {
+  const player = document.getElementById('hlsPlayer');
+  if (!player) return;
+  const src = `/stream/${esc(video.id)}/playlist.m3u8`;
+  if (Hls.isSupported()) {
+    const hls = new Hls();
+    hls.loadSource(src);
+    hls.attachMedia(player);
+  } else if (player.canPlayType('application/vnd.apple.mpegurl')) {
+    player.src = src;
+  } else {
+    player.parentElement.innerHTML = '<p class="text-warning p-4">Your browser does not support HLS playback.</p>';
+  }
+}
+
+function renderLocked(video, priceUsd, priceIdr) {
+  return `
+    <div class="ratio ratio-16x9 rounded overflow-hidden bg-black mb-4 shadow d-flex align-items-center justify-content-center">
+      <div class="text-center text-white p-4">
+        <div style="font-size:3rem">🔒</div>
+        <div class="mt-2 fw-semibold">This video requires payment to unlock</div>
+        <div class="text-secondary small">$${esc(priceUsd)} · ${esc(priceIdr)}</div>
+      </div>
+    </div>
+    <div class="card shadow-sm mb-4">
+      <div class="card-header fw-semibold">Unlock This Video — $${esc(priceUsd)}</div>
+      <div class="card-body">
+        <ul class="nav nav-tabs mb-3" id="payTabs">
+          <li class="nav-item"><button class="nav-link active" data-pay="wallet" onclick="switchPay('wallet')">💳 Wallet</button></li>
+          <li class="nav-item"><button class="nav-link" data-pay="x402" onclick="switchPay('x402')">⛓ Crypto (x402)</button></li>
+          <li class="nav-item"><button class="nav-link" data-pay="fiat" onclick="switchPay('fiat')">🏦 Bank Transfer</button></li>
+        </ul>
+        <div id="payAlert" class="d-none mb-3"></div>
+
+        <!-- Wallet payment -->
+        <div id="pay-wallet">
+          <p class="small text-body-secondary">Pay from your PPV Stream wallet balance. Fast and instant.</p>
+          <div class="mb-2 small">Balance: <strong id="walletBal">Loading…</strong></div>
+          <button class="btn btn-primary" onclick="payWallet()">Pay $${esc(priceUsd)} from Wallet</button>
+        </div>
+
+        <!-- x402 / crypto -->
+        <div id="pay-x402" class="d-none">
+          <p class="small text-body-secondary">Pay with USDC on a supported EVM chain. Confirmation is automatic.</p>
+          <button class="btn btn-primary" onclick="payX402()">Pay $${esc(priceUsd)} via Crypto</button>
+          <div id="x402Instructions" class="mt-3 d-none p-3 rounded border font-monospace small"></div>
+        </div>
+
+        <!-- Bank transfer -->
+        <div id="pay-fiat" class="d-none">
+          <p class="small text-body-secondary">Transfer via bank or QRIS. Access is granted after admin confirms payment.</p>
+          <div id="fiatInfo" class="mb-3 small text-body-secondary">Loading seller's payment info…</div>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label for="fiatAmt" class="form-label">Amount Sent (IDR)</label>
+              <input id="fiatAmt" type="number" min="1000" class="form-control" placeholder="e.g. 170000">
+            </div>
+            <div class="col-12">
+              <button class="btn btn-primary" onclick="payFiat()">Confirm Manual Payment</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function switchPay(tab) {
+  ['wallet','x402','fiat'].forEach(t => {
+    document.getElementById('pay-' + t).classList.toggle('d-none', t !== tab);
+  });
+  document.querySelectorAll('#payTabs .nav-link').forEach(b => b.classList.toggle('active', b.dataset.pay === tab));
+}
+
+function bindPaymentTabs(video, priceCents, priceUsd) {
+  // load wallet balance
+  fetch('/api/wallet/balance').then(r=>r.json()).then(j => {
+    const el = document.getElementById('walletBal');
+    if (el) el.textContent = j.ok ? '$' + ((j.balance_cents||0)/100).toFixed(2) : '—';
+  }).catch(() => {});
+
+  // load fiat info (seller profile)
+  fetch('/api/profile_public?' + new URLSearchParams({ owner_id: video.owner_id })).then(r=>r.json()).then(j => {
+    const el = document.getElementById('fiatInfo');
+    if (!el) return;
+    if (j.ok && j.profile) {
+      const p = j.profile;
+      el.innerHTML = `Transfer <strong>Rp ${fmtIdr.format(Math.round(priceCents/100*USD_TO_IDR))}</strong> to:<br>` +
+        (p.bank_account ? `Bank: <code>${esc(p.bank_account)}</code><br>` : '') +
+        (p.whatsapp ? `WhatsApp: <code>${esc(p.whatsapp)}</code><br>` : '') +
+        `<span class="text-warning">After payment, confirm below. Access is granted after seller verification.</span>`;
+    } else {
+      el.textContent = 'Seller has not configured payment info. Contact them directly.';
+    }
+  }).catch(() => {});
+}
+
+async function payWallet() {
+  const btn = event.currentTarget; btn.disabled=true; btn.textContent='Processing…';
+  const alert = document.getElementById('payAlert'); alert.className='d-none';
+  try {
+    const j = await fetch('/api/pay_wallet', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams({ video_id: VIDEO_ID, ref: REF }) }).then(r=>r.json());
+    if (j.ok) { showPayAlert('success', 'Payment successful! Loading video…'); setTimeout(() => location.reload(), 1500); }
+    else showPayAlert('danger', 'Failed: ' + (j.error||'unknown'));
+  } catch(e) { showPayAlert('danger', 'Error: ' + e.message); }
+  finally { btn.disabled=false; btn.textContent='Pay from Wallet'; }
+}
+
+async function payX402() {
+  const btn = event.currentTarget; btn.disabled=true; btn.textContent='Preparing…';
+  const alert = document.getElementById('payAlert'); alert.className='d-none';
+  try {
+    const j = await fetch('/api/pay_x402_init', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams({ video_id: VIDEO_ID, ref: REF }) }).then(r=>r.json());
+    if (!j.ok) { showPayAlert('danger', 'Failed: ' + (j.error||'unknown')); return; }
+    const box = document.getElementById('x402Instructions');
     box.classList.remove('d-none');
-    f.onsubmit=async(e)=>{
-      e.preventDefault();
-      const usd=Number(ev_price_usd.value||0);
-      if(Number.isNaN(usd)||usd<0) return toast('Price must be ≥ 0',false);
-      ev_price_cents.value=String(Math.round(usd*100));
-      const body=new URLSearchParams(new FormData(f));
-      try{
-        const resp=await fetch('/api/videos/update',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});
-        const data=await resp.json().catch(()=>({}));
-        if(!resp.ok||data?.ok!==true) return toast(data?.error||'Failed to save.',false);
-        toast('Saved. Reloading…',true); location.reload();
-      }catch(e2){ toast('Network error.',false); }
-    };
-    ev_price_usd.addEventListener('input',()=>{
-      const usd=Number(ev_price_usd.value||0), idr=Math.round(usd*USD_TO_IDR);
-      priceEl.textContent=`💰 Price (preview): ${numUSD.format(usd)} (~${numIDR.format(idr)})`;
-    });
-  }
-})();
+    box.innerHTML = `Send <strong>${j.amount} USDC</strong> to <code>${esc(j.address)}</code> on chain <code>${esc(String(j.chain_id))}</code>.<br>Invoice: <code>${esc(j.invoice_uid)}</code><br><span class="text-body-secondary">Confirmation is automatic. Refresh this page after payment.</span>`;
+    showPayAlert('info', 'Send payment to the address above. The page will unlock automatically after confirmation.');
+  } catch(e) { showPayAlert('danger', 'Error: ' + e.message); }
+  finally { btn.disabled=false; btn.textContent='Pay via Crypto'; }
+}
+
+async function payFiat() {
+  const amtEl = document.getElementById('fiatAmt');
+  const amt = parseInt(amtEl.value, 10);
+  if (!amt || amt < 1000) return alert('Enter the amount you transferred (min Rp 1,000).');
+  const btn = event.currentTarget; btn.disabled=true; btn.textContent='Submitting…';
+  const alert = document.getElementById('payAlert'); alert.className='d-none';
+  try {
+    const j = await fetch('/api/pay_fiat', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams({ video_id: VIDEO_ID, amount_idr: amt, ref: REF }) }).then(r=>r.json());
+    if (j.ok) showPayAlert('success', 'Payment submitted. Access will be granted after the seller confirms receipt.');
+    else showPayAlert('danger', 'Failed: ' + (j.error||'unknown'));
+  } catch(e) { showPayAlert('danger', 'Error: ' + e.message); }
+  finally { btn.disabled=false; btn.textContent='Confirm Manual Payment'; }
+}
+
+function showPayAlert(type, msg) {
+  const el = document.getElementById('payAlert');
+  if (!el) return;
+  el.className = `alert alert-${type}`;
+  el.textContent = msg;
+}
 </script>
 </body>
 </html>

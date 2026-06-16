@@ -1,158 +1,125 @@
-<!-- public/index.html -->
 <!doctype html>
-<html lang="id">
+<html lang="en" data-bs-theme="dark">
 <head>
   <meta charset="utf-8">
-  <title>Beranda</title>
+  <title>PPV Stream</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="/public/styles.css">
+  <script src="/public/theme.js"></script>
 </head>
-<body class="bg-light">
+<body>
 
-<div class="container py-4">
+<div class="min-vh-100 d-flex flex-column justify-content-center py-5">
+  <div class="container">
+    <div class="row justify-content-center mb-5">
+      <div class="col-12 col-sm-9 col-md-6 col-lg-4">
 
-  <!-- ===== Login card ===== -->
-  <div class="row justify-content-center mb-5">
-    <div class="col-12 col-sm-9 col-md-7 col-lg-5">
-      <h1 class="mb-3">Login</h1>
-      <div id="alert" class="alert d-none" role="alert"></div>
-      <div class="card shadow-sm">
-        <div class="card-body">
-          <form method="post" action="/auth/login">
-            <div class="mb-3">
-              <label for="userEmail" class="form-label">Email</label>
-              <input id="userEmail" name="email" type="email" class="form-control" required>
-            </div>
-            <div class="mb-3">
-              <label for="userPassword" class="form-label">Password</label>
-              <div class="input-group">
-                <input id="userPassword" name="password" type="password" class="form-control" required>
-                <button type="button" id="toggleUserPass" class="btn btn-outline-secondary"
-                        title="Tahan mouse untuk melihat password">👁️</button>
+        <div class="text-center mb-4">
+          <h1 class="fw-bold fs-3" data-platform="brand">🎬 PPV Stream</h1>
+          <p class="text-body-secondary small" data-platform="tagline">Pay-Per-View Streaming Platform</p>
+        </div>
+
+        <div id="alertBox" class="alert d-none" role="alert"></div>
+
+        <div class="card shadow-sm">
+          <div class="card-body p-4">
+            <h5 class="card-title mb-4">Sign In</h5>
+            <form method="post" action="/auth/login">
+              <div class="mb-3">
+                <label for="email" class="form-label">Email</label>
+                <input id="email" name="email" type="email" class="form-control" required autocomplete="email">
               </div>
-            </div>
-            <button class="btn btn-primary w-100">Login</button>
-          </form>
+              <div class="mb-4">
+                <label for="password" class="form-label">Password</label>
+                <div class="input-group">
+                  <input id="password" name="password" type="password" class="form-control" required autocomplete="current-password">
+                  <button type="button" class="btn btn-outline-secondary" id="togglePass">👁️</button>
+                </div>
+              </div>
+              <button class="btn btn-primary w-100 mb-3">Sign In</button>
+              <div class="d-flex justify-content-between small">
+                <a href="/auth/forgot">Forgot password?</a>
+                <a href="/auth/register">Create account</a>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div class="d-flex justify-content-center mt-3">
+          <button class="btn btn-sm btn-outline-secondary" onclick="toggleTheme()" id="themeToggle">☀️</button>
         </div>
       </div>
-      <p class="text-center mt-3 mb-1">Lupa password? <a href="/auth/forgot">Reset</a></p>
-      <p class="text-center">Belum punya akun? <a href="/auth/register">Daftar</a></p>
+    </div>
+
+    <!-- Video preview -->
+    <h2 class="mb-3 fs-5 fw-semibold">Available Videos</h2>
+    <div class="mb-3">
+      <input id="q" class="form-control" style="max-width:480px" placeholder="Search title, creator, description…">
+    </div>
+    <div id="videos" class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-3">
+      <div class="col"><div class="skeleton"></div></div>
+      <div class="col"><div class="skeleton"></div></div>
+      <div class="col"><div class="skeleton"></div></div>
     </div>
   </div>
-
-  <!-- ===== Video list preview ===== -->
-  <h2 class="mb-3">Daftar Video</h2>
-  <div class="mb-3">
-    <input id="q" class="form-control" style="max-width:480px"
-           placeholder="Cari judul / owner / deskripsi…" aria-label="Pencarian">
-  </div>
-  <div id="videos" class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-3">
-    <div class="col"><div class="skeleton"></div></div>
-    <div class="col"><div class="skeleton"></div></div>
-    <div class="col"><div class="skeleton"></div></div>
-  </div>
-
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-/* ==== Toggle password ==== */
-const userPass = document.getElementById('userPassword');
-const toggleUserPass = document.getElementById('toggleUserPass');
-toggleUserPass.addEventListener('mousedown', () => { userPass.type = 'text'; toggleUserPass.textContent = '🙈'; });
-toggleUserPass.addEventListener('mouseup',   () => { userPass.type = 'password'; toggleUserPass.textContent = '👁️'; });
-toggleUserPass.addEventListener('mouseleave',() => { userPass.type = 'password'; toggleUserPass.textContent = '👁️'; });
+const tp = document.getElementById('togglePass');
+const pw = document.getElementById('password');
+tp.addEventListener('mousedown', () => { pw.type='text'; tp.textContent='🙈'; });
+tp.addEventListener('mouseup',   () => { pw.type='password'; tp.textContent='👁️'; });
+tp.addEventListener('mouseleave',() => { pw.type='password'; tp.textContent='👁️'; });
 
-/* ==== Alert dari query ==== */
-(function () {
-  const box = document.getElementById('alert');
+(function(){
   const p = new URLSearchParams(location.search);
-  const status = p.get('status');
-  const reason = p.get('reason');
+  const status = p.get('status'), reason = p.get('reason');
   if (!status) return;
-  const map = {
-    missing_field: 'Lengkapi semua field.',
-    invalid_email: 'Format email tidak valid.',
-    bad_credentials: 'Email atau password salah.',
-    server_error: 'Terjadi masalah di server. Coba lagi.',
-  };
-  let msg = status === 'ok' ? 'Login berhasil.' : (map[reason] || `Login gagal. (${reason || 'unknown'})`);
-  box.textContent = msg;
-  box.classList.add(status === 'ok' ? 'alert-success' : 'alert-danger');
-  box.classList.remove('d-none');
+  const map = { missing_field:'Fill in all fields.', invalid_email:'Invalid email address.', bad_credentials:'Incorrect email or password.', server_error:'Server error. Please try again.' };
+  const box = document.getElementById('alertBox');
+  box.textContent = status === 'ok' ? 'Login successful.' : (map[reason] || `Login failed. (${reason || 'unknown'})`);
+  box.className = 'alert ' + (status === 'ok' ? 'alert-success' : 'alert-danger');
 })();
 
-/* ==== Util & Kurs ==== */
-const numIDR = new Intl.NumberFormat('id-ID');
-let USD_TO_IDR = 17000;
+let USD_TO_IDR = 17000, allVideos = [];
+const fmt = new Intl.NumberFormat('id-ID');
 
-function escapeHtml(s){
-  return String(s ?? '')
-    .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
-    .replaceAll('"','&quot;').replaceAll("'",'&#039;');
-}
-
-async function resolveUsdToIdr(){
-  try{
-    const r = await fetch('/api/kurs');
+(async function init(){
+  try { const r = await fetch('/api/kurs'); const j = await r.json(); if(j.usd_to_idr) USD_TO_IDR = j.usd_to_idr; } catch {}
+  try {
+    const r = await fetch('/api/videos');
     const j = await r.json();
-    if (r.ok && j && typeof j.usd_to_idr === 'number') USD_TO_IDR = j.usd_to_idr;
-  }catch {}
-}
-
-let allVideos = [];
+    allVideos = Array.isArray(j.videos) ? j.videos : [];
+    render(allVideos);
+  } catch(e) {
+    document.getElementById('videos').innerHTML = `<div class="col-12 text-body-secondary">Failed to load videos: ${esc(String(e))}</div>`;
+  }
+})();
 
 function render(list){
-  const wrap = document.getElementById('videos');
-  if (!list.length){
-    wrap.innerHTML = '<div class="col-12"><p class="text-muted">Belum ada video atau tidak ada yang cocok.</p></div>';
-    return;
-  }
-  wrap.innerHTML = list.map(v => {
-    const priceIDR = Math.round((v.price_cents || 0) / 100 * USD_TO_IDR);
-    const desc = (v.description || '').trim();
-    return `
-      <div class="col">
-        <div class="card h-100 shadow-sm">
-          <div class="card-body">
-            <h5 class="card-title">${escapeHtml(v.title)}</h5>
-            <p class="mb-1">👤 ${escapeHtml(v.owner_name)}</p>
-            <p class="mb-1 fw-semibold">💰 Rp ${numIDR.format(priceIDR)}</p>
-            ${desc
-              ? `<p class="card-text mt-2" style="white-space:pre-wrap">${escapeHtml(desc)}</p>`
-              : `<p class="card-text text-muted mt-2">(Belum ada deskripsi)</p>`}
-          </div>
-        </div>
-      </div>`;
+  const w = document.getElementById('videos');
+  if (!list.length) { w.innerHTML='<div class="col-12"><p class="text-body-secondary">No videos found.</p></div>'; return; }
+  w.innerHTML = list.map(v => {
+    const price = v.price_cents > 0 ? 'Rp ' + fmt.format(Math.round(v.price_cents/100*USD_TO_IDR)) : '<span class="text-success">Free</span>';
+    return `<div class="col"><div class="card h-100 shadow-sm video-card" onclick="location.href='/public/watch.html?video_id=${esc(v.id)}'">
+      <div class="card-body">
+        <h6 class="card-title fw-bold">${esc(v.title)}</h6>
+        <p class="mb-1 small text-body-secondary">by ${esc(v.owner_name)}</p>
+        <p class="mb-0 fw-semibold">${price}</p>
+      </div></div></div>`;
   }).join('');
 }
 
-function applyFilters(){
-  const q = document.getElementById('q').value.trim().toLowerCase();
-  let list = [...allVideos];
-  if (q) list = list.filter(v =>
-    `${v.title} ${v.owner_name} ${v.description||''}`.toLowerCase().includes(q));
-  list.sort((a,b) => (b.created_at > a.created_at) ? 1 : (b.created_at < a.created_at ? -1 : 0));
-  render(list);
-}
-
 let t;
-document.getElementById('q').addEventListener('input', () => { clearTimeout(t); t = setTimeout(applyFilters, 200); });
-
-(async function init(){
-  await resolveUsdToIdr();
-  try{
-    const res = await fetch('/api/videos');
-    const data = await res.json();
-    if (!res.ok || data.ok === false) throw new Error(data.error || 'Gagal memuat /api/videos');
-    allVideos = Array.isArray(data.videos) ? data.videos : [];
-    applyFilters();
-  }catch(e){
-    document.getElementById('videos').innerHTML =
-      `<div class="col-12"><p class="text-muted">Gagal memuat video: ${escapeHtml(String(e))}</p></div>`;
-  }
-})();
+document.getElementById('q').addEventListener('input', () => {
+  clearTimeout(t);
+  t = setTimeout(() => {
+    const q = document.getElementById('q').value.trim().toLowerCase();
+    render(q ? allVideos.filter(v => `${v.title} ${v.owner_name} ${v.description||''}`.toLowerCase().includes(q)) : allVideos);
+  }, 200);
+});
 </script>
 </body>
 </html>

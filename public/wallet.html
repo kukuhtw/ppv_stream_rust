@@ -1,272 +1,343 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 <head>
   <meta charset="utf-8">
+  <title>Wallet — PPV Stream</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>My Wallet – PPV Stream</title>
-  <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:system-ui,-apple-system,sans-serif;background:#0f0f0f;color:#e8e8e8;min-height:100vh}
-    a{color:#a78bfa;text-decoration:none}
-    a:hover{text-decoration:underline}
-
-    header{background:#1a1a2e;border-bottom:1px solid #2a2a4a;padding:14px 24px;display:flex;align-items:center;gap:16px}
-    header h1{font-size:1.1rem;font-weight:600;color:#c4b5fd}
-    header nav{margin-left:auto;display:flex;gap:16px;font-size:.9rem}
-
-    .container{max-width:900px;margin:32px auto;padding:0 16px}
-
-    .balance-card{background:linear-gradient(135deg,#1e1b4b,#312e81);border:1px solid #4338ca;border-radius:16px;padding:28px 32px;margin-bottom:28px}
-    .balance-card .label{font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;color:#a5b4fc;margin-bottom:6px}
-    .balance-card .amount{font-size:2.4rem;font-weight:700;color:#e0e7ff;letter-spacing:-.5px}
-    .balance-card .sub{font-size:.85rem;color:#818cf8;margin-top:4px}
-
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;margin-bottom:28px}
-    .card{background:#1a1a2e;border:1px solid #2a2a4a;border-radius:12px;padding:22px}
-    .card h3{font-size:.95rem;font-weight:600;margin-bottom:16px;color:#c4b5fd}
-
-    label{display:block;font-size:.82rem;color:#9ca3af;margin-bottom:4px;margin-top:12px}
-    label:first-of-type{margin-top:0}
-    input,textarea{width:100%;background:#0f0f0f;border:1px solid #374151;color:#e8e8e8;border-radius:7px;padding:9px 12px;font-size:.9rem}
-    input:focus,textarea:focus{outline:none;border-color:#6366f1}
-    textarea{resize:vertical;min-height:60px}
-
-    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 20px;border-radius:8px;font-size:.88rem;font-weight:600;cursor:pointer;border:none;transition:opacity .15s}
-    .btn:hover{opacity:.85}
-    .btn-primary{background:#6366f1;color:#fff}
-    .btn-success{background:#10b981;color:#fff}
-    .btn-warning{background:#f59e0b;color:#000}
-    .btn-full{width:100%;margin-top:14px}
-
-    .msg{border-radius:7px;padding:10px 14px;font-size:.85rem;margin-top:10px;display:none}
-    .msg.ok{background:#064e3b;color:#6ee7b7;border:1px solid #065f46}
-    .msg.err{background:#450a0a;color:#fca5a5;border:1px solid #7f1d1d}
-    .msg.show{display:block}
-
-    .txn-table{width:100%;border-collapse:collapse;font-size:.82rem}
-    .txn-table thead th{background:#12122a;color:#818cf8;text-align:left;padding:10px 12px;border-bottom:1px solid #2a2a4a;font-weight:500;text-transform:uppercase;font-size:.75rem;letter-spacing:.05em}
-    .txn-table tbody tr:hover{background:rgba(99,102,241,.05)}
-    .txn-table td{padding:10px 12px;border-bottom:1px solid #1e1e38;vertical-align:middle}
-    .txn-table .mono{font-family:ui-monospace,monospace}
-
-    .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:.72rem;font-weight:600;text-transform:uppercase}
-    .badge-green{background:#064e3b;color:#6ee7b7}
-    .badge-yellow{background:#451a03;color:#fcd34d}
-    .badge-red{background:#450a0a;color:#fca5a5}
-    .badge-blue{background:#1e3a5f;color:#93c5fd}
-
-    .type-deposit{color:#34d399}
-    .type-withdrawal{color:#f87171}
-    .type-transfer_in{color:#60a5fa}
-    .type-transfer_out{color:#fb923c}
-
-    .section-title{font-size:.85rem;text-transform:uppercase;letter-spacing:.07em;color:#6366f1;margin-bottom:14px;font-weight:600}
-    .min-note{font-size:.76rem;color:#6b7280;margin-top:4px}
-  </style>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/public/styles.css">
+  <script src="/public/theme.js"></script>
 </head>
 <body>
 
-<header>
-  <h1>PPV Stream &rsaquo; Wallet</h1>
-  <nav>
-    <a href="/public/dashboard.html">Dashboard</a>
-    <a href="/public/browse.html">Browse</a>
-    <a href="#" id="logoutBtn">Logout</a>
-  </nav>
-</header>
+<nav class="navbar navbar-expand-md bg-body-tertiary shadow-sm border-bottom">
+  <div class="container">
+    <a class="navbar-brand fw-bold" href="/public/browse.html" data-platform="brand">🎬 PPV Stream</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="mainNav">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link" href="/public/browse.html">Browse</a></li>
+        <li class="nav-item"><a class="nav-link" href="/public/dashboard.html">Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link active fw-semibold" href="/public/wallet.html">Wallet</a></li>
+        <li class="nav-item"><a class="nav-link" href="/public/affiliate.html">Affiliate</a></li>
+      </ul>
+      <div class="d-flex align-items-center gap-2 mt-2 mt-md-0">
+        <span id="userbar" class="badge bg-secondary">Loading…</span>
+        <button class="btn btn-sm btn-outline-secondary" onclick="toggleTheme()" id="themeToggle">☀️</button>
+        <button id="logoutBtn" class="btn btn-sm btn-outline-danger">Logout</button>
+      </div>
+    </div>
+  </div>
+</nav>
 
-<div class="container">
+<div class="container py-4 pb-5">
+  <h1 class="mb-1 fs-4 fw-bold">Wallet</h1>
+  <p class="text-body-secondary small mb-4">Manage your balance, top-ups, and withdrawals.</p>
 
-  <!-- Balance Card -->
-  <div class="balance-card">
-    <div class="label">Available Balance</div>
-    <div class="amount" id="balanceDisplay">—</div>
-    <div class="sub" id="balanceCents"></div>
+  <!-- Balance card -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-body d-flex flex-column flex-md-row align-items-md-center gap-3">
+      <div class="me-auto">
+        <div class="text-body-secondary small mb-1">Available Balance</div>
+        <div class="fs-2 fw-bold" id="balanceDisplay">—</div>
+        <div class="text-body-secondary small" id="balanceIdr"></div>
+      </div>
+      <div class="d-flex gap-2">
+        <button class="btn btn-primary" onclick="showTab('deposit')">Top Up</button>
+        <button class="btn btn-outline-secondary" onclick="showTab('withdraw')">Withdraw</button>
+        <button class="btn btn-outline-secondary" onclick="loadBalance()">↻ Refresh</button>
+      </div>
+    </div>
   </div>
 
-  <!-- Action Cards -->
-  <div class="grid">
+  <!-- Action tabs -->
+  <ul class="nav nav-tabs mb-3" id="walletTabs">
+    <li class="nav-item"><button class="nav-link active" data-tab="deposit" onclick="showTab('deposit')">Deposit / Top Up</button></li>
+    <li class="nav-item"><button class="nav-link" data-tab="withdraw" onclick="showTab('withdraw')">Withdraw</button></li>
+    <li class="nav-item"><button class="nav-link" data-tab="transfer" onclick="showTab('transfer')">Transfer</button></li>
+    <li class="nav-item"><button class="nav-link" data-tab="history" onclick="showTab('history')">History</button></li>
+  </ul>
 
-    <!-- Deposit -->
-    <div class="card">
-      <h3>Request Deposit</h3>
-      <label>Amount (cents, e.g. 5000 = $50)</label>
-      <input type="number" id="depositAmount" min="1000" placeholder="1000">
-      <p class="min-note">Minimum: $10.00</p>
-      <label>Note (optional)</label>
-      <textarea id="depositNote" placeholder="Bank transfer reference, etc."></textarea>
-      <button class="btn btn-success btn-full" onclick="doDeposit()">Submit Deposit Request</button>
-      <div class="msg" id="depositMsg"></div>
+  <!-- Deposit -->
+  <div id="tab-deposit" class="tab-pane-custom">
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold">Top Up Balance</div>
+      <div class="card-body">
+        <div id="depositAlert" class="d-none mb-3"></div>
+        <form id="depositForm">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label for="depositAmt" class="form-label">Amount (USD cents)</label>
+              <input id="depositAmt" name="amount_cents" type="number" min="100" step="100" value="1000" class="form-control" required>
+              <div class="form-text">$10.00 minimum</div>
+            </div>
+            <div class="col-md-4">
+              <label for="depositMethod" class="form-label">Payment Method</label>
+              <select id="depositMethod" name="method" class="form-select" onchange="onMethodChange()">
+                <option value="x402">x402 (EVM / Crypto)</option>
+                <option value="transfer">Bank Transfer (IDR)</option>
+                <option value="qris">QRIS</option>
+              </select>
+            </div>
+            <div class="col-12">
+              <button class="btn btn-primary" type="submit">Request Top Up</button>
+            </div>
+          </div>
+        </form>
+        <div id="depositInstructions" class="mt-4 d-none">
+          <div id="depositX402" class="d-none">
+            <h6 class="fw-semibold">Pay via Crypto (x402)</h6>
+            <p class="small text-body-secondary">Send the exact amount in USDC to the address below on the selected chain. Confirmation is automatic.</p>
+            <div class="p-3 rounded border font-monospace small" id="x402Details">—</div>
+          </div>
+          <div id="depositFiat" class="d-none">
+            <h6 class="fw-semibold">Bank Transfer / QRIS Instructions</h6>
+            <div id="fiatDetails" class="small"></div>
+          </div>
+        </div>
+      </div>
     </div>
-
-    <!-- Withdraw -->
-    <div class="card">
-      <h3>Request Withdrawal</h3>
-      <label>Amount (cents, e.g. 5000 = $50)</label>
-      <input type="number" id="withdrawAmount" min="5000" placeholder="5000">
-      <p class="min-note">Minimum: $50.00</p>
-      <label>Note (bank account, wallet, etc.)</label>
-      <textarea id="withdrawNote" placeholder="Send to: BCA 1234567890 / John Doe"></textarea>
-      <button class="btn btn-warning btn-full" onclick="doWithdraw()">Submit Withdrawal Request</button>
-      <div class="msg" id="withdrawMsg"></div>
-    </div>
-
-    <!-- Transfer -->
-    <div class="card">
-      <h3>Transfer to User</h3>
-      <label>Recipient Username</label>
-      <input type="text" id="transferTo" placeholder="username">
-      <label>Amount (cents, e.g. 100 = $1)</label>
-      <input type="number" id="transferAmount" min="100" placeholder="100">
-      <p class="min-note">Minimum: $1.00 · Instant, no approval needed</p>
-      <label>Note (optional)</label>
-      <input type="text" id="transferNote" placeholder="Payment for…">
-      <button class="btn btn-primary btn-full" onclick="doTransfer()">Send</button>
-      <div class="msg" id="transferMsg"></div>
-    </div>
-
   </div>
 
-  <!-- Transaction History -->
-  <div class="card">
-    <p class="section-title">Transaction History</p>
-    <table class="txn-table">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Type</th>
-          <th>Amount</th>
-          <th>Balance After</th>
-          <th>Status</th>
-          <th>Counterparty</th>
-          <th>Note</th>
-          <th>Date</th>
-        </tr>
-      </thead>
-      <tbody id="txnBody">
-        <tr><td colspan="8" style="text-align:center;color:#6b7280;padding:24px">Loading…</td></tr>
-      </tbody>
-    </table>
+  <!-- Withdraw -->
+  <div id="tab-withdraw" class="tab-pane-custom d-none">
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold">Withdraw Funds</div>
+      <div class="card-body">
+        <div id="withdrawAlert" class="d-none mb-3"></div>
+        <form id="withdrawForm">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label for="wdAmt" class="form-label">Amount (USD cents)</label>
+              <input id="wdAmt" name="amount_cents" type="number" min="100" step="100" class="form-control" required placeholder="e.g. 5000 = $50">
+            </div>
+            <div class="col-md-4">
+              <label for="wdMethod" class="form-label">Withdrawal Method</label>
+              <select id="wdMethod" name="method" class="form-select">
+                <option value="bank">Bank Transfer</option>
+                <option value="crypto">Crypto (EVM)</option>
+              </select>
+            </div>
+            <div class="col-12">
+              <div class="alert alert-info small py-2 mb-2">Your payout destination is taken from your <a href="/public/dashboard.html">Profile</a>. Make sure it is up-to-date.</div>
+              <button class="btn btn-primary" type="submit">Request Withdrawal</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Transfer -->
+  <div id="tab-transfer" class="tab-pane-custom d-none">
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold">Transfer to User</div>
+      <div class="card-body">
+        <div id="transferAlert" class="d-none mb-3"></div>
+        <form id="transferForm">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label for="trTarget" class="form-label">Recipient Username</label>
+              <input id="trTarget" name="to_username" class="form-control" required placeholder="username">
+              <div id="trLookup" class="small text-body-secondary mt-1"></div>
+            </div>
+            <div class="col-md-4">
+              <label for="trAmt" class="form-label">Amount (USD cents)</label>
+              <input id="trAmt" name="amount_cents" type="number" min="1" class="form-control" required placeholder="e.g. 500 = $5">
+            </div>
+            <div class="col-md-4">
+              <label for="trNote" class="form-label">Note <span class="text-body-secondary small">(optional)</span></label>
+              <input id="trNote" name="note" class="form-control" maxlength="120" placeholder="What's this for?">
+            </div>
+            <div class="col-12">
+              <button class="btn btn-primary" type="submit">Send Transfer</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- History -->
+  <div id="tab-history" class="tab-pane-custom d-none">
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold">Transaction History</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover tbl-compact mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Note</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody">
+              <tr><td colspan="5" class="text-body-secondary">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-const $ = id => document.getElementById(id);
+let USD_TO_IDR = 17000;
+const fmtIdr = new Intl.NumberFormat('id-ID');
 
-function cents(n) {
-  const v = parseInt(n) || 0;
-  return `$${Math.floor(v/100)}.${String(Math.abs(v)%100).padStart(2,'0')}`;
-}
-
-function showMsg(id, ok, text) {
-  const el = $(id);
-  el.className = `msg show ${ok ? 'ok' : 'err'}`;
-  el.textContent = text;
-}
-
-async function loadBalance() {
-  const r = await fetch('/api/wallet/balance').then(x=>x.json()).catch(()=>({ok:false}));
-  if (r.ok) {
-    $('balanceDisplay').textContent = r.balance_display;
-    $('balanceCents').textContent = `${r.balance_cents} cents`;
-  } else {
-    $('balanceDisplay').textContent = 'Login required';
-  }
-}
-
-function txnTypeBadge(t) {
-  const labels = {
-    deposit:      '<span class="type-deposit">↓ Deposit</span>',
-    withdrawal:   '<span class="type-withdrawal">↑ Withdrawal</span>',
-    transfer_in:  '<span class="type-transfer_in">⇐ Transfer In</span>',
-    transfer_out: '<span class="type-transfer_out">⇒ Transfer Out</span>',
-  };
-  return labels[t] || t;
-}
-
-function statusBadge(s) {
-  const map = {
-    pending:   'badge-yellow',
-    approved:  'badge-green',
-    completed: 'badge-green',
-    rejected:  'badge-red',
-  };
-  return `<span class="badge ${map[s]||'badge-blue'}">${s}</span>`;
-}
-
-async function loadTxns() {
-  const r = await fetch('/api/wallet/transactions?limit=50').then(x=>x.json()).catch(()=>({ok:false}));
-  const tbody = $('txnBody');
-  if (!r.ok || !r.items?.length) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#6b7280;padding:24px">${r.ok ? 'No transactions yet.' : 'Failed to load.'}</td></tr>`;
-    return;
-  }
-  tbody.innerHTML = r.items.map(t => `
-    <tr>
-      <td class="mono">${t.id}</td>
-      <td>${txnTypeBadge(t.txn_type)}</td>
-      <td class="mono">${cents(t.amount_cents)}</td>
-      <td class="mono">${cents(t.balance_after)}</td>
-      <td>${statusBadge(t.status)}</td>
-      <td>${t.ref_username ? `@${t.ref_username}` : '—'}</td>
-      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.note||'—'}</td>
-      <td class="mono" style="white-space:nowrap">${(t.created_at||'').slice(0,16).replace('T',' ')}</td>
-    </tr>
-  `).join('');
-}
-
-async function doDeposit() {
-  const amount = parseInt($('depositAmount').value);
-  const note   = $('depositNote').value.trim();
-  if (!amount || amount < 1000) return showMsg('depositMsg', false, 'Minimum deposit is $10.00 (1000 cents).');
-  const r = await fetch('/api/wallet/deposit', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({amount_cents: amount, note: note||null})
-  }).then(x=>x.json());
-  showMsg('depositMsg', r.ok, r.ok ? r.message : r.error);
-  if (r.ok) { loadTxns(); $('depositAmount').value=''; $('depositNote').value=''; }
-}
-
-async function doWithdraw() {
-  const amount = parseInt($('withdrawAmount').value);
-  const note   = $('withdrawNote').value.trim();
-  if (!amount || amount < 5000) return showMsg('withdrawMsg', false, 'Minimum withdrawal is $50.00 (5000 cents).');
-  const r = await fetch('/api/wallet/withdraw', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({amount_cents: amount, note: note||null})
-  }).then(x=>x.json());
-  showMsg('withdrawMsg', r.ok, r.ok ? r.message : r.error);
-  if (r.ok) { loadBalance(); loadTxns(); $('withdrawAmount').value=''; $('withdrawNote').value=''; }
-}
-
-async function doTransfer() {
-  const to     = $('transferTo').value.trim();
-  const amount = parseInt($('transferAmount').value);
-  const note   = $('transferNote').value.trim();
-  if (!to)     return showMsg('transferMsg', false, 'Enter a recipient username.');
-  if (!amount || amount < 100) return showMsg('transferMsg', false, 'Minimum transfer is $1.00 (100 cents).');
-  const r = await fetch('/api/wallet/transfer', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({to_username: to, amount_cents: amount, note: note||null})
-  }).then(x=>x.json());
-  showMsg('transferMsg', r.ok, r.ok
-    ? `Sent ${r.amount_display} to @${r.transferred_to}. New balance: ${r.balance_display}`
-    : r.error);
-  if (r.ok) { loadBalance(); loadTxns(); $('transferTo').value=''; $('transferAmount').value=''; $('transferNote').value=''; }
-}
-
-$('logoutBtn').addEventListener('click', async e => {
-  e.preventDefault();
-  await fetch('/auth/logout', {method:'POST'});
-  location.href = '/public/auth/login.html';
+// ── user bar + logout ──
+(async function(){
+  try {
+    const j = await fetch('/api/me').then(r=>r.json());
+    const el = document.getElementById('userbar');
+    if (j.ok && j.user) el.innerHTML = `<b>${esc(j.user.username)}</b> &lt;${esc(j.user.email)}&gt;`;
+    else location.href = '/public/auth/login.html';
+  } catch {}
+})();
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  await fetch('/auth/logout', { method:'POST' }).catch(()=>{});
+  location.href = '/public/auth/login.html?status=ok';
 });
 
+// ── tabs ──
+function showTab(name) {
+  document.querySelectorAll('.tab-pane-custom').forEach(el => el.classList.add('d-none'));
+  document.querySelectorAll('#walletTabs .nav-link').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.remove('d-none');
+  document.querySelector(`#walletTabs [data-tab="${name}"]`).classList.add('active');
+  if (name === 'history') loadHistory();
+}
+
+// ── balance ──
+async function loadBalance() {
+  try {
+    const j = await fetch('/api/wallet/balance').then(r=>r.json());
+    if (j.ok) {
+      const cents = j.balance_cents || 0;
+      document.getElementById('balanceDisplay').textContent = '$' + (cents/100).toFixed(2);
+      try { const k = await fetch('/api/kurs').then(r=>r.json()); if(k.usd_to_idr) USD_TO_IDR = k.usd_to_idr; } catch {}
+      document.getElementById('balanceIdr').textContent = '≈ Rp ' + fmtIdr.format(Math.round(cents/100*USD_TO_IDR));
+    } else {
+      document.getElementById('balanceDisplay').textContent = 'Error';
+    }
+  } catch { document.getElementById('balanceDisplay').textContent = '—'; }
+}
 loadBalance();
-loadTxns();
+
+// ── method change ──
+function onMethodChange() {
+  document.getElementById('depositInstructions').classList.add('d-none');
+  document.getElementById('depositX402').classList.add('d-none');
+  document.getElementById('depositFiat').classList.add('d-none');
+}
+
+// ── deposit ──
+document.getElementById('depositForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const method = fd.get('method');
+  const cents  = parseInt(fd.get('amount_cents'), 10);
+  const btn = e.submitter; btn.disabled=true; btn.textContent='Processing…';
+  const alert = document.getElementById('depositAlert');
+  alert.className = 'd-none';
+  try {
+    const j = await fetch('/api/wallet/deposit', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams(fd) }).then(r=>r.json());
+    if (!j.ok) { showAlert(alert, 'danger', 'Failed: ' + (j.error||'unknown')); return; }
+    const instr = document.getElementById('depositInstructions');
+    instr.classList.remove('d-none');
+    if (method === 'x402') {
+      document.getElementById('depositX402').classList.remove('d-none');
+      document.getElementById('x402Details').innerHTML =
+        `Pay <strong>$${(cents/100).toFixed(2)} USDC</strong> to:<br><code>${esc(j.address||'—')}</code><br>Chain ID: <code>${esc(String(j.chain_id||'—'))}</code><br>Invoice: <code>${esc(j.invoice_uid||'—')}</code>`;
+    } else {
+      document.getElementById('depositFiat').classList.remove('d-none');
+      document.getElementById('fiatDetails').innerHTML = j.instructions || `<p>Invoice ID: <code>${esc(j.invoice_uid||'—')}</code>. Contact support for payment details.</p>`;
+    }
+    loadBalance();
+  } catch(err) { showAlert(alert, 'danger', 'Error: ' + err.message); }
+  finally { btn.disabled=false; btn.textContent='Request Top Up'; }
+});
+
+// ── withdraw ──
+document.getElementById('withdrawForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn = e.submitter; btn.disabled=true; btn.textContent='Submitting…';
+  const alert = document.getElementById('withdrawAlert');
+  alert.className = 'd-none';
+  try {
+    const j = await fetch('/api/wallet/withdraw', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams(new FormData(e.target)) }).then(r=>r.json());
+    if (j.ok) { showAlert(alert, 'success', 'Withdrawal request submitted. Admin will process it within 1–2 business days.'); e.target.reset(); loadBalance(); }
+    else showAlert(alert, 'danger', 'Failed: ' + (j.error||'unknown'));
+  } catch(err) { showAlert(alert, 'danger', 'Error: ' + err.message); }
+  finally { btn.disabled=false; btn.textContent='Request Withdrawal'; }
+});
+
+// ── transfer ──
+let trTimer;
+document.getElementById('trTarget').addEventListener('input', () => {
+  clearTimeout(trTimer);
+  const u = document.getElementById('trTarget').value.trim();
+  const box = document.getElementById('trLookup');
+  box.textContent = '';
+  if (!u) return;
+  trTimer = setTimeout(async () => {
+    try {
+      const j = await fetch('/api/user_lookup?' + new URLSearchParams({ username: u })).then(r=>r.json());
+      box.textContent = (j.ok && j.user) ? `✓ Found: ${j.user.id}` : '✗ User not found';
+    } catch { box.textContent = '✗ Lookup failed'; }
+  }, 300);
+});
+
+document.getElementById('transferForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn = e.submitter; btn.disabled=true; btn.textContent='Sending…';
+  const alert = document.getElementById('transferAlert');
+  alert.className = 'd-none';
+  try {
+    const j = await fetch('/api/wallet/transfer', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams(new FormData(e.target)) }).then(r=>r.json());
+    if (j.ok) { showAlert(alert, 'success', 'Transfer sent!'); e.target.reset(); document.getElementById('trLookup').textContent=''; loadBalance(); }
+    else showAlert(alert, 'danger', 'Failed: ' + (j.error||'unknown'));
+  } catch(err) { showAlert(alert, 'danger', 'Error: ' + err.message); }
+  finally { btn.disabled=false; btn.textContent='Send Transfer'; }
+});
+
+// ── history ──
+async function loadHistory() {
+  const tbody = document.getElementById('historyBody');
+  tbody.innerHTML = '<tr><td colspan="5" class="text-body-secondary">Loading…</td></tr>';
+  try {
+    const j = await fetch('/api/wallet/history').then(r=>r.json());
+    if (!j.ok || !Array.isArray(j.transactions) || !j.transactions.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-body-secondary">No transactions yet.</td></tr>';
+      return;
+    }
+    const statusBadge = s => {
+      const map = { pending:'warning', completed:'success', rejected:'danger', processing:'info' };
+      return `<span class="badge bg-${map[s]||'secondary'}">${esc(s)}</span>`;
+    };
+    tbody.innerHTML = j.transactions.map(t =>
+      `<tr>
+        <td class="small text-nowrap">${esc((t.created_at||'').slice(0,16))}</td>
+        <td class="small">${esc(t.type||'—')}</td>
+        <td class="small fw-semibold">${t.amount_cents >= 0 ? '+' : ''}$${((t.amount_cents||0)/100).toFixed(2)}</td>
+        <td class="small">${statusBadge(t.status||'—')}</td>
+        <td class="small text-body-secondary">${esc(t.note||'')}</td>
+      </tr>`
+    ).join('');
+  } catch(e) { tbody.innerHTML = `<tr><td colspan="5" class="text-body-secondary">Error: ${esc(String(e))}</td></tr>`; }
+}
+
+function showAlert(el, type, msg) {
+  el.className = `alert alert-${type}`;
+  el.textContent = msg;
+}
 </script>
 </body>
 </html>
