@@ -781,6 +781,333 @@ If you want to understand the repo gradually, read the schema in this order:
 9. `chat_conversations` and `chat_messages`
 10. `smtp_settings` and `payment_settings`
 
+## Table-by-Table Column Dictionary
+
+This appendix summarizes the meaning of the most important columns in each table.
+
+### `users`
+
+- `id`: primary key for the account.
+- `username`: public-facing handle used across browsing, access control, and chat.
+- `email`: login and notification address. It is unique when present.
+- `password_hash`: password digest stored by the authentication system.
+- `is_admin`: marks whether the account has admin privileges.
+- `bank_account`: creator payout destination for manual or gateway disbursement flows.
+- `wallet_account`: creator EVM-compatible wallet address for blockchain-related flows.
+- `wallet_chain_id`: preferred chain for the creator wallet.
+- `whatsapp`: creator contact field.
+- `profile_desc`: public profile description shown on creator-facing surfaces.
+- `balance_cents`: current internal wallet balance snapshot in platform cents.
+- `created_at`: account creation timestamp.
+
+### `sessions`
+
+- `id`: session token or session identifier.
+- `user_id`: owner of the session.
+- `is_admin`: denormalized privilege marker copied into the session context.
+- `created_at`: session creation time.
+- `expires_at`: session expiry deadline.
+
+### `password_resets`
+
+- `id`: primary key.
+- `user_id`: user requesting the password reset.
+- `token`: one-time reset token.
+- `expires_at`: token expiration time.
+- `used`: indicates whether the token has already been consumed.
+- `created_at`: token issuance time.
+
+### `videos`
+
+- `id`: primary key for the video.
+- `owner_id`: creator who owns and sells the video.
+- `title`: human-readable video title.
+- `price_cents`: selling price in cents.
+- `filename`: media file reference on disk or storage.
+- `created_at`: upload or creation time.
+
+### `allowlist`
+
+- `video_id`: video being unlocked.
+- `username`: username granted playback access for that video.
+
+### `purchases`
+
+- `id`: purchase record identifier.
+- `user_id`: buyer who obtained the entitlement.
+- `video_id`: purchased video.
+- `created_at`: purchase completion time.
+
+### `playback_sessions`
+
+- `session_id`: primary key for the playback session.
+- `user_id`: user who requested streaming.
+- `video_id`: video being streamed.
+- `session_dir`: server-side working directory for generated playback artifacts.
+- `status`: lifecycle state such as `starting`, `ready`, `completed`, or `error`.
+- `last_error`: latest processing or playback preparation error.
+- `created_at`: session creation timestamp.
+- `expires_at`: cleanup deadline for temporary playback resources.
+
+### `pay_tokens`
+
+- `id`: primary key.
+- `chain`: human-readable chain name.
+- `chain_id`: numeric blockchain network ID.
+- `symbol`: token ticker symbol.
+- `decimals`: token precision.
+- `erc20_address`: contract address for ERC-20 or similar tokens; null for native assets.
+- `is_active`: whether the token is currently enabled for payment.
+- `updated_at`: last configuration update time.
+- `token_kind`: token classification such as `NATIVE`, `ERC20`, or `STABLE`.
+- `is_native`: generated convenience flag derived from `token_kind`.
+
+### `x402_invoices`
+
+- `id`: internal primary key.
+- `invoice_uid`: public invoice identifier.
+- `invoice_uid_hash`: hash used for safer lookup and external references.
+- `user_id`: buyer creating the invoice.
+- `video_id`: target video being purchased.
+- `creator_id`: creator expected to receive the sale proceeds.
+- `chain_id`: blockchain network selected for payment.
+- `token_symbol`: chosen payment symbol.
+- `token_address`: contract address when a token is not native.
+- `price_cents`: product price at invoice creation time.
+- `usd_to_idr`: optional captured conversion rate.
+- `token_amount`: quoted token amount stored in base units.
+- `required_amount_wei`: minimum required amount for successful settlement.
+- `paid_amount_wei`: actual amount detected as paid.
+- `invoice_group_uid`: group identifier for retries or related quote attempts.
+- `split_creator_bp`: creator share in basis points.
+- `split_admin_bp`: platform share in basis points.
+- `status`: lifecycle state such as `pending`, `paid`, `underpaid`, `expired`, or `cancelled`.
+- `payer_address`: on-chain sender address.
+- `tx_hash`: blockchain transaction hash.
+- `created_at`: invoice creation time.
+- `paid_at`: settlement confirmation time.
+- `expires_at`: payment deadline.
+- `affiliate_ref`: affiliate reference captured at checkout creation.
+
+### `fiat_invoices`
+
+- `id`: internal primary key.
+- `invoice_uid`: public invoice identifier.
+- `provider`: payment provider name such as Stripe, PayPal, Midtrans, or Xendit.
+- `provider_ref`: provider-specific order, session, or invoice reference.
+- `user_id`: buyer creating the invoice.
+- `video_id`: target video being purchased.
+- `creator_id`: creator whose content is being sold.
+- `amount`: invoice amount in provider-compatible units.
+- `currency`: billing currency.
+- `status`: lifecycle state such as `pending`, `paid`, `failed`, `expired`, or `cancelled`.
+- `payment_url`: hosted checkout URL or external payment link.
+- `buyer_email`: payer email passed to or returned by the provider.
+- `meta`: provider-specific structured payload or auxiliary metadata.
+- `created_at`: invoice creation time.
+- `paid_at`: payment completion time.
+- `disbursed_at`: creator disbursement completion time.
+- `disburse_ref`: payout or transfer reference used during disbursement.
+- `affiliate_ref`: affiliate reference captured at invoice creation.
+
+### `wallet_transactions`
+
+- `id`: primary key.
+- `user_id`: ledger owner whose balance is affected.
+- `txn_type`: transaction category such as `deposit`, `withdrawal`, `transfer_in`, or `transfer_out`.
+- `amount_cents`: absolute transaction amount in cents.
+- `balance_after`: user balance after the transaction is applied.
+- `status`: approval or completion state.
+- `ref_user_id`: optional counterparty user in transfer scenarios.
+- `note`: user-facing or user-supplied reason text.
+- `admin_note`: internal approval, rejection, or audit remark.
+- `created_at`: transaction creation time.
+- `updated_at`: last administrative or lifecycle update time.
+
+### `affiliate_settings`
+
+- `video_id`: video whose affiliate program is being configured.
+- `owner_id`: creator who controls the setting.
+- `commission_pct`: percentage of the purchase allocated to the affiliate.
+- `is_enabled`: whether affiliate referrals are active for the video.
+- `created_at`: row creation time.
+- `updated_at`: last configuration update time.
+
+### `affiliate_commissions`
+
+- `id`: primary key.
+- `video_id`: video that generated the commission.
+- `affiliate_id`: referring user earning the commission.
+- `buyer_id`: final purchaser whose order triggered the commission.
+- `owner_id`: creator whose sale funded the commission.
+- `purchase_price_cents`: sale price used for commission calculation.
+- `commission_cents`: affiliate earning amount.
+- `payment_method`: payment rail used by the buyer, such as `wallet`, `x402`, or `fiat`.
+- `ref_invoice_uid`: invoice or payment reference associated with the sale.
+- `created_at`: commission record creation time.
+
+### `chat_conversations`
+
+- `id`: conversation identifier.
+- `conversation_type`: thread type such as direct user chat or admin support chat.
+- `direct_user_a_id`: first participant for direct conversations.
+- `direct_user_b_id`: second participant for direct conversations.
+- `support_user_id`: end-user participant for support conversations.
+- `created_by_user_id`: user who initiated the conversation.
+- `created_at`: conversation creation time.
+- `updated_at`: last structural update time.
+- `last_message_at`: timestamp used for ordering recent threads.
+
+### `chat_messages`
+
+- `id`: message identifier.
+- `conversation_id`: parent conversation.
+- `sender_user_id`: user who sent the message.
+- `body`: message content.
+- `created_at`: message creation time.
+
+### `smtp_settings`
+
+- `id`: singleton row identifier, practically expected to be `1`.
+- `host`: SMTP host name.
+- `port`: SMTP port.
+- `username`: SMTP login username.
+- `password`: SMTP login password.
+- `from_email`: default sender email.
+- `from_name`: default sender display name.
+- `use_tls`: whether TLS is enabled.
+- `enabled`: whether SMTP sending is enabled in the application.
+- `updated_at`: last settings update time.
+
+### `payment_settings`
+
+- `id`: singleton key constrained to a single logical row.
+- `wallet_payment_enabled`: enables video purchases using internal wallet balance.
+- `wallet_transfer_enabled`: enables user-to-user wallet transfers.
+- `paypal_enabled`: enables PayPal.
+- `stripe_enabled`: enables Stripe.
+- `xendit_enabled`: enables Xendit.
+- `midtrans_enabled`: enables Midtrans.
+- `x402_enabled`: enables blockchain x402 payments.
+- `default_provider`: preferred default payment provider.
+- `updated_at`: last settings update time.
+
+## Business Rules and Invariants
+
+This section describes behavioral rules that are important even when they are not fully enforced by foreign keys or database constraints alone.
+
+### Identity and session rules
+
+- Each user account should have a stable `id` across all modules.
+- `email` should uniquely identify a login-capable account when present.
+- `sessions.user_id` must always refer to a valid account while the session is active.
+- `sessions.is_admin` should stay consistent with the authorization context used when the session was created.
+- `password_resets.token` should be single-use in practice, even if historical rows remain stored.
+- Expired or used password reset tokens must not be accepted again.
+
+### Video ownership and access rules
+
+- Every `video` must belong to exactly one creator through `videos.owner_id`.
+- A purchase is only meaningful if both the buyer and video still exist.
+- A successful purchase should result in an entitlement outcome:
+  `purchases` row plus access grant behavior.
+- `allowlist` exists as an access optimization and should remain aligned with actual purchases or approved access grants.
+- Because `allowlist` stores `username` rather than `user_id`, username changes would require special synchronization logic if renaming is ever introduced.
+
+### Purchase and entitlement rules
+
+- `purchases` is the strongest durable business proof that a user bought a video.
+- The same payment success event must not create duplicate entitlements for the same outcome.
+- Payment confirmation should be idempotent:
+  retrying a webhook or callback should not double-insert `purchases`, `allowlist`, or commission rows.
+- A failed, expired, cancelled, or underpaid invoice must not unlock content.
+
+### x402 invoice rules
+
+- Each `x402_invoices.invoice_uid` must uniquely represent one invoice instance.
+- `invoice_uid_hash` should map to the same invoice as `invoice_uid`, but is safer to expose in lookup flows.
+- `required_amount_wei` is the minimum settlement threshold.
+- `paid_amount_wei` records what was actually received.
+- `status = paid` should only happen when the platform has verified sufficient on-chain payment.
+- `status = underpaid` means the invoice exists but should not grant entitlement until business rules say the shortfall is resolved.
+- `invoice_group_uid` should group related quote attempts, retries, or top-up flows for the same logical purchase attempt.
+- `creator_id` should match the owner of the referenced video at invoice creation time.
+
+### Fiat invoice rules
+
+- Each `fiat_invoices.invoice_uid` must uniquely identify one gateway invoice.
+- `provider_ref` should be treated as the external provider reconciliation key.
+- `status = paid` should only be set after trusted confirmation from the payment provider or a verified callback flow.
+- A creator disbursement should only happen after the invoice has genuinely been paid.
+- `disbursed_at` and `disburse_ref` should be written together when a payout is completed or externally reconciled.
+- Sensitive values such as `buyer_email` may be operationally useful, but should not be exposed broadly in admin or public surfaces.
+
+### Wallet rules
+
+- `users.balance_cents` is the current balance snapshot, not the full audit history.
+- `wallet_transactions` is the supporting ledger and should explain every meaningful wallet balance movement.
+- `amount_cents` is always positive; direction is inferred from `txn_type` and the business operation.
+- `balance_after` should reflect the post-transaction balance for the ledger owner.
+- Transfers between users should produce consistent dual-sided accounting when the product flow requires it.
+- A withdrawal marked `completed` should represent funds considered finalized from the platform perspective.
+- Rejected withdrawals or deposits should not leave the user balance in an inconsistent state.
+
+### Affiliate rules
+
+- `affiliate_settings` is one-to-one with `videos`, so each video has at most one active affiliate configuration row.
+- `commission_pct` must stay within the configured safe range and should never exceed the business cap.
+- `affiliate_commissions` should only be created for successfully completed purchases.
+- The `owner_id` in `affiliate_commissions` should represent the creator who sold the video.
+- The `affiliate_id` should never be the same business actor as the buyer unless the platform explicitly allows self-referrals.
+- `ref_invoice_uid` is a cross-module reference and should point to the payment attempt that triggered the commission.
+- Commission creation should be idempotent so that repeated payment callbacks do not double-credit affiliates.
+
+### Chat rules
+
+- Every persisted message must belong to exactly one conversation.
+- `chat_conversations.conversation_type` determines which participant columns are meaningful.
+- For direct conversations:
+  `direct_user_a_id` and `direct_user_b_id` should be populated, and `support_user_id` should be null.
+- For support conversations:
+  `support_user_id` should be populated, and direct-user fields should not define another independent direct thread.
+- The unique indexes mean there should be only one support thread per support user and one direct thread per normalized participant pair.
+- `last_message_at` should always reflect the timestamp of the most recent stored message.
+- Deleting a conversation cascades to its messages, so historical retention policies should take that into account.
+
+### Playback rules
+
+- `playback_sessions` is an operational table for temporary streaming state, not long-term business history.
+- Each `session_id` should represent one prepared playback context.
+- Expired playback sessions should be cleaned up so temporary directories and access windows do not linger indefinitely.
+- A playback session should only be considered usable while it is not expired and its status is valid for streaming.
+
+### Configuration singleton rules
+
+- `smtp_settings` is effectively treated as a singleton table with row `id = 1`.
+- `payment_settings` is designed as a singleton through `id = TRUE`.
+- Admin-facing configuration UIs should update these rows rather than creating additional logical duplicates.
+- Secrets are only partially represented in the database model:
+  feature toggles may live in tables, while some provider secrets remain in environment configuration.
+
+### Security and privacy invariants
+
+- Public-facing endpoints should expose only the minimum user profile data needed for the product feature.
+- Admin-facing endpoints should still follow least-privilege and least-exposure principles.
+- Invoice and ledger tables should be considered sensitive operational records.
+- PII such as email, payout details, wallet addresses, and contact fields should be carefully scoped per endpoint and UI surface.
+- Chat records are durable database records and should be treated as retained user content.
+
+### Consistency invariants across modules
+
+- A successful paid purchase should converge to the same business result regardless of payment rail:
+  access granted, purchase recorded, and optional affiliate accounting applied.
+- Creator identity should remain consistent across:
+  `videos.owner_id`, invoice `creator_id`, affiliate `owner_id`, and payout/disbursement logic.
+- Buyer identity should remain consistent across:
+  `purchases.user_id`, invoice `user_id`, affiliate `buyer_id`, wallet debit flows, and chat ownership where relevant.
+- The database contains a mix of strongly enforced foreign keys and application-enforced invariants.
+  For safe evolution of the product, both categories need to be respected.
+
 ## Final Takeaway
 
 This database is centered around three main ideas:
