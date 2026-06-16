@@ -6,18 +6,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    .callout { position:absolute; background:#ffc107; color:#000; font-size:.7rem; font-weight:700; padding:2px 6px; border-radius:4px; white-space:nowrap; z-index:10; }
-    .annotated { position:relative; }
-    .mockup-banner { background:#0d6efd; color:#fff; font-size:.75rem; padding:4px 12px; text-align:center; letter-spacing:.08em; }
-    .locked-overlay { background:#000; display:flex; align-items:center; justify-content:center; min-height:280px; border-radius:.375rem; }
+    .callout { position: absolute; background: #ffc107; color: #000; font-size: .7rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; white-space: nowrap; z-index: 10; }
+    .annotated { position: relative; }
+    .mockup-banner { background: #0d6efd; color: #fff; font-size: .75rem; padding: 4px 12px; text-align: center; letter-spacing: .08em; }
+    .locked-overlay { background: #000; display: flex; align-items: center; justify-content: center; min-height: 280px; border-radius: .375rem; }
   </style>
 </head>
 <body>
-<div class="mockup-banner">TUTORIAL MOCKUP — Watch / Payment Page</div>
+<div class="mockup-banner">TUTORIAL MOCKUP - Watch / Payment Page</div>
 
 <nav class="navbar navbar-expand-md bg-body-tertiary shadow-sm border-bottom">
   <div class="container">
-    <a class="navbar-brand fw-bold" href="#">🎬 PPV Stream</a>
+    <a class="navbar-brand fw-bold" href="#">PPV Stream</a>
     <div class="collapse navbar-collapse show">
       <ul class="navbar-nav me-auto">
         <li class="nav-item"><a class="nav-link" href="#">Browse</a></li>
@@ -27,7 +27,7 @@
       </ul>
       <div class="d-flex align-items-center gap-2">
         <span class="badge bg-secondary">dave &lt;dave@example.com&gt;</span>
-        <button class="btn btn-sm btn-outline-secondary">☀️</button>
+        <button class="btn btn-sm btn-outline-secondary">Theme</button>
         <button class="btn btn-sm btn-outline-danger">Logout</button>
       </div>
     </div>
@@ -35,69 +35,63 @@
 </nav>
 
 <div class="container py-4 pb-5">
-  <div class="mb-3"><a href="#" class="text-body-secondary text-decoration-none small">← Back to Browse</a></div>
+  <div class="mb-3"><a href="#" class="text-body-secondary text-decoration-none small">Back to Browse</a></div>
 
-  <!-- Title area -->
   <div class="annotated mb-1">
-    <span class="callout" style="top:-20px;left:0">① Video title, owner, price, and referral badge</span>
+    <span class="callout" style="top:-20px;left:0">1 Title, price, affiliate badge, referral badge</span>
     <h1 class="fs-4 fw-bold mb-1">Advanced Rust Tutorial</h1>
-    <p class="text-body-secondary small mb-3">
-      by <strong>alice</strong> &nbsp;•&nbsp;
-      <span class="fw-semibold text-primary">$10.00 (Rp 170.000)</span>
-      &nbsp;•&nbsp;
-      <span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">via alice</span>
+    <p class="text-body-secondary small mb-2">
+      by <strong>alice</strong> | <span class="fw-semibold text-primary">$10.00 (Rp 170.000)</span>
+      | <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">10% affiliate program</span>
+      | <span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">via alice</span>
     </p>
   </div>
 
-  <!-- Locked player -->
+  <div class="alert alert-info py-2 small mb-4 annotated">
+    <span class="callout" style="top:-18px;left:0">2 Affiliate info banner</span>
+    This video has an active affiliate program. Referrers earn <strong>10%</strong> for each confirmed purchase.
+  </div>
+
   <div class="locked-overlay mb-4 shadow annotated">
-    <span class="callout" style="top:-18px;left:0">② Locked player — shown before payment</span>
+    <span class="callout" style="top:-18px;left:0">3 Locked player before payment</span>
     <div class="text-center text-white p-4">
-      <div style="font-size:3rem">🔒</div>
+      <div style="font-size:3rem">Locked</div>
       <div class="mt-2 fw-semibold">This video requires payment to unlock</div>
-      <div class="text-secondary small">$10.00 · Rp 170.000</div>
+      <div class="text-secondary small">$10.00 | Rp 170.000</div>
     </div>
   </div>
 
-  <!-- Payment panel -->
   <div class="card shadow-sm mb-4 annotated">
-    <span class="callout" style="top:-18px;left:0">③ Payment panel — 3 tabs: Wallet / Crypto (x402) / Bank Transfer</span>
-    <div class="card-header fw-semibold">Unlock This Video — $10.00</div>
+    <span class="callout" style="top:-18px;left:0">4 Payment panel</span>
+    <div class="card-header fw-semibold">Unlock This Video - $10.00</div>
     <div class="card-body">
       <ul class="nav nav-tabs mb-3">
-        <li class="nav-item"><button class="nav-link active">💳 Wallet</button></li>
-        <li class="nav-item"><button class="nav-link">⛓ Crypto (x402)</button></li>
-        <li class="nav-item"><button class="nav-link">🏦 Bank Transfer</button></li>
+        <li class="nav-item"><button class="nav-link active">Wallet</button></li>
+        <li class="nav-item"><button class="nav-link">Crypto (x402)</button></li>
+        <li class="nav-item"><button class="nav-link">Bank Transfer</button></li>
       </ul>
-
-      <!-- Wallet tab (shown) -->
-      <div class="annotated">
-        <span class="callout" style="top:-18px;left:0">④ Wallet tab — instant deduction from balance</span>
-        <p class="small text-body-secondary">Pay from your PPV Stream wallet balance. Fast and instant.</p>
-        <div class="mb-2 small">Balance: <strong>$42.50</strong></div>
-        <button class="btn btn-primary">Pay $10.00 from Wallet</button>
-      </div>
+      <p class="small text-body-secondary">Pay from your PPV Stream wallet balance. Fast and instant.</p>
+      <div class="mb-2 small">Balance: <strong>$42.50</strong></div>
+      <button class="btn btn-primary">Pay $10.00 from Wallet</button>
     </div>
   </div>
 
-  <!-- Unlocked player (reference) -->
   <div class="card shadow-sm mb-4 annotated">
-    <span class="callout" style="top:-18px;left:0">⑤ After payment — HLS player loads automatically</span>
+    <span class="callout" style="top:-18px;left:0">5 After payment, HLS player loads</span>
     <div class="card-body p-0">
       <div class="ratio ratio-16x9 bg-black rounded">
         <div class="d-flex align-items-center justify-content-center text-white">
           <div class="text-center">
-            <div style="font-size:2.5rem">▶</div>
-            <div class="small text-secondary mt-2">HLS video plays here (hls.js)</div>
+            <div style="font-size:2.5rem">Play</div>
+            <div class="small text-secondary mt-2">HLS video plays here</div>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Description -->
   <div class="card shadow-sm annotated">
-    <span class="callout" style="top:-18px;left:0">⑥ Video description (if provided by creator)</span>
+    <span class="callout" style="top:-18px;left:0">6 Video description</span>
     <div class="card-body">
       <h6 class="fw-semibold mb-2">About this video</h6>
       <p class="mb-0 small text-body-secondary">A deep dive into Rust async patterns including tokio, channels, and concurrency primitives. Suitable for intermediate Rust developers.</p>

@@ -74,7 +74,7 @@
           <tr><td>Navbar brand + links</td><td>Consistent navigation; active link highlighted.</td></tr>
           <tr><td>Search input</td><td>Filters by title, creator name, description.</td></tr>
           <tr><td>Sort dropdown</td><td>Newest / Cheapest / Most expensive / A-Z.</td></tr>
-          <tr><td>Video cards</td><td>Clickable -> goes to watch page; shows Ready or Processing badge.</td></tr>
+          <tr><td>Video cards</td><td>Clickable -> goes to watch page; shows Ready or Processing badge, plus affiliate badge when the creator has enabled a commission program for that video.</td></tr>
           <tr><td>Free badge</td><td>Green text when the video costs $0.</td></tr>
           <tr><td>Price display</td><td>In Rupiah using the live USD to IDR rate from <code>/api/kurs</code>.</td></tr>
           <tr><td>User bar</td><td>Shows logged-in username; shows Sign In link if not logged in.</td></tr>
@@ -151,6 +151,7 @@
         <thead class="table-light"><tr><th>Element</th><th>Function</th></tr></thead>
         <tbody>
           <tr><td>Locked player overlay</td><td>Shown before payment. Displays price in USD and IDR.</td></tr>
+          <tr><td>Affiliate program info</td><td>If the video has an active affiliate setup, the page shows the commission percentage near the title and in an info banner.</td></tr>
           <tr><td>Wallet tab</td><td>Instant payment from wallet balance.</td></tr>
           <tr><td>Crypto (x402) tab</td><td>Initiates an x402 on-chain payment and confirms automatically.</td></tr>
           <tr><td>Bank Transfer tab</td><td>User confirms after manual transfer; access is granted after verification.</td></tr>

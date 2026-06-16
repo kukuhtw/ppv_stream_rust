@@ -2,7 +2,7 @@
 <html lang="en" data-bs-theme="dark">
 <head>
   <meta charset="utf-8">
-  <title>Browse — PPV Stream</title>
+  <title>Browse - PPV Stream</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="/public/styles.css">
@@ -12,7 +12,7 @@
 
 <nav class="navbar navbar-expand-md bg-body-tertiary shadow-sm border-bottom">
   <div class="container">
-    <a class="navbar-brand fw-bold" href="/public/browse.html" data-platform="brand">🎬 PPV Stream</a>
+    <a class="navbar-brand fw-bold" href="/public/browse.html" data-platform="brand">PPV Stream</a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
       <span class="navbar-toggler-icon"></span>
     </button>
@@ -24,8 +24,8 @@
         <li class="nav-item"><a class="nav-link" href="/public/affiliate.html">Affiliate</a></li>
       </ul>
       <div class="d-flex align-items-center gap-2 mt-2 mt-md-0">
-        <span id="userbar" class="badge bg-secondary">Loading…</span>
-        <button class="btn btn-sm btn-outline-secondary" onclick="toggleTheme()" id="themeToggle">☀️</button>
+        <span id="userbar" class="badge bg-secondary">Loading...</span>
+        <button class="btn btn-sm btn-outline-secondary" onclick="toggleTheme()" id="themeToggle">Theme</button>
       </div>
     </div>
   </div>
@@ -37,14 +37,14 @@
 
   <div class="row g-2 mb-4">
     <div class="col-12 col-md-7">
-      <input id="q" class="form-control" placeholder="Search title, creator, description…">
+      <input id="q" class="form-control" placeholder="Search title, creator, description...">
     </div>
     <div class="col-12 col-md-3">
       <select id="sort" class="form-select">
         <option value="newest">Newest first</option>
         <option value="cheapest">Cheapest first</option>
         <option value="expensive">Most expensive</option>
-        <option value="title">Title (A–Z)</option>
+        <option value="title">Title (A-Z)</option>
       </select>
     </div>
   </div>
@@ -58,11 +58,11 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-let USD_TO_IDR = 17000, allVideos = [];
+let USD_TO_IDR = 17000;
+let allVideos = [];
 const fmt = new Intl.NumberFormat('id-ID');
 
-// ── user bar ──
-(async function() {
+(async function () {
   try {
     const j = await fetch('/api/me').then(r => r.json());
     const el = document.getElementById('userbar');
@@ -71,36 +71,65 @@ const fmt = new Intl.NumberFormat('id-ID');
   } catch {}
 })();
 
-// ── load videos ──
-(async function init(){
-  try { const j = await fetch('/api/kurs').then(r=>r.json()); if(j.usd_to_idr) USD_TO_IDR = j.usd_to_idr; } catch {}
+(async function init() {
   try {
-    const j = await fetch('/api/videos').then(r=>r.json());
-    allVideos = Array.isArray(j.videos) ? j.videos : [];
+    const j = await fetch('/api/kurs').then(r => r.json());
+    if (j.usd_to_idr) USD_TO_IDR = j.usd_to_idr;
+  } catch {}
+
+  try {
+    const j = await fetch('/api/videos').then(r => r.json());
+    const baseVideos = Array.isArray(j.videos) ? j.videos : [];
+    allVideos = await Promise.all(baseVideos.map(enrichVideoWithAffiliate));
     applyFilters();
-  } catch(e) {
+  } catch (e) {
     document.getElementById('videos').innerHTML = `<div class="col-12 text-body-secondary">Failed to load videos: ${esc(String(e))}</div>`;
   }
 })();
 
+async function enrichVideoWithAffiliate(video) {
+  try {
+    const j = await fetch('/api/affiliate/program?' + new URLSearchParams({ video_id: video.id })).then(r => r.json());
+    return {
+      ...video,
+      affiliate_enabled: Boolean(j.ok && j.has_affiliate),
+      affiliate_pct: Number(j.commission_pct || 0)
+    };
+  } catch {
+    return {
+      ...video,
+      affiliate_enabled: false,
+      affiliate_pct: 0
+    };
+  }
+}
+
 function applyFilters() {
   const q = document.getElementById('q').value.trim().toLowerCase();
   const sort = document.getElementById('sort').value;
-  let list = q ? allVideos.filter(v => `${v.title} ${v.owner_name} ${v.description||''}`.toLowerCase().includes(q)) : [...allVideos];
-  if (sort === 'newest')    list.sort((a,b) => b.created_at > a.created_at ? 1 : -1);
-  if (sort === 'cheapest')  list.sort((a,b) => a.price_cents - b.price_cents);
-  if (sort === 'expensive') list.sort((a,b) => b.price_cents - a.price_cents);
-  if (sort === 'title')     list.sort((a,b) => a.title.localeCompare(b.title));
+  let list = q ? allVideos.filter(v => `${v.title} ${v.owner_name} ${v.description || ''}`.toLowerCase().includes(q)) : [...allVideos];
+  if (sort === 'newest') list.sort((a, b) => b.created_at > a.created_at ? 1 : -1);
+  if (sort === 'cheapest') list.sort((a, b) => a.price_cents - b.price_cents);
+  if (sort === 'expensive') list.sort((a, b) => b.price_cents - a.price_cents);
+  if (sort === 'title') list.sort((a, b) => a.title.localeCompare(b.title));
   render(list);
 }
 
 function render(list) {
   const w = document.getElementById('videos');
-  if (!list.length) { w.innerHTML='<div class="col-12"><p class="text-body-secondary">No videos found.</p></div>'; return; }
+  if (!list.length) {
+    w.innerHTML = '<div class="col-12"><p class="text-body-secondary">No videos found.</p></div>';
+    return;
+  }
   w.innerHTML = list.map(v => {
-    const priceTxt = v.price_cents > 0 ? 'Rp ' + fmt.format(Math.round(v.price_cents/100*USD_TO_IDR)) : 'Free';
+    const priceTxt = v.price_cents > 0 ? 'Rp ' + fmt.format(Math.round(v.price_cents / 100 * USD_TO_IDR)) : 'Free';
     const priceClass = v.price_cents > 0 ? 'text-primary' : 'text-success';
-    const hlsBadge = v.hls_ready ? '<span class="badge bg-success-subtle text-success-emphasis border border-success-subtle" style="font-size:.65rem">▶ Ready</span>' : '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle" style="font-size:.65rem">⏳ Processing</span>';
+    const hlsBadge = v.hls_ready
+      ? '<span class="badge bg-success-subtle text-success-emphasis border border-success-subtle" style="font-size:.65rem">Ready</span>'
+      : '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle" style="font-size:.65rem">Processing</span>';
+    const affiliateBadge = v.affiliate_enabled
+      ? `<span class="badge bg-info-subtle text-info-emphasis border border-info-subtle" style="font-size:.65rem">${esc(String(v.affiliate_pct || 0))}% affiliate</span>`
+      : '';
     const desc = (v.description || '').trim();
     return `<div class="col">
       <div class="card h-100 shadow-sm video-card" onclick="location.href='/public/watch.html?video_id=${esc(v.id)}'">
@@ -111,6 +140,7 @@ function render(list) {
           </div>
           <p class="mb-2 small text-body-secondary">by <strong>${esc(v.owner_name)}</strong></p>
           ${desc ? `<p class="small text-body-secondary mb-2" style="overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${esc(desc)}</p>` : ''}
+          ${affiliateBadge ? `<div class="mb-2">${affiliateBadge}</div>` : ''}
           <p class="mb-0 fw-semibold ${priceClass}">${priceTxt}</p>
         </div>
       </div>
@@ -119,7 +149,10 @@ function render(list) {
 }
 
 let t;
-document.getElementById('q').addEventListener('input', () => { clearTimeout(t); t = setTimeout(applyFilters, 200); });
+document.getElementById('q').addEventListener('input', () => {
+  clearTimeout(t);
+  t = setTimeout(applyFilters, 200);
+});
 document.getElementById('sort').addEventListener('change', applyFilters);
 </script>
 </body>

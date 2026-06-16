@@ -16,6 +16,7 @@
 | Document | Description |
 |----------|-------------|
 | **README.md** *(this file)* | Platform overview, quick start, architecture, feature list |
+| [SETUP.md](SETUP.md) | Complete step-by-step setup and run guide in English for Docker and non-Docker environments |
 | [VISION.md](VISION.md) | Inspiration — the problems we solve and the creator economy we're building |
 | [WALLET.md](WALLET.md) | Internal fiat wallet — business flows, DB design, API reference |
 | [AFFILIATE.md](AFFILIATE.md) | Affiliate system — referral links, commission flows, security model |
@@ -319,6 +320,8 @@ ppv_stream_rust/
 ---
 
 ## ⚙️ Quick Start
+
+For the complete installation guide, environment variable reference, admin bootstrap steps, and both Docker and non-Docker workflows, see [SETUP.md](SETUP.md).
 
 ```bash
 # 1. Start PostgreSQL
