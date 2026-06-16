@@ -177,6 +177,119 @@
   </div>
 
   <div class="card shadow-sm mb-4">
+    <div class="card-header fw-semibold">Storage Backend and Migration</div>
+    <div class="card-body">
+      <p class="text-body-secondary small mb-3">Use this section to save the desired storage backend configuration and migrate existing local assets to an S3-compatible target. Runtime storage still follows the server environment at startup, so a restart is required after changing the backend.</p>
+      <div id="storageAlert" class="d-none mb-3"></div>
+      <div class="row g-3 mb-4">
+        <div class="col-md-6">
+          <div class="border rounded p-3 h-100">
+            <div class="fw-semibold mb-2">Active Runtime Backend</div>
+            <div id="activeStorageSummary" class="small text-body-secondary">Loading...</div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="border rounded p-3 h-100">
+            <div class="fw-semibold mb-2">Saved Desired Backend</div>
+            <div id="desiredStorageSummary" class="small text-body-secondary">Loading...</div>
+          </div>
+        </div>
+      </div>
+
+      <form id="storageSettingsForm" class="mb-4">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label for="storageBackend" class="form-label">Backend</label>
+            <select id="storageBackend" class="form-select">
+              <option value="local">Local</option>
+              <option value="s3">AWS S3</option>
+              <option value="minio">MinIO</option>
+              <option value="r2">Cloudflare R2</option>
+              <option value="b2">Backblaze B2</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label for="storageBucket" class="form-label">Bucket</label>
+            <input id="storageBucket" class="form-control" placeholder="ppv-stream-prod">
+          </div>
+          <div class="col-md-4">
+            <label for="storageRegion" class="form-label">Region</label>
+            <input id="storageRegion" class="form-control" placeholder="us-east-1">
+          </div>
+          <div class="col-md-6">
+            <label for="storageAccessKey" class="form-label">Access Key</label>
+            <input id="storageAccessKey" class="form-control" placeholder="Optional for some providers">
+          </div>
+          <div class="col-md-6">
+            <label for="storageSecretKey" class="form-label">Secret Key</label>
+            <input id="storageSecretKey" type="password" class="form-control">
+            <div class="form-text">Leave blank to keep the current stored secret key.</div>
+          </div>
+          <div class="col-md-6">
+            <label for="storageEndpoint" class="form-label">Endpoint</label>
+            <input id="storageEndpoint" class="form-control" placeholder="http://minio:9000">
+          </div>
+          <div class="col-md-6">
+            <label for="storagePublicUrl" class="form-label">Public URL / CDN Base</label>
+            <input id="storagePublicUrl" class="form-control" placeholder="https://files.example.com/ppv-stream">
+          </div>
+          <div class="col-md-6">
+            <div class="form-check form-switch mt-md-4 pt-md-2">
+              <input class="form-check-input" type="checkbox" id="storagePathStyle">
+              <label class="form-check-label" for="storagePathStyle">Force path-style requests</label>
+            </div>
+          </div>
+          <div class="col-12">
+            <button class="btn btn-primary" type="submit">Save Storage Settings</button>
+            <button class="btn btn-outline-secondary ms-2" type="button" id="testStorageBtn">Test Connection</button>
+          </div>
+        </div>
+      </form>
+
+      <div class="border rounded p-3 mb-4">
+        <div class="fw-semibold mb-2">Storage Migration Job</div>
+        <p class="text-body-secondary small mb-3">This copies existing local `storage/` uploads and `media/` HLS outputs into the saved remote backend. Keep local runtime directories in place after migration.</p>
+        <form id="storageMigrationForm" class="row g-3 align-items-end">
+          <div class="col-md-4">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="migrateUploads" checked>
+              <label class="form-check-label" for="migrateUploads">Copy uploaded originals</label>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="migrateMedia" checked>
+              <label class="form-check-label" for="migrateMedia">Copy transcoded HLS media</label>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <button class="btn btn-outline-primary" type="submit" id="startStorageMigrationBtn">Start Migration</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table align-middle">
+          <thead>
+            <tr>
+              <th>Created</th>
+              <th>Status</th>
+              <th>Backend</th>
+              <th>Scope</th>
+              <th>Progress</th>
+              <th>Last Error</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="storageMigrationRows">
+            <tr><td colspan="7" class="text-body-secondary">Loading storage migration jobs...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm mb-4">
     <div class="card-header fw-semibold">USD to IDR Exchange Rate</div>
     <div class="card-body">
       <p class="text-body-secondary small mb-3">This build only exposes a read endpoint for the current rate. If you need to change it, update the server-side source that feeds <code>/api/kurs</code>.</p>
@@ -232,6 +345,11 @@ function showAlert(id, type, msg) {
   el.className = `alert alert-${type}`;
   el.textContent = msg;
   el.classList.remove('d-none');
+}
+
+function fmtDateTime(value) {
+  if (!value) return '-';
+  return String(value).replace('T', ' ').slice(0, 19);
 }
 
 (function initBrand(){
@@ -386,6 +504,202 @@ document.getElementById('smtpForm').addEventListener('submit', async e => {
   }
 });
 
+async function loadStorageSettings() {
+  try {
+    const j = await fetch('/admin/storage_settings').then(r => r.json());
+    if (!j.ok) {
+      showAlert('storageAlert', 'danger', j.error || 'Failed to load storage settings.');
+      return;
+    }
+    const desired = j.desired || {};
+    const active = j.active || {};
+    const restartNotice = j.restart_required
+      ? '<div class="mt-2 text-warning fw-semibold">Saved backend differs from the active runtime backend. Restart the application to apply the change.</div>'
+      : '<div class="mt-2 text-success fw-semibold">Saved backend matches the active runtime backend.</div>';
+    document.getElementById('storageBackend').value = desired.backend || 'local';
+    document.getElementById('storageBucket').value = desired.bucket || '';
+    document.getElementById('storageRegion').value = desired.region || 'us-east-1';
+    document.getElementById('storageAccessKey').value = desired.access_key || '';
+    document.getElementById('storageSecretKey').value = '';
+    document.getElementById('storageSecretKey').placeholder = desired.has_secret_key ? 'Stored secret key is already set' : 'No secret key stored yet';
+    document.getElementById('storageEndpoint').value = desired.endpoint || '';
+    document.getElementById('storagePublicUrl').value = desired.public_url || '';
+    document.getElementById('storagePathStyle').checked = !!desired.path_style;
+
+    document.getElementById('activeStorageSummary').innerHTML = `
+      <div><strong>Backend:</strong> ${esc(active.backend || 'local')}</div>
+      <div><strong>Bucket:</strong> ${esc(active.bucket || '-')}</div>
+      <div><strong>Endpoint:</strong> ${esc(active.endpoint || '-')}</div>
+      <div><strong>Public URL:</strong> ${esc(active.public_url || '-')}</div>
+    `;
+
+    const desiredMissing = Array.isArray(desired.missing_fields) && desired.missing_fields.length
+      ? desired.missing_fields.map(v => esc(v)).join(', ')
+      : '<span class="text-success">Complete</span>';
+    document.getElementById('desiredStorageSummary').innerHTML = `
+      <div><strong>Backend:</strong> ${esc(desired.backend || 'local')}</div>
+      <div><strong>Bucket:</strong> ${esc(desired.bucket || '-')}</div>
+      <div><strong>Endpoint:</strong> ${esc(desired.endpoint || '-')}</div>
+      <div><strong>Missing fields:</strong> ${desiredMissing}</div>
+      <div><strong>Restart required:</strong> ${j.restart_required ? '<span class="text-warning">Yes</span>' : '<span class="text-success">No</span>'}</div>
+      ${restartNotice}
+    `;
+
+    renderStorageMigrationJobs(Array.isArray(j.jobs) ? j.jobs : [], !!j.running_job);
+  } catch (err) {
+    showAlert('storageAlert', 'danger', 'Error: ' + err.message);
+  }
+}
+
+function renderStorageMigrationJobs(jobs, running) {
+  const tbody = document.getElementById('storageMigrationRows');
+  if (!jobs.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-body-secondary">No storage migration jobs yet.</td></tr>';
+  } else {
+    tbody.innerHTML = jobs.map(job => {
+      const scope = [
+        job.include_uploads ? 'uploads' : '',
+        job.include_media ? 'media' : ''
+      ].filter(Boolean).join(', ') || '-';
+      const total = Number(job.total_files || 0);
+      const copied = Number(job.copied_files || 0);
+      const failed = Number(job.failed_files || 0);
+      const retryAttempts = Number(job.retry_attempts || 0);
+      const percent = total > 0 ? Math.min(100, Math.round(((copied + failed) / total) * 100)) : 0;
+      const progress = `${copied}/${total} copied` + (failed ? `, ${failed} failed` : '');
+      const retryText = retryAttempts > 0 ? `${retryAttempts} retries` : 'No retries';
+      const badgeClass = job.status === 'completed' ? 'success'
+        : job.status === 'completed_with_errors' ? 'warning'
+        : job.status === 'failed' ? 'danger'
+        : job.status === 'cancelled' ? 'secondary'
+        : job.status === 'cancel_requested' ? 'warning'
+        : job.status === 'running' ? 'info'
+        : 'secondary';
+      const canCancel = ['pending', 'running', 'cancel_requested'].includes(job.status || '');
+      const actions = canCancel
+        ? `<button type="button" class="btn btn-sm btn-outline-danger js-cancel-storage-job" data-job-id="${esc(job.id || '')}" ${job.status === 'cancel_requested' ? 'disabled' : ''}>${job.status === 'cancel_requested' ? 'Cancelling...' : 'Cancel'}</button>`
+        : '<span class="text-body-secondary">-</span>';
+      return `<tr>
+        <td class="small text-nowrap">${esc(fmtDateTime(job.created_at))}</td>
+        <td><span class="badge text-bg-${badgeClass}">${esc(job.status || 'unknown')}</span></td>
+        <td class="small">${esc(job.backend || '-')}<div class="text-body-secondary">${esc(job.bucket || '-')}</div></td>
+        <td class="small">${esc(scope)}</td>
+        <td class="small">
+          <div class="fw-semibold mb-1">${esc(progress)}</div>
+          <div class="progress" role="progressbar" aria-valuenow="${percent}" aria-valuemin="0" aria-valuemax="100" style="height:8px">
+            <div class="progress-bar bg-${badgeClass}" style="width:${percent}%"></div>
+          </div>
+          <div class="text-body-secondary mt-1">${percent}% processed · ${esc(retryText)}</div>
+        </td>
+        <td class="small text-body-secondary">${esc(job.last_error || '-')}</td>
+        <td class="small text-nowrap">${actions}</td>
+      </tr>`;
+    }).join('');
+  }
+  document.getElementById('startStorageMigrationBtn').disabled = !!running;
+}
+
+async function loadStorageMigrationJobs() {
+  try {
+    const j = await fetch('/admin/storage_migrations').then(r => r.json());
+    if (!j.ok) return;
+    renderStorageMigrationJobs(Array.isArray(j.jobs) ? j.jobs : [], !!j.running_job);
+  } catch {}
+}
+
+document.getElementById('storageSettingsForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const payload = {
+    backend: document.getElementById('storageBackend').value,
+    bucket: document.getElementById('storageBucket').value.trim(),
+    region: document.getElementById('storageRegion').value.trim(),
+    access_key: document.getElementById('storageAccessKey').value.trim(),
+    secret_key: document.getElementById('storageSecretKey').value,
+    endpoint: document.getElementById('storageEndpoint').value.trim(),
+    public_url: document.getElementById('storagePublicUrl').value.trim(),
+    path_style: document.getElementById('storagePathStyle').checked
+  };
+  try {
+    const j = await fetch('/admin/storage_settings', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    }).then(r => r.json());
+    showAlert('storageAlert', j.ok ? 'success' : 'danger', j.ok ? (j.message || 'Storage settings saved.') : ('Failed: ' + (j.error || 'unknown')));
+    if (j.ok) await loadStorageSettings();
+  } catch (err) {
+    showAlert('storageAlert', 'danger', 'Error: ' + err.message);
+  }
+});
+
+document.getElementById('testStorageBtn').addEventListener('click', async () => {
+  const payload = {
+    backend: document.getElementById('storageBackend').value,
+    bucket: document.getElementById('storageBucket').value.trim(),
+    region: document.getElementById('storageRegion').value.trim(),
+    access_key: document.getElementById('storageAccessKey').value.trim(),
+    secret_key: document.getElementById('storageSecretKey').value,
+    endpoint: document.getElementById('storageEndpoint').value.trim(),
+    public_url: document.getElementById('storagePublicUrl').value.trim(),
+    path_style: document.getElementById('storagePathStyle').checked
+  };
+  const btn = document.getElementById('testStorageBtn');
+  btn.disabled = true;
+  try {
+    const j = await fetch('/admin/storage_settings/test', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    }).then(r => r.json());
+    showAlert('storageAlert', j.ok ? 'success' : 'danger', j.ok ? (j.message || 'Storage connection test succeeded.') : ('Failed: ' + (j.error || 'unknown')));
+  } catch (err) {
+    showAlert('storageAlert', 'danger', 'Error: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('storageMigrationForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const payload = {
+    include_uploads: document.getElementById('migrateUploads').checked,
+    include_media: document.getElementById('migrateMedia').checked
+  };
+  try {
+    const j = await fetch('/admin/storage_migrations', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    }).then(r => r.json());
+    showAlert('storageAlert', j.ok ? 'success' : 'danger', j.ok ? (j.message || 'Storage migration started.') : ('Failed: ' + (j.error || 'unknown')));
+    if (j.ok) {
+      await loadStorageMigrationJobs();
+      setTimeout(loadStorageMigrationJobs, 2000);
+    }
+  } catch (err) {
+    showAlert('storageAlert', 'danger', 'Error: ' + err.message);
+  }
+});
+
+document.getElementById('storageMigrationRows').addEventListener('click', async e => {
+  const btn = e.target.closest('.js-cancel-storage-job');
+  if (!btn) return;
+  const jobId = btn.getAttribute('data-job-id');
+  if (!jobId) return;
+
+  btn.disabled = true;
+  try {
+    const j = await fetch(`/admin/storage_migrations/${encodeURIComponent(jobId)}/cancel`, {
+      method:'POST'
+    }).then(r => r.json());
+    showAlert('storageAlert', j.ok ? 'success' : 'danger', j.ok ? (j.message || 'Cancellation requested.') : ('Failed: ' + (j.error || 'unknown')));
+    await loadStorageMigrationJobs();
+  } catch (err) {
+    btn.disabled = false;
+    showAlert('storageAlert', 'danger', 'Error: ' + err.message);
+  }
+});
+
 (async function loadKurs() {
   try {
     const j = await fetch('/api/kurs').then(r => r.json());
@@ -419,6 +733,8 @@ document.getElementById('adminPwForm').addEventListener('submit', async e => {
 
 loadPaymentSettings();
 loadSmtpSettings();
+loadStorageSettings();
+setInterval(loadStorageMigrationJobs, 5000);
 </script>
 </body>
 </html>

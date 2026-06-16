@@ -37,6 +37,22 @@ pub struct S3StoragePlugin {
 }
 
 impl S3StoragePlugin {
+    pub fn from_parts(
+        store: Arc<dyn ObjectStore>,
+        bucket: String,
+        region: String,
+        endpoint: String,
+        public_url: Option<String>,
+    ) -> Self {
+        Self {
+            store,
+            bucket,
+            region,
+            endpoint,
+            public_url,
+        }
+    }
+
     pub fn from_env() -> Result<Self> {
         let bucket = std::env::var("S3_BUCKET")
             .context("S3_BUCKET is required for s3/minio storage backend")?;
@@ -71,13 +87,13 @@ impl S3StoragePlugin {
             .build()
             .context("failed to build S3 object store client")?;
 
-        Ok(Self {
-            store: Arc::new(store),
+        Ok(Self::from_parts(
+            Arc::new(store),
             bucket,
             region,
             endpoint,
             public_url,
-        })
+        ))
     }
 
     /// Human-readable description of the remote endpoint (for logs).

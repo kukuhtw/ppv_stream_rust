@@ -1,17 +1,33 @@
 // src/handlers/admin.rs
 use crate::payment_settings::load_payment_settings;
 use crate::plugins::payment::PaymentPluginRegistry;
+use crate::storage_settings::{collect_local_files, load_storage_settings, StoredStorageSettings};
 use crate::{config::Config, sessions};
 use axum::{
     extract::{Path, Query, State},
     response::{Html, IntoResponse},
     Json,
 };
+use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde_json::json;
 use sqlx::Row;
+use std::collections::HashSet;
+use std::path::Path as FsPath;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
+use tokio::sync::Mutex;
+use tokio::time::sleep;
 use tower_cookies::Cookies;
 use tracing::{info, warn};
+use uuid::Uuid;
+
+static STORAGE_MIGRATION_RUNNING: AtomicBool = AtomicBool::new(false);
+static STORAGE_MIGRATION_CANCELLED: Lazy<Mutex<HashSet<String>>> =
+    Lazy::new(|| Mutex::new(HashSet::new()));
+const STORAGE_MIGRATION_MAX_ATTEMPTS: usize = 3;
+const STORAGE_MIGRATION_MAX_RETRIES: usize = STORAGE_MIGRATION_MAX_ATTEMPTS - 1;
+const STORAGE_MIGRATION_RETRY_DELAYS_MS: [u64; 2] = [750, 2000];
 
 #[derive(Clone)]
 pub struct AdminState {
@@ -606,6 +622,737 @@ pub struct PaymentSettingsSavePayload {
     pub midtrans_enabled: bool,
     pub x402_enabled: bool,
     pub default_provider: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct StorageSettingsSavePayload {
+    pub backend: String,
+    pub bucket: String,
+    pub region: String,
+    pub access_key: String,
+    pub secret_key: String,
+    pub endpoint: String,
+    pub public_url: String,
+    pub path_style: bool,
+}
+
+#[derive(Deserialize)]
+pub struct StorageMigrationStartPayload {
+    pub include_uploads: bool,
+    pub include_media: bool,
+}
+
+async fn test_storage_settings_connection(
+    cfg: &Config,
+    settings: &StoredStorageSettings,
+) -> anyhow::Result<()> {
+    let storage = settings.build_plugin()?;
+    if settings.normalized_backend() == "local" {
+        return Ok(());
+    }
+
+    let temp_name = format!("storage-test-{}.txt", Uuid::new_v4());
+    let temp_path = FsPath::new(&cfg.tmp_dir).join(&temp_name);
+    if let Some(parent) = temp_path.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+    tokio::fs::write(&temp_path, b"ppv-stream storage connection test").await?;
+
+    let key = format!("healthchecks/{temp_name}");
+    let put_result = storage.put_file(&key, &temp_path).await;
+    let _ = tokio::fs::remove_file(&temp_path).await;
+    put_result?;
+    storage.delete(&key).await?;
+    Ok(())
+}
+
+fn active_storage_summary() -> serde_json::Value {
+    let backend = std::env::var("STORAGE_BACKEND").unwrap_or_else(|_| "local".into());
+    json!({
+        "backend": backend,
+        "bucket": std::env::var("S3_BUCKET").unwrap_or_default(),
+        "region": std::env::var("S3_REGION").unwrap_or_else(|_| "us-east-1".into()),
+        "endpoint": std::env::var("S3_ENDPOINT").unwrap_or_default(),
+        "public_url": std::env::var("S3_PUBLIC_URL").unwrap_or_default(),
+        "path_style": std::env::var("S3_PATH_STYLE").ok().as_deref() == Some("true"),
+    })
+}
+
+async fn list_storage_migration_jobs_json(pool: &crate::db::PgPool) -> Vec<serde_json::Value> {
+    let rows = sqlx::query(
+        r#"SELECT id, status, backend, bucket, endpoint, include_uploads, include_media,
+                  total_files, copied_files, failed_files, retry_attempts, last_error,
+                  started_by_user_id, created_at::TEXT AS created_at,
+                  started_at::TEXT AS started_at, completed_at::TEXT AS completed_at
+           FROM storage_migration_jobs
+           ORDER BY created_at DESC
+           LIMIT 20"#,
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+
+    rows.into_iter()
+        .map(|r| {
+            json!({
+                "id": r.try_get::<String, _>("id").unwrap_or_default(),
+                "status": r.try_get::<String, _>("status").unwrap_or_default(),
+                "backend": r.try_get::<String, _>("backend").unwrap_or_default(),
+                "bucket": r.try_get::<String, _>("bucket").unwrap_or_default(),
+                "endpoint": r.try_get::<String, _>("endpoint").unwrap_or_default(),
+                "include_uploads": r.try_get::<bool, _>("include_uploads").unwrap_or(true),
+                "include_media": r.try_get::<bool, _>("include_media").unwrap_or(true),
+                "total_files": r.try_get::<i64, _>("total_files").unwrap_or(0),
+                "copied_files": r.try_get::<i64, _>("copied_files").unwrap_or(0),
+                "failed_files": r.try_get::<i64, _>("failed_files").unwrap_or(0),
+                "retry_attempts": r.try_get::<i64, _>("retry_attempts").unwrap_or(0),
+                "last_error": r.try_get::<Option<String>, _>("last_error").unwrap_or(None),
+                "started_by_user_id": r.try_get::<Option<String>, _>("started_by_user_id").unwrap_or(None),
+                "created_at": r.try_get::<Option<String>, _>("created_at").unwrap_or(None),
+                "started_at": r.try_get::<Option<String>, _>("started_at").unwrap_or(None),
+                "completed_at": r.try_get::<Option<String>, _>("completed_at").unwrap_or(None),
+            })
+        })
+        .collect()
+}
+
+async fn update_storage_job_progress(
+    pool: &crate::db::PgPool,
+    job_id: &str,
+    copied_files: i64,
+    failed_files: i64,
+    retry_attempts: i64,
+    last_error: Option<&str>,
+) {
+    let _ = sqlx::query(
+        r#"UPDATE storage_migration_jobs
+           SET copied_files = $2,
+               failed_files = $3,
+               retry_attempts = $4,
+               last_error = COALESCE($5, last_error)
+           WHERE id = $1"#,
+    )
+    .bind(job_id)
+    .bind(copied_files)
+    .bind(failed_files)
+    .bind(retry_attempts)
+    .bind(last_error)
+    .execute(pool)
+    .await;
+}
+
+async fn request_storage_job_cancel(job_id: &str) {
+    let mut cancelled = STORAGE_MIGRATION_CANCELLED.lock().await;
+    cancelled.insert(job_id.to_string());
+}
+
+async fn clear_storage_job_cancel(job_id: &str) {
+    let mut cancelled = STORAGE_MIGRATION_CANCELLED.lock().await;
+    cancelled.remove(job_id);
+}
+
+async fn is_storage_job_cancelled(job_id: &str) -> bool {
+    let cancelled = STORAGE_MIGRATION_CANCELLED.lock().await;
+    cancelled.contains(job_id)
+}
+
+async fn mark_storage_job_cancelled(
+    pool: &crate::db::PgPool,
+    job_id: &str,
+    copied_files: i64,
+    failed_files: i64,
+    retry_attempts: i64,
+    last_error: Option<&str>,
+) -> anyhow::Result<()> {
+    sqlx::query(
+        r#"UPDATE storage_migration_jobs
+           SET status = 'cancelled',
+               copied_files = $2,
+               failed_files = $3,
+               retry_attempts = $4,
+               last_error = COALESCE($5, last_error),
+               completed_at = NOW()
+           WHERE id = $1"#,
+    )
+    .bind(job_id)
+    .bind(copied_files)
+    .bind(failed_files)
+    .bind(retry_attempts)
+    .bind(last_error)
+    .execute(pool)
+    .await?;
+    clear_storage_job_cancel(job_id).await;
+    Ok(())
+}
+
+async fn upload_storage_migration_file(
+    storage: &dyn crate::plugins::storage::StoragePlugin,
+    key: &str,
+    path: &FsPath,
+    label: &str,
+) -> Result<usize, String> {
+    let mut last_error = String::new();
+    for attempt in 1..=STORAGE_MIGRATION_MAX_ATTEMPTS {
+        match storage.put_file(key, path).await {
+            Ok(_) => return Ok(attempt.saturating_sub(1)),
+            Err(e) => {
+                last_error = format!(
+                    "{label} {key} attempt {attempt}/{STORAGE_MIGRATION_MAX_ATTEMPTS}: {e}"
+                );
+                if attempt < STORAGE_MIGRATION_MAX_ATTEMPTS {
+                    sleep(Duration::from_millis(
+                        STORAGE_MIGRATION_RETRY_DELAYS_MS[attempt - 1],
+                    ))
+                    .await;
+                }
+            }
+        }
+    }
+
+    Err(last_error)
+}
+
+async fn run_storage_migration_job(
+    pool: crate::db::PgPool,
+    cfg: Config,
+    job_id: String,
+    settings: StoredStorageSettings,
+    include_uploads: bool,
+    include_media: bool,
+) -> anyhow::Result<()> {
+    let storage = settings.build_plugin()?;
+    let mut upload_files = Vec::new();
+    let mut media_files = Vec::new();
+
+    if include_uploads {
+        upload_files = collect_local_files(FsPath::new(&cfg.upload_dir)).await?;
+    }
+    if include_media {
+        media_files = collect_local_files(FsPath::new(&cfg.media_dir)).await?;
+    }
+
+    let total_files = (upload_files.len() + media_files.len()) as i64;
+    sqlx::query(
+        r#"UPDATE storage_migration_jobs
+           SET status = 'running',
+               total_files = $2,
+               started_at = NOW(),
+               last_error = NULL
+           WHERE id = $1"#,
+    )
+    .bind(&job_id)
+    .bind(total_files)
+    .execute(&pool)
+    .await?;
+
+    let mut copied_files = 0_i64;
+    let mut failed_files = 0_i64;
+    let mut retry_attempts = 0_i64;
+    let mut last_error: Option<String> = None;
+
+    for path in upload_files {
+        if is_storage_job_cancelled(&job_id).await {
+            mark_storage_job_cancelled(
+                &pool,
+                &job_id,
+                copied_files,
+                failed_files,
+                retry_attempts,
+                last_error.as_deref(),
+            )
+            .await?;
+            return Ok(());
+        }
+        let rel = path
+            .strip_prefix(&cfg.upload_dir)
+            .unwrap_or(&path)
+            .to_string_lossy()
+            .replace('\\', "/");
+        let key = format!("uploads/{rel}");
+        match upload_storage_migration_file(storage.as_ref(), &key, &path, "upload").await {
+            Ok(file_retry_attempts) => {
+                copied_files += 1;
+                retry_attempts += file_retry_attempts as i64;
+            }
+            Err(e) => {
+                failed_files += 1;
+                retry_attempts += STORAGE_MIGRATION_MAX_RETRIES as i64;
+                last_error = Some(e);
+            }
+        }
+        update_storage_job_progress(
+            &pool,
+            &job_id,
+            copied_files,
+            failed_files,
+            retry_attempts,
+            last_error.as_deref(),
+        )
+        .await;
+    }
+
+    for path in media_files {
+        if is_storage_job_cancelled(&job_id).await {
+            mark_storage_job_cancelled(
+                &pool,
+                &job_id,
+                copied_files,
+                failed_files,
+                retry_attempts,
+                last_error.as_deref(),
+            )
+            .await?;
+            return Ok(());
+        }
+        let rel = path
+            .strip_prefix(&cfg.media_dir)
+            .unwrap_or(&path)
+            .to_string_lossy()
+            .replace('\\', "/");
+        let key = format!("videos/{rel}");
+        match upload_storage_migration_file(storage.as_ref(), &key, &path, "media").await {
+            Ok(file_retry_attempts) => {
+                copied_files += 1;
+                retry_attempts += file_retry_attempts as i64;
+            }
+            Err(e) => {
+                failed_files += 1;
+                retry_attempts += STORAGE_MIGRATION_MAX_RETRIES as i64;
+                last_error = Some(e);
+            }
+        }
+        update_storage_job_progress(
+            &pool,
+            &job_id,
+            copied_files,
+            failed_files,
+            retry_attempts,
+            last_error.as_deref(),
+        )
+        .await;
+    }
+
+    let final_status = if failed_files > 0 {
+        "completed_with_errors"
+    } else {
+        "completed"
+    };
+    sqlx::query(
+        r#"UPDATE storage_migration_jobs
+           SET status = $2,
+               copied_files = $3,
+               failed_files = $4,
+               retry_attempts = $5,
+               last_error = $6,
+               completed_at = NOW()
+           WHERE id = $1"#,
+    )
+    .bind(&job_id)
+    .bind(final_status)
+    .bind(copied_files)
+    .bind(failed_files)
+    .bind(retry_attempts)
+    .bind(last_error.as_deref())
+    .execute(&pool)
+    .await?;
+    clear_storage_job_cancel(&job_id).await;
+
+    Ok(())
+}
+
+pub async fn admin_storage_settings_get(
+    State(st): State<AdminState>,
+    cookies: Cookies,
+) -> impl IntoResponse {
+    let admin_user_id = match ensure_admin_session(&st, &cookies).await {
+        Ok(user_id) => user_id,
+        Err(resp) => return resp,
+    };
+    info!(admin_user_id = %admin_user_id, action = "admin_storage_settings_view", "storage settings viewed");
+
+    let settings = load_storage_settings(&st.pool).await;
+    let active = active_storage_summary();
+    let missing_fields = settings.missing_fields();
+    let desired_backend = settings.normalized_backend();
+    let active_backend = active
+        .get("backend")
+        .and_then(|v| v.as_str())
+        .unwrap_or("local")
+        .to_ascii_lowercase();
+
+    Json(json!({
+        "ok": true,
+        "active": active,
+        "desired": {
+            "backend": settings.backend,
+            "bucket": settings.bucket,
+            "region": settings.region,
+            "access_key": settings.access_key,
+            "secret_key": "",
+            "has_secret_key": settings.has_secret(),
+            "endpoint": settings.endpoint,
+            "public_url": settings.public_url,
+            "path_style": settings.path_style,
+            "missing_fields": missing_fields,
+            "configured": missing_fields.is_empty(),
+        },
+        "restart_required": desired_backend != active_backend,
+        "running_job": STORAGE_MIGRATION_RUNNING.load(Ordering::SeqCst),
+        "jobs": list_storage_migration_jobs_json(&st.pool).await,
+    }))
+}
+
+pub async fn admin_storage_settings_save(
+    State(st): State<AdminState>,
+    cookies: Cookies,
+    Json(p): Json<StorageSettingsSavePayload>,
+) -> impl IntoResponse {
+    let admin_user_id = match ensure_admin_session(&st, &cookies).await {
+        Ok(user_id) => user_id,
+        Err(resp) => return resp,
+    };
+
+    let existing = load_storage_settings(&st.pool).await;
+    let settings = StoredStorageSettings {
+        backend: p.backend.trim().to_ascii_lowercase(),
+        bucket: p.bucket.trim().to_string(),
+        region: if p.region.trim().is_empty() {
+            "us-east-1".into()
+        } else {
+            p.region.trim().to_string()
+        },
+        access_key: p.access_key.trim().to_string(),
+        secret_key: if p.secret_key.is_empty() {
+            existing.secret_key
+        } else {
+            p.secret_key
+        },
+        endpoint: p.endpoint.trim().to_string(),
+        public_url: p.public_url.trim().to_string(),
+        path_style: p.path_style,
+    };
+
+    if let Err(e) = settings.validate() {
+        return Json(json!({"ok": false, "error": e.to_string()}));
+    }
+
+    let res = sqlx::query(
+        r#"INSERT INTO storage_settings
+              (id, backend, bucket, region, access_key, secret_key, endpoint, public_url, path_style, updated_at)
+           VALUES
+              (TRUE, $1, $2, $3, $4, $5, $6, $7, $8, NOW())
+           ON CONFLICT (id) DO UPDATE
+             SET backend = $1,
+                 bucket = $2,
+                 region = $3,
+                 access_key = $4,
+                 secret_key = $5,
+                 endpoint = $6,
+                 public_url = $7,
+                 path_style = $8,
+                 updated_at = NOW()"#,
+    )
+    .bind(&settings.backend)
+    .bind(&settings.bucket)
+    .bind(&settings.region)
+    .bind(&settings.access_key)
+    .bind(&settings.secret_key)
+    .bind(&settings.endpoint)
+    .bind(&settings.public_url)
+    .bind(settings.path_style)
+    .execute(&st.pool)
+    .await;
+
+    match res {
+        Ok(_) => {
+            let restart_required = settings.normalized_backend()
+                != std::env::var("STORAGE_BACKEND")
+                    .unwrap_or_else(|_| "local".into())
+                    .to_ascii_lowercase();
+            info!(
+                admin_user_id = %admin_user_id,
+                action = "admin_storage_settings_save",
+                backend = %settings.backend,
+                bucket = %settings.bucket,
+                endpoint = %settings.endpoint,
+                path_style = settings.path_style,
+                restart_required = restart_required,
+                "storage settings saved"
+            );
+            Json(json!({
+                "ok": true,
+                "message": "Storage settings saved. Restart the application to apply the backend change at runtime.",
+                "restart_required": restart_required
+            }))
+        }
+        Err(e) => Json(json!({"ok": false, "error": format!("db: {e}")})),
+    }
+}
+
+pub async fn admin_storage_settings_test(
+    State(st): State<AdminState>,
+    cookies: Cookies,
+    Json(p): Json<StorageSettingsSavePayload>,
+) -> impl IntoResponse {
+    let admin_user_id = match ensure_admin_session(&st, &cookies).await {
+        Ok(user_id) => user_id,
+        Err(resp) => return resp,
+    };
+
+    let existing = load_storage_settings(&st.pool).await;
+    let settings = StoredStorageSettings {
+        backend: p.backend.trim().to_ascii_lowercase(),
+        bucket: p.bucket.trim().to_string(),
+        region: if p.region.trim().is_empty() {
+            "us-east-1".into()
+        } else {
+            p.region.trim().to_string()
+        },
+        access_key: p.access_key.trim().to_string(),
+        secret_key: if p.secret_key.is_empty() {
+            existing.secret_key
+        } else {
+            p.secret_key
+        },
+        endpoint: p.endpoint.trim().to_string(),
+        public_url: p.public_url.trim().to_string(),
+        path_style: p.path_style,
+    };
+
+    if let Err(e) = settings.validate() {
+        return Json(json!({"ok": false, "error": e.to_string()}));
+    }
+
+    match test_storage_settings_connection(&st.cfg, &settings).await {
+        Ok(_) => {
+            info!(
+                admin_user_id = %admin_user_id,
+                action = "admin_storage_settings_test",
+                backend = %settings.backend,
+                bucket = %settings.bucket,
+                endpoint = %settings.endpoint,
+                "storage connection test succeeded"
+            );
+            Json(json!({
+                "ok": true,
+                "message": if settings.normalized_backend() == "local" {
+                    "Local storage configuration is valid."
+                } else {
+                    "Remote storage connection test succeeded."
+                }
+            }))
+        }
+        Err(e) => {
+            warn!(
+                admin_user_id = %admin_user_id,
+                action = "admin_storage_settings_test_failed",
+                backend = %settings.backend,
+                bucket = %settings.bucket,
+                endpoint = %settings.endpoint,
+                error = %e,
+                "storage connection test failed"
+            );
+            Json(json!({"ok": false, "error": e.to_string()}))
+        }
+    }
+}
+
+pub async fn admin_storage_migrations_get(
+    State(st): State<AdminState>,
+    cookies: Cookies,
+) -> impl IntoResponse {
+    let admin_user_id = match ensure_admin_session(&st, &cookies).await {
+        Ok(user_id) => user_id,
+        Err(resp) => return resp,
+    };
+    info!(admin_user_id = %admin_user_id, action = "admin_storage_migrations_view", "storage migration jobs viewed");
+
+    Json(json!({
+        "ok": true,
+        "running_job": STORAGE_MIGRATION_RUNNING.load(Ordering::SeqCst),
+        "jobs": list_storage_migration_jobs_json(&st.pool).await,
+    }))
+}
+
+pub async fn admin_storage_migrations_start(
+    State(st): State<AdminState>,
+    cookies: Cookies,
+    Json(p): Json<StorageMigrationStartPayload>,
+) -> impl IntoResponse {
+    let admin_user_id = match ensure_admin_session(&st, &cookies).await {
+        Ok(user_id) => user_id,
+        Err(resp) => return resp,
+    };
+
+    if !p.include_uploads && !p.include_media {
+        return Json(json!({"ok": false, "error": "select at least one migration scope"}));
+    }
+
+    if STORAGE_MIGRATION_RUNNING
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return Json(json!({"ok": false, "error": "a storage migration job is already running"}));
+    }
+
+    let settings = load_storage_settings(&st.pool).await;
+    if let Err(e) = settings.validate() {
+        STORAGE_MIGRATION_RUNNING.store(false, Ordering::SeqCst);
+        return Json(json!({"ok": false, "error": e.to_string()}));
+    }
+    if settings.normalized_backend() == "local" {
+        STORAGE_MIGRATION_RUNNING.store(false, Ordering::SeqCst);
+        return Json(
+            json!({"ok": false, "error": "storage migration requires a remote backend such as s3, minio, r2, or b2"}),
+        );
+    }
+
+    let job_id = Uuid::new_v4().to_string();
+    let insert = sqlx::query(
+        r#"INSERT INTO storage_migration_jobs
+              (id, status, backend, bucket, endpoint, include_uploads, include_media, started_by_user_id, created_at)
+           VALUES
+              ($1, 'pending', $2, $3, $4, $5, $6, $7, NOW())"#,
+    )
+    .bind(&job_id)
+    .bind(&settings.backend)
+    .bind(&settings.bucket)
+    .bind(&settings.endpoint)
+    .bind(p.include_uploads)
+    .bind(p.include_media)
+    .bind(&admin_user_id)
+    .execute(&st.pool)
+    .await;
+
+    if let Err(e) = insert {
+        STORAGE_MIGRATION_RUNNING.store(false, Ordering::SeqCst);
+        return Json(json!({"ok": false, "error": format!("db: {e}")}));
+    }
+
+    let pool = st.pool.clone();
+    let cfg = st.cfg.clone();
+    let job_id_clone = job_id.clone();
+    let backend_for_log = settings.backend.clone();
+    tokio::spawn(async move {
+        let outcome = run_storage_migration_job(
+            pool.clone(),
+            cfg,
+            job_id_clone.clone(),
+            settings,
+            p.include_uploads,
+            p.include_media,
+        )
+        .await;
+
+        if let Err(e) = outcome {
+            let _ = sqlx::query(
+                r#"UPDATE storage_migration_jobs
+                   SET status = 'failed',
+                       last_error = $2,
+                       completed_at = NOW()
+                   WHERE id = $1"#,
+            )
+            .bind(&job_id_clone)
+            .bind(e.to_string())
+            .execute(&pool)
+            .await;
+            warn!(
+                action = "admin_storage_migration_failed",
+                job_id = %job_id_clone,
+                backend = %backend_for_log,
+                error = %e,
+                "storage migration failed"
+            );
+        } else {
+            info!(
+                action = "admin_storage_migration_completed",
+                job_id = %job_id_clone,
+                backend = %backend_for_log,
+                "storage migration finished"
+            );
+        }
+        clear_storage_job_cancel(&job_id_clone).await;
+        STORAGE_MIGRATION_RUNNING.store(false, Ordering::SeqCst);
+    });
+
+    info!(
+        admin_user_id = %admin_user_id,
+        action = "admin_storage_migration_start",
+        job_id = %job_id,
+        backend = %backend_for_log,
+        include_uploads = p.include_uploads,
+        include_media = p.include_media,
+        "storage migration started"
+    );
+
+    Json(json!({
+        "ok": true,
+        "job_id": job_id,
+        "message": "Storage migration started in the background."
+    }))
+}
+
+pub async fn admin_storage_migration_cancel(
+    State(st): State<AdminState>,
+    cookies: Cookies,
+    Path(job_id): Path<String>,
+) -> impl IntoResponse {
+    let admin_user_id = match ensure_admin_session(&st, &cookies).await {
+        Ok(user_id) => user_id,
+        Err(resp) => return resp,
+    };
+
+    let row = match sqlx::query(
+        r#"SELECT status
+           FROM storage_migration_jobs
+           WHERE id = $1"#,
+    )
+    .bind(&job_id)
+    .fetch_optional(&st.pool)
+    .await
+    {
+        Ok(row) => row,
+        Err(e) => return Json(json!({"ok": false, "error": format!("db: {e}")})),
+    };
+
+    let Some(row) = row else {
+        return Json(json!({"ok": false, "error": "storage migration job not found"}));
+    };
+
+    let status = row.try_get::<String, _>("status").unwrap_or_default();
+    if !matches!(status.as_str(), "pending" | "running" | "cancel_requested") {
+        return Json(json!({
+            "ok": false,
+            "error": format!("cannot cancel a job with status '{status}'")
+        }));
+    }
+
+    request_storage_job_cancel(&job_id).await;
+    let update = sqlx::query(
+        r#"UPDATE storage_migration_jobs
+           SET status = 'cancel_requested',
+               last_error = COALESCE(last_error, 'Cancellation requested by admin')
+           WHERE id = $1"#,
+    )
+    .bind(&job_id)
+    .execute(&st.pool)
+    .await;
+
+    match update {
+        Ok(_) => {
+            info!(
+                admin_user_id = %admin_user_id,
+                action = "admin_storage_migration_cancel",
+                job_id = %job_id,
+                "storage migration cancellation requested"
+            );
+            Json(json!({
+                "ok": true,
+                "message": "Cancellation requested. The job will stop after the current file finishes uploading."
+            }))
+        }
+        Err(e) => Json(json!({"ok": false, "error": format!("db: {e}")})),
+    }
 }
 
 pub async fn admin_payment_settings_get(

@@ -16,6 +16,7 @@ mod middleware;
 mod payment_settings;
 mod plugins;
 mod sessions;
+mod storage_settings;
 mod validators;
 mod worker;
 
@@ -45,8 +46,11 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
     use crate::handlers::{
         admin::{
             admin_data, admin_disburse, admin_payment_settings_get, admin_payment_settings_save,
-            admin_payments, admin_smtp_get, admin_smtp_save, admin_wallet_approve,
-            admin_wallet_complete, admin_wallet_reject, admin_wallet_transactions, AdminState,
+            admin_payments, admin_smtp_get, admin_smtp_save, admin_storage_migration_cancel,
+            admin_storage_migrations_get, admin_storage_migrations_start,
+            admin_storage_settings_get, admin_storage_settings_save, admin_storage_settings_test,
+            admin_wallet_approve, admin_wallet_complete, admin_wallet_reject,
+            admin_wallet_transactions, AdminState,
         },
         affiliate::{
             admin_affiliate_commissions, affiliate_earnings, affiliate_link,
@@ -111,6 +115,22 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
         .route(
             "/admin/payment_settings",
             get(admin_payment_settings_get).post(admin_payment_settings_save),
+        )
+        .route(
+            "/admin/storage_settings",
+            get(admin_storage_settings_get).post(admin_storage_settings_save),
+        )
+        .route(
+            "/admin/storage_settings/test",
+            post(admin_storage_settings_test),
+        )
+        .route(
+            "/admin/storage_migrations",
+            get(admin_storage_migrations_get).post(admin_storage_migrations_start),
+        )
+        .route(
+            "/admin/storage_migrations/:id/cancel",
+            post(admin_storage_migration_cancel),
         )
         .route("/admin/smtp", get(admin_smtp_get).post(admin_smtp_save))
         .with_state(AdminState {
