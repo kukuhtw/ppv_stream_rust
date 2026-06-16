@@ -260,7 +260,7 @@ pub async fn admin_data(
         let id: String = r.get("id");
         let owner_id: String = r.get("owner_id");
         let title: String = r.get("title");
-        let price_cents: i32 = r.get("price_cents");
+        let price_cents: i64 = r.get("price_cents");
         let filename: String = r.get("filename");
         let created_at: String = r.get("created_at");
         html.push_str(&format!(
