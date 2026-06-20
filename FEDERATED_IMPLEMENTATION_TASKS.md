@@ -161,24 +161,46 @@ Remote PPV Stream instances may exchange public creator identity and public vide
 - [x] Add monitoring metrics documentation
 - [x] Add backup and key-rotation guide
 
-## Current Implementation Batch
+## Implementation Complete
 
-Completed:
+All 118 tasks across Phases 0–9 are complete.  The feature branch
+`add-feature/federated` is ready for review and merge.
 
-1. Federation configuration
-2. Configuration validation
-3. Runtime database migration
-4. Federation module skeleton
-5. WebFinger endpoint
-6. NodeInfo endpoints
-7. Local actor endpoint
-8. Basic configuration tests
-9. Application router integration
+### What was built
 
-Next tasks:
+| Phase | Deliverable |
+|---|---|
+| 0 | Federation config, DB migration, module skeleton, routing |
+| 1 | WebFinger, NodeInfo 2.1, local actor endpoint, discovery tests |
+| 2 | 6 federation tables: instances, actors, activities, delivery jobs, remote catalog, domain rules |
+| 3 | RSA-2048 keys, HMAC-SHA256 key encryption, HTTP Signatures, Digest, SSRF guard, replay protection |
+| 4 | Inbox, shared inbox, outbox, followers, following; Follow/Accept/Reject/Undo; exponential-backoff delivery worker |
+| 5 | Video index object, Create/Update/Delete publish + inbound processing, combined catalog, payment and playback rejection guards |
+| 6 | Domain moderation rules (allow/silence/reject\_media/suspend/block); admin overview, instances, activities, delivery, retry, purge endpoints |
+| 7 | Referral tokens (RSA-signed), revenue share tables, integer basis-point math, idempotent processing, refund/chargeback reversal, settlement reports, X402 direct-split endpoint |
+| 8 | Unit tests for WebFinger, NodeInfo, actor serialization, video object, signatures, SSRF, referral, revenue; Docker Compose integration test environment; 13-phase shell test script |
+| 9 | 11 docs: env vars, setup, administration, moderation, troubleshooting, provider settlement, privacy, security threat model, monitoring, key rotation, migration rollback |
 
-1. Phase 7: revenue sharing tables and referral payload
-2. Phase 8: integration tests and safety verification
+### Key files
+
+| File | Purpose |
+|---|---|
+| `sql/040_federation_index_only.sql` | All federation tables and indexes |
+| `sql/041_federation_revenue.sql` | Revenue sharing tables |
+| `src/federation/mod.rs` | Router, config, admin endpoints |
+| `src/federation/keys.rs` | RSA key generation and encrypted storage |
+| `src/federation/signatures.rs` | HTTP Signature create/verify |
+| `src/federation/resolver.rs` | SSRF-safe remote object fetcher |
+| `src/federation/collections.rs` | Inbox, outbox, followers, following |
+| `src/federation/activities.rs` | Activity dispatch and processing |
+| `src/federation/delivery.rs` | Background delivery worker |
+| `src/federation/video_index.rs` | AP Video object builder and remote catalog |
+| `src/federation/catalog.rs` | Combined local+remote catalog endpoint |
+| `src/federation/moderation.rs` | Domain rules and admin dashboard endpoints |
+| `src/federation/revenue.rs` | Referral tokens, revenue share, settlement |
+| `docker-compose.federation-test.yml` | Two-instance integration test environment |
+| `tests/federation_integration.sh` | 13-phase end-to-end test script |
+| `docs/` | 11 operations and security guides |
 
 ## First Batch Result
 
