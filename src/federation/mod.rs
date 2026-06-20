@@ -147,6 +147,11 @@ pub fn router(pool: PgPool, default_base_url: &str) -> Result<Router, String> {
         .route("/videos/:id", get(catalog::video_ap_object))
         // Federated catalog
         .route("/api/federation/catalog", get(catalog::catalog))
+        // Admin test helper (dev bypass only)
+        .route(
+            "/api/federation/admin/inject-inbound",
+            post(admin_inject_inbound),
+        )
         // Admin actor management
         .route(
             "/api/federation/admin/actors/init",
@@ -581,6 +586,112 @@ async fn resolve_referral_for_split(
         "split_enabled":     split_enabled,
         "share_basis_points": if split_enabled { share_bp } else { 0 },
         "provider_wallet":   provider_wallet, // null until wallet column is added
+    }))
+    .into_response()
+}
+
+// ── Admin test helpers (FEDERATION_DEV_HTTP_BYPASS only) ─────────────────
+
+/// `POST /api/federation/admin/inject-inbound`
+///
+/// Directly process an ActivityPub activity as inbound without HTTP Signature
+/// verification.  Only works when `FEDERATION_DEV_HTTP_BYPASS=1`.  Used in
+/// integration tests to inject activities from a remote instance without
+/// needing to round-trip through the delivery worker.
+async fn admin_inject_inbound(
+    State(state): State<FederationState>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    if !moderation::check_admin_token_pub(&headers) {
+        return api_error(StatusCode::FORBIDDEN, "X-Federation-Admin-Token required");
+    }
+
+    let bypass = std::env::var("FEDERATION_DEV_HTTP_BYPASS")
+        .map(|v| matches!(v.trim(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false);
+    if !bypass {
+        return api_error(
+            StatusCode::FORBIDDEN,
+            "inject-inbound requires FEDERATION_DEV_HTTP_BYPASS=1",
+        );
+    }
+
+    let activity_uri = body
+        .get("id")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let activity_type = body
+        .get("type")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let actor_uri = body
+        .get("actor")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+
+    if activity_uri.is_empty() || activity_type.is_empty() || actor_uri.is_empty() {
+        return api_error(
+            StatusCode::BAD_REQUEST,
+            "activity must have id, type, and actor fields",
+        );
+    }
+
+    // Deduplication: if we already have this activity, return early.
+    let existing: Option<uuid::Uuid> = sqlx::query_scalar(
+        "SELECT id FROM federation_activities WHERE activity_uri = $1 LIMIT 1",
+    )
+    .bind(&activity_uri)
+    .fetch_optional(&state.pool)
+    .await
+    .unwrap_or(None);
+
+    if existing.is_some() {
+        return Json(json!({
+            "ok": true,
+            "status": "duplicate",
+            "activity_uri": activity_uri
+        }))
+        .into_response();
+    }
+
+    let activity_id = uuid::Uuid::new_v4();
+    if let Err(e) = sqlx::query(
+        "INSERT INTO federation_activities \
+         (id, activity_uri, activity_type, actor_uri, direction, payload, processing_status) \
+         VALUES ($1, $2, $3, $4, 'inbound', $5, 'pending')",
+    )
+    .bind(activity_id)
+    .bind(&activity_uri)
+    .bind(&activity_type)
+    .bind(&actor_uri)
+    .bind(&body)
+    .execute(&state.pool)
+    .await
+    {
+        tracing::error!("inject-inbound insert failed: {}", e);
+        return api_error(StatusCode::INTERNAL_SERVER_ERROR, "failed to store activity");
+    }
+
+    // Process the activity in the background (mirrors normal inbox processing).
+    tokio::spawn({
+        let pool = state.pool.clone();
+        let actor_uri = actor_uri.clone();
+        let body = body.clone();
+        async move {
+            let _ =
+                activities::handle_inbound_activity(&pool, &actor_uri, &body, activity_id).await;
+        }
+    });
+
+    Json(json!({
+        "ok": true,
+        "status": "accepted",
+        "activity_id": activity_id.to_string(),
+        "activity_uri": activity_uri
     }))
     .into_response()
 }
