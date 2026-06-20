@@ -79,17 +79,17 @@ Remote PPV Stream instances may exchange public creator identity and public vide
 
 ## Phase 5: Video Index Federation
 
-- [ ] Define public ActivityPub video index object
-- [ ] Publish `Create` when a local video becomes public
-- [ ] Publish `Update` when public metadata changes
-- [ ] Publish `Delete` when a video is removed or unavailable
-- [ ] Process remote video `Create`
-- [ ] Process remote video `Update`
-- [ ] Process remote video `Delete`
-- [ ] Build combined local and remote catalog query
-- [ ] Add `hosting_type` to catalog responses
-- [ ] Display origin instance for remote videos
-- [ ] Add canonical origin watch and checkout links
+- [x] Define public ActivityPub video index object
+- [x] Publish `Create` when a local video becomes public
+- [x] Publish `Update` when public metadata changes
+- [x] Publish `Delete` when a video is removed or unavailable
+- [x] Process remote video `Create`
+- [x] Process remote video `Update`
+- [x] Process remote video `Delete`
+- [x] Build combined local and remote catalog query
+- [x] Add `hosting_type` to catalog responses
+- [x] Display origin instance for remote videos
+- [x] Add canonical origin watch and checkout links
 - [ ] Reject local payment requests for remote videos
 - [ ] Reject local playback requests for remote videos
 - [ ] Prevent remote records from entering upload workers
@@ -177,10 +177,11 @@ Completed:
 
 Next tasks:
 
-1. Implement Reject (for manual moderation of Follow requests)
-2. Begin Phase 5: video index federation (Create/Update/Delete)
-3. Build combined local + remote video catalog query
-4. Add `hosting_type` field to catalog responses
+1. Add rejection guards for remote video payment/playback requests
+2. Add `federation_visibility` toggle to video management API
+3. Wire `publish_create` / `publish_update` / `publish_delete` to video admin handlers
+4. Implement Reject (manual Follow moderation — Phase 4 remainder)
+5. Phase 6: domain allow/silence/block moderation admin endpoints
 
 ## First Batch Result
 
@@ -193,6 +194,17 @@ Next tasks:
 - NodeInfo reports `index-only` federation mode
 - A local actor endpoint returns ActivityPub JSON
 - No remote media download or playback logic has been introduced
+
+## Third Batch Result
+
+- ActivityPub Video object builder with PPVStream extension namespace (`video_index.rs`)
+- `publish_create` / `publish_update` / `publish_delete` with follower broadcast via deduped shared inboxes
+- `process_remote_create` / `process_remote_update` / `process_remote_delete` → upserts `remote_video_catalog`
+- Inbound Create/Update/Delete activity dispatch added to `activities.rs`
+- Combined local+remote catalog endpoint `GET /api/federation/catalog` with `hosting_type` field
+- ActivityPub Video object serving at `GET /videos/:id` with Accept header negotiation
+- Canonical origin `watch_url` and `checkout_url` included in remote catalog entries
+- Remote media structurally separated: remote catalog has no `filename`, `hls_master` — cannot be played locally
 
 ## Second Batch Result
 

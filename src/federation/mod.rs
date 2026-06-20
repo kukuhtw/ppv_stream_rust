@@ -1,9 +1,11 @@
 pub mod activities;
+pub mod catalog;
 pub mod collections;
 pub mod delivery;
 pub mod keys;
 pub mod resolver;
 pub mod signatures;
+pub mod video_index;
 
 use axum::{
     extract::{Path, Query, State},
@@ -134,6 +136,10 @@ pub fn router(pool: PgPool, default_base_url: &str) -> Result<Router, String> {
             get(collections::actor_inbox_get).post(collections::actor_inbox_post),
         )
         .route("/inbox", post(collections::shared_inbox_post))
+        // Video index
+        .route("/videos/:id", get(catalog::video_ap_object))
+        // Federated catalog
+        .route("/api/federation/catalog", get(catalog::catalog))
         .with_state(state))
 }
 

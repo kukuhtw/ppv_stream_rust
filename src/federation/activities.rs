@@ -22,10 +22,10 @@ pub async fn handle_inbound_activity(
     let result = match activity_type {
         "Follow" => handle_follow(pool, actor_uri, activity, activity_db_id).await,
         "Undo" => handle_undo(pool, actor_uri, activity, activity_db_id).await,
-        _ => {
-            // Create, Update, Delete — video-index processing (Phase 5)
-            mark_activity(pool, activity_db_id, "ignored").await
-        }
+        "Create" => handle_create_or_update(pool, actor_uri, activity, activity_db_id).await,
+        "Update" => handle_create_or_update(pool, actor_uri, activity, activity_db_id).await,
+        "Delete" => handle_delete(pool, activity, activity_db_id).await,
+        _ => mark_activity(pool, activity_db_id, "ignored").await,
     };
 
     if let Err(ref e) = result {
@@ -165,6 +165,62 @@ async fn handle_undo(
 // ── Accept / Reject ────────────────────────────────────────────────────────
 // (These arrive when a remote instance responds to our own Follow requests,
 // which is future work in Phase 4 / Phase 5.)
+
+// ── Create / Update ────────────────────────────────────────────────────────
+
+async fn handle_create_or_update(
+    pool: &PgPool,
+    actor_uri: &str,
+    activity: &Value,
+    activity_db_id: Uuid,
+) -> anyhow::Result<()> {
+    use crate::federation::video_index::extract_video_object;
+
+    if let Some((obj, _uri)) = extract_video_object(activity) {
+        let activity_type = activity
+            .get("type")
+            .and_then(|t| t.as_str())
+            .unwrap_or("Create");
+
+        let result = if activity_type == "Update" {
+            crate::federation::video_index::process_remote_update(pool, actor_uri, obj).await
+        } else {
+            crate::federation::video_index::process_remote_create(pool, actor_uri, obj).await
+        };
+
+        result.context("remote video catalog update failed")?;
+        mark_activity(pool, activity_db_id, "processed").await
+    } else {
+        // Non-video Create/Update (e.g. Note) — not relevant to this index
+        mark_activity(pool, activity_db_id, "ignored").await
+    }
+}
+
+// ── Delete ─────────────────────────────────────────────────────────────────
+
+async fn handle_delete(
+    pool: &PgPool,
+    activity: &Value,
+    activity_db_id: Uuid,
+) -> anyhow::Result<()> {
+    let object_uri = activity
+        .get("object")
+        .and_then(|o| {
+            if o.is_string() {
+                o.as_str()
+            } else {
+                o.get("id")?.as_str()
+            }
+        });
+
+    if let Some(uri) = object_uri {
+        crate::federation::video_index::process_remote_delete(pool, uri)
+            .await
+            .context("remote video delete failed")?;
+    }
+
+    mark_activity(pool, activity_db_id, "processed").await
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
