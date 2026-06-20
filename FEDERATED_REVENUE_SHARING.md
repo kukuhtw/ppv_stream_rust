@@ -1,97 +1,90 @@
 # Federated Revenue Sharing and Affiliate Commission Model
 
-## 1. Purpose
+## 1. Status
 
-This document defines how revenue should be shared when a video sale involves multiple parties across a federated PPV Stream network.
+This document defines the approved revenue-sharing model for federated PPV Stream providers.
 
-The model covers two main scenarios:
+The approved model is a **hybrid settlement model**.
 
-1. A remote PPV Stream provider drives traffic to a video hosted by another PPV Stream provider.
-2. A user also promotes that video through an affiliate referral link.
+Blockchain wallets are optional for traffic providers and affiliate users. The origin provider remains responsible for calculating revenue shares, recording liabilities, and paying beneficiaries through their selected payout method.
 
-The architecture remains index-only federation:
+## 2. Architecture Boundary
 
-- Remote providers display public video metadata and canonical links.
-- The origin provider stores and streams the video.
-- The origin provider processes the payment.
-- Revenue sharing is calculated by the origin provider after payment confirmation.
-- Remote providers do not receive or store the actual video content.
+Federation remains index-only.
 
-## 2. Main Actors
+Remote PPV Stream providers may display public creator and video metadata, but they do not receive or store:
 
-### 2.1 Buyer
+- Original video files
+- MP4 files
+- HLS manifests
+- HLS segments
+- Transcoded media
+- Playback sessions
+- Watermark output
+- Protected media URLs
 
-The buyer discovers a video, completes payment, and receives playback access from the origin provider.
+The origin provider remains authoritative for:
 
-The buyer pays the same published price regardless of whether the purchase came from:
-
-- Direct traffic
-- A federated provider
-- An affiliate user
-- A federated provider plus an affiliate user
-
-### 2.2 Creator
-
-The creator owns the video and defines its sale price.
-
-The creator receives the primary revenue share after deductions for:
-
-- Payment processing fees
-- Origin provider fee
-- Traffic provider fee
-- Affiliate commission
-- Applicable tax or refund adjustments
-
-### 2.3 Origin Provider
-
-The origin provider is the PPV Stream instance where the video is hosted.
-
-The origin provider is responsible for:
-
-- Video storage
-- Upload processing
-- Transcoding
-- HLS generation
-- Watermarking
-- Payment processing
+- Video hosting
+- Price
+- Checkout
+- Payment confirmation
 - Playback authorization
-- Purchase records
+- Streaming
 - Refunds
 - Chargebacks
-- Customer support
+- Revenue calculation
 - Settlement accounting
 
-The origin provider is the authoritative system for the sale.
+## 3. Main Actors
 
-### 2.4 Traffic Provider
+### 3.1 Buyer
 
-The traffic provider is another PPV Stream instance that displays the remote video index and sends the buyer to the origin provider.
+The buyer discovers a video, completes payment on the origin provider, and receives playback access from the origin provider.
 
-The traffic provider earns a federation referral fee when it successfully drives a paid conversion.
+### 3.2 Creator
 
-The traffic provider does not:
+The creator owns the video and receives the primary revenue share.
 
-- Store the video
-- Process playback
-- Issue access rights
-- Confirm the payment
-- Override the origin price
+### 3.3 Origin Provider
 
-### 2.5 Affiliate User
+The origin provider hosts the video and processes the sale.
 
-The affiliate user is an individual account that promotes another user's video through a unique referral link.
+Responsibilities include:
 
-The affiliate user may belong to:
+- Storage
+- Transcoding
+- HLS streaming
+- Watermarking
+- Payment processing
+- Access control
+- Refunds
+- Chargebacks
+- Revenue ledger
+- Provider settlement
+- Affiliate settlement
+
+### 3.4 Traffic Provider
+
+The traffic provider is another PPV Stream instance that displays the remote video index and sends a buyer to the origin provider.
+
+It earns a federation referral fee when its signed referral results in a confirmed sale.
+
+### 3.5 Affiliate User
+
+The affiliate user promotes another creator's video through a referral link.
+
+The affiliate may belong to:
 
 - The origin provider
 - The traffic provider
-- Another trusted federated provider
+- Another trusted provider
 
-The affiliate commission is separate from the traffic provider fee.
+Affiliate commission is separate from the traffic provider fee.
 
-### 2.6 Payment Provider
+### 3.6 Payment Provider
 
-The payment provider may be:
+Examples:
 
 - Stripe
 - PayPal
@@ -100,11 +93,48 @@ The payment provider may be:
 - Internal wallet
 - X402 blockchain payment
 
-Payment processing fees should normally be deducted before distributable revenue is calculated.
+Payment fees should normally be deducted before distributable revenue is calculated.
 
-## 3. Revenue Components
+## 4. Approved Hybrid Settlement Model
 
-Every successful sale may contain the following components:
+The hybrid model combines on-chain payment with off-chain accounting.
+
+### 4.1 Core Rule
+
+When all beneficiaries have compatible blockchain wallets, the system may pay them directly on-chain.
+
+When one or more beneficiaries do not have blockchain wallets, the smart contract sends their combined share to the origin provider settlement wallet.
+
+The origin provider then records each beneficiary's share as a payable liability.
+
+### 4.2 Default X402 Flow
+
+```text
+Buyer pays through X402
+    -> Smart contract pays creator final share
+    -> Smart contract pays all non-creator funds to origin settlement wallet
+    -> Origin provider creates immutable ledger entries
+    -> Origin provider retains its own fee
+    -> Traffic provider amount becomes payable
+    -> Affiliate amount becomes payable
+    -> Payout occurs through the beneficiary's selected method
+```
+
+### 4.3 Why This Model Is Approved
+
+This model:
+
+- Does not require every provider to understand blockchain
+- Does not require every affiliate to own a wallet
+- Supports bank and gateway payouts
+- Preserves blockchain payment for buyers
+- Supports refund and chargeback accounting
+- Allows payout thresholds
+- Reduces gas costs
+- Allows weekly or monthly settlement
+- Keeps revenue policies configurable
+
+## 5. Revenue Components
 
 ```text
 Gross Sale Amount
@@ -113,7 +143,7 @@ Gross Sale Amount
     equals Net Distributable Revenue
 ```
 
-The net distributable revenue may then be divided among:
+Net distributable revenue may be allocated to:
 
 - Creator
 - Origin provider
@@ -121,289 +151,188 @@ The net distributable revenue may then be divided among:
 - Affiliate user
 - Optional protocol treasury
 
-## 4. Recommended Revenue Sharing Principle
+## 6. Recommended Default Percentages
 
-The recommended model is:
-
-1. Payment fees are deducted first.
-2. Creator share is calculated from net distributable revenue.
-3. Platform revenue is divided between the origin provider and traffic provider.
-4. Affiliate commission is deducted according to the creator's affiliate settings or a configured promotional pool.
-5. All amounts are recorded in an immutable revenue ledger.
-
-This prevents hidden payment costs and makes every share auditable.
-
-## 5. Scenario A: Direct Purchase Without Federation or Affiliate
-
-Example:
+The default policy is configurable, but the recommended starting point is:
 
 ```text
-Gross sale amount:             USD 10.00
-Payment processing fee:        USD  0.50
-Net distributable revenue:     USD  9.50
-```
-
-Recommended split:
-
-| Recipient | Percentage of Net Revenue | Amount |
-|---|---:|---:|
-| Creator | 80% | USD 7.60 |
-| Origin provider | 20% | USD 1.90 |
-| Total | 100% | USD 9.50 |
-
-There is no traffic provider fee and no affiliate commission.
-
-## 6. Scenario B: Purchase Driven by Another Federated Provider
-
-Example:
-
-```text
-Provider A = Origin provider
-Provider B = Traffic provider
-Creator = User hosted on Provider A
-Buyer = User who discovers the video on Provider B
-```
-
-Flow:
-
-```text
-Buyer browses Provider B
-    -> Provider B displays remote video metadata from Provider A
-    -> Buyer clicks the canonical video link
-    -> Buyer is redirected to Provider A
-    -> Provider A creates the invoice
-    -> Provider A confirms payment
-    -> Provider A grants playback access
-    -> Provider A records revenue shares
-```
-
-Example calculation:
-
-```text
-Gross sale amount:             USD 10.00
-Payment processing fee:        USD  0.50
-Net distributable revenue:     USD  9.50
-```
-
-Recommended split:
-
-| Recipient | Percentage of Net Revenue | Amount |
-|---|---:|---:|
-| Creator | 80% | USD 7.60 |
-| Origin provider | 12% | USD 1.14 |
-| Traffic provider | 8% | USD 0.76 |
-| Total | 100% | USD 9.50 |
-
-This model preserves the creator's normal 80% share while the origin provider shares part of its platform fee with the traffic provider.
-
-## 7. Scenario C: Purchase Through an Affiliate Link Without Federation
-
-Example:
-
-```text
-Creator and affiliate are registered on the same provider.
-Buyer clicks the affiliate link directly.
-```
-
-The affiliate user earns a commission configured by the creator for that video.
-
-Example:
-
-```text
-Gross sale amount:             USD 10.00
-Payment processing fee:        USD  0.50
-Net distributable revenue:     USD  9.50
 Creator base share:            80%
-Affiliate commission:          10% of net distributable revenue
+Platform revenue pool:         20%
 ```
 
-Recommended split:
-
-| Recipient | Amount |
-|---|---:|
-| Creator before affiliate | USD 7.60 |
-| Affiliate commission | USD 0.95 |
-| Creator after affiliate | USD 6.65 |
-| Origin provider | USD 1.90 |
-| Total | USD 9.50 |
-
-In this model, affiliate commission comes from the creator's share.
-
-This is consistent with the current PPV Stream affiliate concept where the creator decides the commission percentage and funds the affiliate reward.
-
-## 8. Scenario D: Federated Traffic Provider Plus Affiliate User
-
-This is the most complete scenario.
-
-Example:
-
-```text
-Provider A = Origin provider
-Provider B = Traffic provider
-Creator = User on Provider A
-Affiliate = User on Provider B
-Buyer = User who discovers the video through Provider B and the affiliate link
-```
-
-Flow:
-
-```text
-Affiliate user shares a federated referral link
-    -> Buyer opens the link on Provider B
-    -> Provider B records the affiliate attribution
-    -> Provider B redirects the buyer to Provider A
-    -> Provider A receives signed traffic-provider and affiliate attribution
-    -> Provider A creates the invoice
-    -> Payment is confirmed
-    -> Provider A calculates all revenue shares
-```
-
-Recommended calculation:
-
-```text
-Gross sale amount:             USD 10.00
-Payment processing fee:        USD  0.50
-Net distributable revenue:     USD  9.50
-```
-
-Recommended split:
-
-| Recipient | Percentage of Net Revenue | Amount |
-|---|---:|---:|
-| Creator base share | 80% | USD 7.60 |
-| Origin provider | 12% | USD 1.14 |
-| Traffic provider | 8% | USD 0.76 |
-| Total before affiliate | 100% | USD 9.50 |
-
-If the creator has configured an affiliate commission of 10% of net distributable revenue:
-
-```text
-Affiliate commission:          USD 0.95
-Creator final amount:          USD 6.65
-Origin provider amount:        USD 1.14
-Traffic provider amount:       USD 0.76
-Affiliate amount:              USD 0.95
-```
-
-Final distribution:
-
-| Recipient | Final Amount |
-|---|---:|
-| Creator | USD 6.65 |
-| Origin provider | USD 1.14 |
-| Traffic provider | USD 0.76 |
-| Affiliate user | USD 0.95 |
-| Total | USD 9.50 |
-
-## 9. Alternative Affiliate Funding Models
-
-### 9.1 Creator-Funded Affiliate Commission
-
-This is the recommended default.
-
-```text
-Creator base share
-    minus Affiliate commission
-    equals Creator final share
-```
-
-Advantages:
-
-- Creator controls promotion cost
-- Platform fee remains predictable
-- Traffic provider fee remains predictable
-- Existing affiliate behavior can be reused
-
-Disadvantages:
-
-- High affiliate percentages can significantly reduce creator revenue
-
-### 9.2 Shared Promotional Pool
-
-The affiliate commission may be funded proportionally by multiple parties.
-
-Example:
-
-```text
-Affiliate commission: USD 0.95
-Creator funds:         USD 0.57
-Origin provider funds: USD 0.23
-Traffic provider funds: USD 0.15
-```
-
-Advantages:
-
-- Promotion cost is shared
-- Creator retains more revenue
-- Providers participate in growth incentives
-
-Disadvantages:
-
-- More complex accounting
-- More complex contracts between providers
-- More difficult dispute handling
-
-### 9.3 Platform-Funded Affiliate Commission
-
-The affiliate commission may come entirely from the origin provider fee.
-
-Advantages:
-
-- Creator revenue remains unchanged
-- Attractive for creators
-
-Disadvantages:
-
-- Origin provider margin becomes smaller
-- Unsustainable if affiliate percentage is too high
-
-## 10. Recommended Default Policy
-
-The recommended default is:
-
-```text
-Creator share:                  80% of net distributable revenue
-Platform revenue pool:          20% of net distributable revenue
-```
-
-When the sale is direct:
+### 6.1 Direct Purchase
 
 ```text
 Creator:                        80%
 Origin provider:                20%
+Traffic provider:                0%
+Affiliate:                       0%
 ```
 
-When a federated provider drives the sale:
+### 6.2 Federated Purchase Without Affiliate
 
 ```text
 Creator:                        80%
 Origin provider:                12%
 Traffic provider:                8%
+Affiliate:                       0%
 ```
 
-When an affiliate also participates:
+### 6.3 Federated Purchase With Affiliate
+
+Affiliate commission is deducted from the creator base share by default.
+
+Example with 10% affiliate commission:
 
 ```text
-Affiliate commission is deducted from the creator's 80% share
+Creator base share:            80%
+Affiliate commission:          10%
+Creator final share:           70%
+Origin provider:               12%
+Traffic provider:               8%
 ```
 
-Example with a 10% affiliate commission:
+Total:
 
 ```text
-Creator base:                   80%
-Affiliate:                      10%
-Creator final:                  70%
-Origin provider:                12%
-Traffic provider:                8%
+70% + 10% + 12% + 8% = 100%
 ```
 
-The percentages above are examples and should be configurable.
+## 7. Example Calculation
 
-## 11. Attribution Data
+```text
+Video price:                   USD 20.00
+Payment fee:                   USD  1.00
+Net distributable revenue:     USD 19.00
+```
 
-The traffic provider and affiliate must be identified before the invoice is created.
+Policy:
 
-Recommended referral payload:
+```text
+Creator base:                  80%
+Origin provider:               12%
+Traffic provider:               8%
+Affiliate:                     10% from creator share
+```
+
+Calculation:
+
+```text
+Creator base:          19.00 x 80% = USD 15.20
+Affiliate:             19.00 x 10% = USD  1.90
+Creator final:         15.20 - 1.90 = USD 13.30
+Origin provider:       19.00 x 12% = USD  2.28
+Traffic provider:      19.00 x  8% = USD  1.52
+```
+
+Final distribution:
+
+| Recipient | Amount |
+|---|---:|
+| Creator | USD 13.30 |
+| Origin provider | USD 2.28 |
+| Traffic provider | USD 1.52 |
+| Affiliate user | USD 1.90 |
+| Total | USD 19.00 |
+
+## 8. X402 Settlement Without Beneficiary Wallets
+
+Assume the traffic provider and affiliate do not have blockchain wallets.
+
+The smart contract should distribute:
+
+```text
+Creator wallet:                70%
+Origin settlement wallet:      30%
+```
+
+The backend then records the 30% as:
+
+```text
+Origin provider revenue:       12%
+Traffic provider payable:       8%
+Affiliate payable:             10%
+```
+
+Example using 100 USDC:
+
+```text
+Smart contract transfer
+    Creator wallet:            70 USDC
+    Origin settlement wallet:  30 USDC
+
+Origin provider ledger
+    Origin provider revenue:   12 USDC
+    Traffic provider payable:   8 USDC
+    Affiliate payable:         10 USDC
+```
+
+The origin provider must not treat the full 30 USDC as income.
+
+The 18 USDC owed to the traffic provider and affiliate is a liability.
+
+## 9. Beneficiary Payout Methods
+
+Blockchain wallet is optional.
+
+A traffic provider or affiliate may select:
+
+- Internal PPV wallet
+- Bank transfer
+- PayPal
+- Xendit disbursement
+- Stripe Connect
+- Stablecoin wallet
+- Manual settlement
+
+The selected payout method belongs in a payout profile.
+
+## 10. Payout Profiles
+
+Recommended table:
+
+```sql
+CREATE TABLE payout_profiles (
+    id UUID PRIMARY KEY,
+    owner_type TEXT NOT NULL,
+    owner_reference TEXT NOT NULL,
+    payout_method TEXT NOT NULL,
+    payout_currency TEXT NOT NULL,
+    bank_account_encrypted JSONB,
+    paypal_email TEXT,
+    blockchain_address TEXT,
+    blockchain_network TEXT,
+    minimum_payout_minor BIGINT NOT NULL DEFAULT 0,
+    verification_status TEXT NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (owner_type, owner_reference)
+);
+```
+
+Owner types:
+
+- provider
+- affiliate
+- creator
+
+Payout methods:
+
+- internal_wallet
+- bank_transfer
+- paypal
+- xendit
+- stripe_connect
+- blockchain
+- manual
+
+Sensitive payout data must be encrypted at rest.
+
+## 11. Signed Referral Attribution
+
+The traffic provider and affiliate must be identified before invoice creation.
+
+Example signed payload:
 
 ```json
 {
@@ -420,32 +349,19 @@ Recommended referral payload:
 
 The origin provider must verify:
 
-- The traffic provider is known and trusted
-- The signature is valid
-- The referral has not expired
-- The referral is linked to the correct video
-- The affiliate actor exists
-- The referral has not been reused improperly
-- The traffic provider is not blocked
+- Traffic provider identity
+- Signature
+- Expiration
+- Video binding
+- Affiliate identity
+- Referral uniqueness
+- Domain moderation status
 
-## 12. Signed Referral URL
+Unsigned query parameters must never determine revenue attribution.
 
-Example:
+## 12. Invoice Capture Rule
 
-```text
-https://provider-a.example/federation/checkout/video-123
-?traffic_instance=provider-b.example
-&affiliate_actor=https%3A%2F%2Fprovider-b.example%2Fusers%2Falice
-&referral_id=REF-20260620-000123
-&expires=1781953200
-&signature=abc123
-```
-
-The origin provider must never trust unsigned query parameters for revenue attribution.
-
-## 13. Invoice Capture Rule
-
-Attribution must be stored when the invoice is created.
+Attribution must be captured when the invoice is created.
 
 Recommended invoice fields:
 
@@ -456,29 +372,30 @@ affiliate_actor_uri
 affiliate_referral_id
 revenue_share_policy_id
 revenue_share_snapshot
+settlement_mode
 ```
 
-The revenue share snapshot is important because percentages may change later.
-
-Example snapshot:
+Example policy snapshot:
 
 ```json
 {
-  "creator_pct": 80,
-  "origin_provider_pct": 12,
-  "traffic_provider_pct": 8,
-  "affiliate_pct": 10,
-  "affiliate_funding_source": "creator_share"
+  "creator_base_bps": 8000,
+  "creator_final_bps": 7000,
+  "origin_provider_bps": 1200,
+  "traffic_provider_bps": 800,
+  "affiliate_bps": 1000,
+  "affiliate_funding_source": "creator_share",
+  "settlement_mode": "hybrid",
+  "traffic_provider_payout_method": "bank_transfer",
+  "affiliate_payout_method": "internal_wallet"
 }
 ```
 
-The payment result must use the snapshot stored at invoice creation, not the current configuration.
+The payment result must use this snapshot even if policy settings change later.
 
-## 14. Revenue Calculation Order
+## 13. Calculation Order
 
-The recommended calculation order is:
-
-1. Confirm gross sale amount.
+1. Confirm gross amount.
 2. Deduct payment processing fee.
 3. Deduct tax or mandatory charges.
 4. Calculate net distributable revenue.
@@ -486,119 +403,45 @@ The recommended calculation order is:
 6. Calculate origin provider share.
 7. Calculate traffic provider share.
 8. Calculate affiliate commission.
-9. Deduct affiliate commission from the selected funding source.
-10. Store immutable revenue ledger entries.
-11. Grant buyer access.
-12. Schedule provider settlement.
+9. Deduct affiliate commission from its configured funding source.
+10. Determine direct on-chain recipients.
+11. Send all non-direct shares to the origin settlement wallet.
+12. Create immutable revenue ledger entries.
+13. Grant buyer access.
+14. Schedule beneficiary payouts.
 
-## 15. Calculation Formula
+## 14. Minor Units and Basis Points
 
-```text
-Net Revenue = Gross Amount - Payment Fee - Tax
-
-Creator Base = Net Revenue × Creator Percentage
-Origin Provider = Net Revenue × Origin Provider Percentage
-Traffic Provider = Net Revenue × Traffic Provider Percentage
-Affiliate Commission = Net Revenue × Affiliate Percentage
-
-Creator Final = Creator Base - Affiliate Commission
-```
-
-Validation rule:
-
-```text
-Creator Final + Origin Provider + Traffic Provider + Affiliate Commission = Net Revenue
-```
-
-## 16. Rounding Rules
-
-All monetary calculations should use integer minor units.
+All calculations must use integer minor units.
 
 Examples:
 
 - USD cents
 - IDR rupiah
-- Token base units
+- USDC base units
 
 Do not use floating-point arithmetic.
 
-Recommended method:
+Formula:
 
 ```text
-amount_minor × basis_points / 10,000
+share_minor = net_amount_minor x basis_points / 10,000
 ```
 
-Any rounding remainder should be assigned according to a documented policy.
+Recommended rounding policy:
 
-Recommended default:
+- Calculate each share using integer division.
+- Assign the final remainder to the origin provider.
+- Store the remainder explicitly for audit.
 
-- Assign the remainder to the origin provider
-- Record the remainder explicitly in the ledger
+## 15. Revenue Ledger
 
-## 17. Basis Point Configuration
-
-Use basis points for precise configuration.
-
-Example:
-
-```text
-Creator:                 8,000 bps
-Origin provider:         1,200 bps
-Traffic provider:          800 bps
-Total:                  10,000 bps
-```
-
-Affiliate commission may use a separate basis-point field:
-
-```text
-Affiliate commission:    1,000 bps
-```
-
-If affiliate commission is creator-funded, it is deducted from the creator allocation after the base split.
-
-## 18. Recommended Database Tables
-
-### 18.1 federation_referrals
-
-```sql
-CREATE TABLE federation_referrals (
-    id UUID PRIMARY KEY,
-    referral_id TEXT NOT NULL UNIQUE,
-    video_object_uri TEXT NOT NULL,
-    origin_instance TEXT NOT NULL,
-    traffic_instance TEXT NOT NULL,
-    affiliate_actor_uri TEXT,
-    issued_at TIMESTAMPTZ NOT NULL,
-    expires_at TIMESTAMPTZ NOT NULL,
-    signature TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'pending',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
-
-### 18.2 revenue_share_policies
-
-```sql
-CREATE TABLE revenue_share_policies (
-    id UUID PRIMARY KEY,
-    name TEXT NOT NULL,
-    creator_bps INT NOT NULL,
-    origin_provider_bps INT NOT NULL,
-    traffic_provider_bps INT NOT NULL,
-    affiliate_funding_source TEXT NOT NULL,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CHECK (creator_bps + origin_provider_bps + traffic_provider_bps = 10000)
-);
-```
-
-### 18.3 federation_revenue_shares
+Recommended table:
 
 ```sql
 CREATE TABLE federation_revenue_shares (
     id UUID PRIMARY KEY,
-    invoice_uid TEXT NOT NULL,
+    invoice_uid TEXT NOT NULL UNIQUE,
     video_id TEXT NOT NULL,
     buyer_id TEXT,
     buyer_actor_uri TEXT,
@@ -613,17 +456,18 @@ CREATE TABLE federation_revenue_shares (
     origin_provider_amount_minor BIGINT NOT NULL,
     traffic_provider_amount_minor BIGINT NOT NULL DEFAULT 0,
     affiliate_amount_minor BIGINT NOT NULL DEFAULT 0,
+    settlement_wallet_amount_minor BIGINT NOT NULL DEFAULT 0,
     currency TEXT NOT NULL,
+    settlement_mode TEXT NOT NULL DEFAULT 'hybrid',
     status TEXT NOT NULL DEFAULT 'confirmed',
     policy_snapshot JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     settled_at TIMESTAMPTZ,
-    reversed_at TIMESTAMPTZ,
-    UNIQUE (invoice_uid)
+    reversed_at TIMESTAMPTZ
 );
 ```
 
-### 18.4 revenue_ledger_entries
+Recommended ledger entries:
 
 ```sql
 CREATE TABLE revenue_ledger_entries (
@@ -635,7 +479,11 @@ CREATE TABLE revenue_ledger_entries (
     currency TEXT NOT NULL,
     entry_type TEXT NOT NULL,
     status TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    payout_profile_id UUID,
+    external_reference TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    paid_at TIMESTAMPTZ,
+    reversed_at TIMESTAMPTZ
 );
 ```
 
@@ -649,234 +497,286 @@ Recipient types:
 - tax_authority
 - protocol_treasury
 
-## 19. Settlement Model
+## 16. Ledger Statuses
 
-### 19.1 Internal Ledger Settlement
+Recommended statuses:
 
-For the first implementation, the origin provider should record payable amounts in a ledger.
+- confirmed
+- payable
+- on_hold
+- scheduled
+- processing
+- paid
+- failed
+- reversed
+- disputed
 
-The traffic provider and remote affiliate are paid later.
+A successful blockchain payment does not automatically mean every beneficiary has been paid.
 
-Recommended settlement schedules:
+Example:
+
+```text
+Creator entry:           paid
+Origin provider entry:   confirmed
+Traffic provider entry:  payable
+Affiliate entry:         payable
+```
+
+## 17. Settlement Schedule
+
+The origin provider may settle beneficiaries:
 
 - Daily
 - Weekly
 - Monthly
 - After a minimum payout threshold
 
-### 19.2 Provider Settlement Example
+Example:
 
 ```text
-Traffic provider: Provider B
-Monthly eligible sales: USD 1,000
-Traffic provider share: USD 80
-Refund adjustment: USD 10
-Chargeback adjustment: USD 5
-Final payable: USD 65
+Traffic provider monthly earnings: USD 80
+Refund adjustment:                 USD 10
+Chargeback adjustment:             USD  5
+Final payable:                      USD 65
 ```
 
-Settlement methods may include:
+## 18. Remote Affiliate Settlement
 
-- Bank transfer
-- PayPal payout
-- Stripe Connect
-- Xendit disbursement
-- Stablecoin transfer
-- X402 settlement
+When the affiliate belongs to another provider, two settlement approaches are allowed.
 
-### 19.3 Affiliate Settlement
+### 18.1 Direct Affiliate Payout
 
-Affiliate earnings may be settled through:
+The origin provider pays the affiliate using the affiliate's verified payout profile.
 
-- Internal wallet if the affiliate is local
-- Provider-to-provider settlement if the affiliate is remote
-- Direct blockchain transfer
-- External payout account
+### 18.2 Provider-Mediated Payout
 
-For remote affiliates, the origin provider may settle to the affiliate's home provider, which then credits the affiliate account.
+The origin provider pays the affiliate's home provider.
 
-## 20. X402 Smart Contract Split
+The home provider then credits the affiliate's account.
 
-For on-chain payments, revenue may be split immediately.
+Provider-mediated payout is recommended when:
+
+- The affiliate uses an internal wallet
+- The home provider handles KYC
+- The origin provider does not support the affiliate's local payment method
+
+## 19. Smart Contract Decision
+
+### 19.1 Existing Contract
+
+The existing two-recipient contract can support the hybrid MVP.
+
+For a federated sale with an affiliate:
+
+```text
+creatorBp = creator final percentage
+admin receives = all non-creator percentages
+```
 
 Example:
 
 ```text
-Buyer pays:               10 USDC
-Creator receives:          7.00 USDC
-Origin provider receives:  1.20 USDC
-Traffic provider receives: 0.80 USDC
-Affiliate receives:        1.00 USDC
+Creator final:                  7000 bps
+Origin settlement wallet:      3000 bps
 ```
 
-Example basis points:
+Backend allocation of the settlement amount:
 
 ```text
-Creator final:             7,000 bps
-Origin provider:           1,200 bps
-Traffic provider:            800 bps
-Affiliate:                 1,000 bps
-Total:                    10,000 bps
+Origin provider:               1200 bps
+Traffic provider:               800 bps
+Affiliate:                     1000 bps
 ```
 
-The contract should validate that the total equals 10,000 basis points.
+### 19.2 Recommended New Contract
 
-## 21. Refund and Chargeback Handling
+A new contract may be introduced as:
 
-A refund or chargeback must reverse all related revenue shares.
+```text
+X402FederatedSplitter.sol
+```
 
-Recommended behavior:
+It should not require four blockchain wallets.
 
-1. Mark the original revenue share as reversed.
-2. Create negative ledger entries for every recipient.
+The recommended contract supports:
+
+- Creator direct recipient
+- Origin settlement wallet
+- Optional direct traffic-provider recipient
+- Optional direct affiliate recipient
+- Signed beneficiary identifiers
+- Signed policy snapshot hash
+
+### 19.3 Optional Direct Payment
+
+If a beneficiary has a verified blockchain wallet, its share may be paid directly.
+
+If not, its share is included in the origin settlement wallet allocation.
+
+Example:
+
+```text
+Creator has wallet:             direct
+Traffic provider has wallet:    direct
+Affiliate has no wallet:        settlement wallet
+Origin provider:                settlement wallet
+```
+
+The backend remains authoritative for the off-chain ledger.
+
+## 20. Smart Contract Metadata
+
+The signed invoice should bind:
+
+- Invoice UID
+- Token
+- Minimum amount
+- Creator address
+- Creator final basis points
+- Origin settlement wallet
+- Direct recipient addresses, when present
+- Direct recipient basis points
+- Traffic provider beneficiary ID
+- Affiliate beneficiary ID
+- Revenue policy snapshot hash
+- Video ID hash
+- Payer
+- Deadline
+- Contract address
+- Chain ID
+
+A beneficiary ID may be:
+
+```text
+keccak256(provider actor URI)
+keccak256(affiliate actor URI)
+```
+
+This records attribution without requiring a wallet address.
+
+## 21. Suggested Smart Contract Event
+
+```solidity
+event FederatedPaid(
+    bytes32 indexed invoiceUid,
+    address indexed payer,
+    address indexed creator,
+    address settlementWallet,
+    address token,
+    uint256 totalAmount,
+    uint256 creatorAmount,
+    uint256 settlementAmount,
+    bytes32 trafficProviderId,
+    bytes32 affiliateId,
+    bytes32 policyHash,
+    string videoId
+);
+```
+
+The event records beneficiary identities without requiring their blockchain wallets.
+
+## 22. Refund and Chargeback Handling
+
+Refunds and chargebacks must reverse all related allocations.
+
+Required behavior:
+
+1. Preserve the original entries.
+2. Create negative reversal entries.
 3. Reduce unsettled payable balances.
-4. If already settled, create a debt balance for the next settlement cycle.
-5. Revoke playback access when policy requires it.
-6. Preserve the original audit records.
+4. Create beneficiary debt if already paid.
+5. Revoke playback access when required.
+6. Mark the revenue share as reversed or disputed.
 
-Never delete the original ledger entries.
+Never delete financial ledger records.
 
-## 22. Fraud Prevention Rules
+## 23. Fraud Prevention
 
-The implementation should enforce:
+Required controls:
 
-- Signed traffic-provider referrals
-- Signed affiliate attribution for remote affiliates
+- Signed traffic referrals
+- Signed remote affiliate attribution
 - Referral expiration
 - One traffic provider per invoice
 - One affiliate per invoice
-- Idempotent commission processing
+- Idempotent revenue processing
 - Self-referral prevention
 - Creator cannot affiliate their own video
 - Buyer cannot be the affiliate
 - Blocked providers cannot earn new fees
-- Replayed webhooks cannot create duplicate shares
-- Referral must match the purchased video
-- Referral must be captured before payment confirmation
-- All percentage settings must be snapshotted
+- Webhook replay protection
+- Referral and video binding
+- Invoice-time policy snapshot
+- Verified payout profiles
+- Payout approval controls
+- Reconciliation reports
 
-## 23. Self-Referral Rules
+## 24. Accounting Rule
 
-Reject commission when:
+Amounts owed to traffic providers and affiliates must be recorded as liabilities.
 
-- Buyer actor equals affiliate actor
-- Creator actor equals affiliate actor
-- Traffic provider and origin provider are the same instance and local traffic rules do not allow a provider fee
-- The same operator controls both instances and policy prohibits related-party referral fees
+They must not be recognized as origin-provider revenue.
 
-## 24. Configuration Example
+Example:
+
+```text
+Settlement wallet balance:     30 USDC
+Origin provider revenue:       12 USDC
+Traffic provider payable:       8 USDC
+Affiliate payable:             10 USDC
+```
+
+The accounting system must preserve this separation.
+
+## 25. Recommended Environment Configuration
 
 ```env
-FEDERATION_CREATOR_BPS=8000
+FEDERATION_CREATOR_BASE_BPS=8000
 FEDERATION_ORIGIN_PROVIDER_BPS=1200
 FEDERATION_TRAFFIC_PROVIDER_BPS=800
 AFFILIATE_MAX_BPS=3000
 AFFILIATE_FUNDING_SOURCE=creator_share
+FEDERATION_SETTLEMENT_MODE=hybrid
+FEDERATION_SETTLEMENT_WALLET=0x...
 FEDERATION_MIN_PAYOUT_MINOR=5000
 FEDERATION_SETTLEMENT_CYCLE=monthly
 ```
 
-## 25. API Suggestions
-
-### Create Federated Referral
+## 26. Recommended API Endpoints
 
 ```http
 POST /api/federation/referrals
-```
-
-### Start Purchase
-
-```http
 POST /api/federation/purchase/start
-```
-
-### Confirm Revenue Share
-
-```http
 POST /api/federation/revenue/confirm
-```
-
-### List Provider Earnings
-
-```http
-GET /api/federation/provider-earnings
-```
-
-### List Affiliate Earnings
-
-```http
-GET /api/federation/affiliate-earnings
-```
-
-### Admin Settlement
-
-```http
+GET  /api/federation/provider-earnings
+GET  /api/federation/affiliate-earnings
+GET  /api/payout-profile
+POST /api/payout-profile
+GET  /admin/federation/settlements
 POST /admin/federation/settlements
-GET /admin/federation/settlements
 POST /admin/federation/settlements/:id/complete
+POST /admin/federation/settlements/:id/retry
 ```
 
-## 26. End-to-End Example
+## 27. Implementation Order
 
-Assume:
+1. Add payout profiles.
+2. Add hybrid settlement configuration.
+3. Add signed referral attribution.
+4. Capture attribution and policy snapshot at invoice creation.
+5. Add revenue share and ledger tables.
+6. Calculate shares in integer minor units.
+7. Route creator final share on-chain.
+8. Route non-direct shares to the settlement wallet.
+9. Create provider and affiliate payable entries.
+10. Add settlement dashboard.
+11. Add refund and chargeback reversal.
+12. Add optional direct blockchain recipients.
+13. Add reconciliation reports.
+14. Introduce `X402FederatedSplitter.sol` only after audit and testing.
 
-```text
-Video price:                   USD 20.00
-Payment fee:                   USD  1.00
-Net distributable revenue:     USD 19.00
-Creator base share:            80%
-Origin provider share:         12%
-Traffic provider share:         8%
-Affiliate commission:          10% of net revenue
-Affiliate funding source:      Creator share
-```
+## 28. Final Approved Rule
 
-Calculation:
+> PPV Stream uses hybrid federated settlement. Blockchain wallets are optional for traffic providers and affiliates. The creator may receive a direct on-chain payment, while all non-direct beneficiary shares are sent to the origin provider settlement wallet and recorded as payable liabilities in an immutable ledger.
 
-```text
-Creator base:          19.00 × 80% = USD 15.20
-Origin provider:       19.00 × 12% = USD  2.28
-Traffic provider:      19.00 ×  8% = USD  1.52
-Affiliate commission:  19.00 × 10% = USD  1.90
-Creator final:         15.20 - 1.90 = USD 13.30
-```
-
-Final distribution:
-
-| Recipient | Amount |
-|---|---:|
-| Creator | USD 13.30 |
-| Origin provider | USD 2.28 |
-| Traffic provider | USD 1.52 |
-| Affiliate user | USD 1.90 |
-| Total | USD 19.00 |
-
-## 27. Recommended Implementation Order
-
-1. Add revenue share policy configuration.
-2. Add signed federated referral payloads.
-3. Capture traffic provider and affiliate attribution at invoice creation.
-4. Add immutable revenue share records.
-5. Add idempotent ledger processing.
-6. Add refund and chargeback reversal.
-7. Add provider settlement dashboard.
-8. Add remote affiliate settlement.
-9. Add X402 direct split support.
-10. Add reconciliation reports.
-
-## 28. Final Recommended Model
-
-The recommended business rule is:
-
-> The origin provider processes the sale and remains authoritative. The creator receives the primary revenue share. The traffic provider receives a federation referral fee for driving the buyer. The affiliate user receives a separate commission when a valid affiliate referral contributed to the sale.
-
-Recommended default allocation:
-
-```text
-Creator base share:            80%
-Origin provider share:         12%
-Traffic provider share:         8%
-Affiliate commission:          Configurable and deducted from creator share
-```
-
-This model keeps creator revenue transparent, rewards federated providers for distribution, rewards individual affiliates for promotion, and preserves a clear audit trail for every sale.
+This model supports decentralized traffic distribution without forcing every provider or affiliate to adopt blockchain infrastructure.
