@@ -25,6 +25,7 @@
 | [DATA_FLOW.md](DATA_FLOW.md) | Narrative end-to-end data flow guide from registration and login through purchase, disbursement, affiliate payout, chat, and playback |
 | [STORAGE_MIGRATION.md](STORAGE_MIGRATION.md) | Step-by-step migration guide from local storage to S3, MinIO, and other S3-compatible object storage backends, including the admin storage settings workflow |
 | [STORAGE_ADMIN_MOCKUP.md](STORAGE_ADMIN_MOCKUP.md) | Admin UX mockup for storage backend settings, migration jobs, resume flow, and file-level inspection |
+| [FEDERATED_LEARN.md](FEDERATED_LEARN.md) | Beginner-friendly federated learning guide that explains the index-only model, discovery flow, roles, and security boundaries |
 | [VISION.md](VISION.md) | Inspiration — the problems we solve and the creator economy we're building |
 | [WALLET.md](WALLET.md) | Internal fiat wallet — business flows, DB design, API reference |
 | [AFFILIATE.md](AFFILIATE.md) | Affiliate system — referral links, commission flows, security model |
