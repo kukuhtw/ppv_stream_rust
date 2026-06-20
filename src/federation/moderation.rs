@@ -14,6 +14,10 @@ use super::{api_error, FederationState};
 // ── Admin token auth ───────────────────────────────────────────────────────
 
 /// Checks `X-Federation-Admin-Token` header against `FEDERATION_ADMIN_TOKEN` env var.
+pub fn check_admin_token_pub(headers: &HeaderMap) -> bool {
+    check_admin_token(headers)
+}
+
 fn check_admin_token(headers: &HeaderMap) -> bool {
     let expected = match std::env::var("FEDERATION_ADMIN_TOKEN") {
         Ok(t) if !t.trim().is_empty() => t,

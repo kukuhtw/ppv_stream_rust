@@ -5,6 +5,7 @@ pub mod delivery;
 pub mod keys;
 pub mod moderation;
 pub mod resolver;
+pub mod revenue;
 pub mod signatures;
 pub mod video_index;
 
@@ -170,6 +171,16 @@ pub fn router(pool: PgPool, default_base_url: &str) -> Result<Router, String> {
         .route(
             "/api/federation/admin/remote-videos/:domain",
             axum::routing::delete(moderation::purge_remote_videos),
+        )
+        // Admin — revenue share policies
+        .route(
+            "/api/federation/admin/revenue/policies",
+            get(admin_list_revenue_policies).post(admin_set_revenue_policy),
+        )
+        // Admin — provider settlement report
+        .route(
+            "/api/federation/admin/revenue/provider-report",
+            get(admin_provider_settlement),
         )
         .with_state(state))
 }
@@ -372,6 +383,89 @@ async fn local_actor(
         .into_response()
 }
 
+// ── Admin revenue sharing ──────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct SetRevenuePolicyBody {
+    domain: String,
+    share_basis_points: i32,
+}
+
+/// `GET /api/federation/admin/revenue/policies`
+async fn admin_list_revenue_policies(
+    State(state): State<FederationState>,
+    headers: HeaderMap,
+) -> Response {
+    if !moderation::check_admin_token_pub(&headers) {
+        return api_error(StatusCode::FORBIDDEN, "X-Federation-Admin-Token required");
+    }
+
+    let rows: Vec<(String, i32, bool, String)> = sqlx::query_as(
+        "SELECT instance_domain, share_basis_points, is_active, created_at::text \
+         FROM revenue_share_policies \
+         ORDER BY instance_domain",
+    )
+    .fetch_all(&state.pool)
+    .await
+    .unwrap_or_default();
+
+    let policies: Vec<Value> = rows
+        .into_iter()
+        .map(|(domain, bp, active, created_at)| {
+            json!({
+                "instance_domain":    domain,
+                "share_basis_points": bp,
+                "is_active":          active,
+                "created_at":         created_at,
+            })
+        })
+        .collect();
+
+    Json(json!({ "ok": true, "policies": policies })).into_response()
+}
+
+/// `POST /api/federation/admin/revenue/policies`
+async fn admin_set_revenue_policy(
+    State(state): State<FederationState>,
+    headers: HeaderMap,
+    Json(body): Json<SetRevenuePolicyBody>,
+) -> Response {
+    if !moderation::check_admin_token_pub(&headers) {
+        return api_error(StatusCode::FORBIDDEN, "X-Federation-Admin-Token required");
+    }
+
+    let domain = body.domain.trim().to_lowercase();
+    if domain.is_empty() || domain.contains('/') {
+        return api_error(StatusCode::BAD_REQUEST, "domain must be a bare hostname");
+    }
+
+    match revenue::set_share_policy(&state.pool, &domain, body.share_basis_points, "admin").await {
+        Ok(()) => Json(json!({ "ok": true })).into_response(),
+        Err(e) => {
+            tracing::error!("set_share_policy failed: {}", e);
+            api_error(StatusCode::BAD_REQUEST, &e.to_string())
+        }
+    }
+}
+
+/// `GET /api/federation/admin/revenue/provider-report`
+async fn admin_provider_settlement(
+    State(state): State<FederationState>,
+    headers: HeaderMap,
+) -> Response {
+    if !moderation::check_admin_token_pub(&headers) {
+        return api_error(StatusCode::FORBIDDEN, "X-Federation-Admin-Token required");
+    }
+
+    match revenue::provider_settlement_report(&state.pool).await {
+        Ok(rows) => Json(json!({ "ok": true, "rows": rows })).into_response(),
+        Err(e) => {
+            tracing::error!("provider_settlement_report failed: {}", e);
+            api_error(StatusCode::INTERNAL_SERVER_ERROR, "report query failed")
+        }
+    }
+}
+
 // ── Admin moderation ───────────────────────────────────────────────────────
 
 /// `POST /api/federation/follows/:id/reject`
@@ -527,5 +621,39 @@ mod tests {
         let base = "https://example.com";
         let shared_inbox = format!("{}/inbox", base);
         assert_eq!(shared_inbox, "https://example.com/inbox");
+    }
+
+    // ── Actor JSON serialization tests ────────────────────────────────────
+
+    #[test]
+    fn actor_json_has_required_activitypub_fields() {
+        let base = "https://example.com";
+        let username = "alice";
+        let actor_url = format!("{}/users/{}", base, username);
+
+        let actor = serde_json::json!({
+            "@context": [
+                "https://www.w3.org/ns/activitystreams",
+                "https://w3id.org/security/v1"
+            ],
+            "id":              actor_url,
+            "type":            "Person",
+            "preferredUsername": username,
+            "inbox":           format!("{}/inbox", actor_url),
+            "outbox":          format!("{}/outbox", actor_url),
+            "followers":       format!("{}/followers", actor_url),
+            "following":       format!("{}/following", actor_url),
+            "endpoints": {
+                "sharedInbox": format!("{}/inbox", base)
+            }
+        });
+
+        assert_eq!(actor["type"], "Person");
+        assert_eq!(actor["preferredUsername"], username);
+        assert!(actor["inbox"].as_str().unwrap().ends_with("/inbox"));
+        assert!(actor["outbox"].as_str().unwrap().ends_with("/outbox"));
+        assert!(actor["@context"].is_array());
+        let ctx = actor["@context"].as_array().unwrap();
+        assert!(ctx.iter().any(|v| v == "https://w3id.org/security/v1"));
     }
 }

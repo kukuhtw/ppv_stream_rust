@@ -112,41 +112,41 @@ Remote PPV Stream instances may exchange public creator identity and public vide
 
 ## Phase 7: Provider Referral and Revenue Sharing
 
-- [ ] Create `federation_referrals`
-- [ ] Create `revenue_share_policies`
-- [ ] Create `federation_revenue_shares`
-- [ ] Create `revenue_ledger_entries`
-- [ ] Implement signed traffic-provider referral payload
-- [ ] Implement remote affiliate attribution
-- [ ] Capture attribution at invoice creation
-- [ ] Snapshot revenue policy at invoice creation
-- [ ] Calculate revenue in integer minor units
-- [ ] Add basis-point validation
-- [ ] Add idempotent revenue processing
-- [ ] Add refund reversal entries
-- [ ] Add chargeback reversal entries
-- [ ] Add provider settlement reporting
+- [x] Create `federation_referrals`
+- [x] Create `revenue_share_policies`
+- [x] Create `federation_revenue_shares`
+- [x] Create `revenue_ledger_entries`
+- [x] Implement signed traffic-provider referral payload
+- [x] Implement remote affiliate attribution
+- [x] Capture attribution at invoice creation
+- [x] Snapshot revenue policy at invoice creation
+- [x] Calculate revenue in integer minor units
+- [x] Add basis-point validation
+- [x] Add idempotent revenue processing
+- [x] Add refund reversal entries
+- [x] Add chargeback reversal entries
+- [x] Add provider settlement reporting
 - [ ] Add affiliate settlement reporting
 - [ ] Add optional X402 direct split
 
 ## Phase 8: Testing
 
-- [ ] Unit test WebFinger parsing
-- [ ] Unit test NodeInfo response
-- [ ] Unit test actor serialization
-- [ ] Unit test ActivityPub video serialization
-- [ ] Unit test signature generation
-- [ ] Unit test signature verification
-- [ ] Unit test SSRF protections
-- [ ] Unit test referral verification
-- [ ] Unit test revenue calculations
+- [x] Unit test WebFinger parsing
+- [x] Unit test NodeInfo response
+- [x] Unit test actor serialization
+- [x] Unit test ActivityPub video serialization
+- [x] Unit test signature generation
+- [x] Unit test signature verification
+- [x] Unit test SSRF protections
+- [x] Unit test referral verification
+- [x] Unit test revenue calculations
 - [ ] Integration test two PPV Stream instances
-- [ ] Verify no remote media file is downloaded
-- [ ] Verify no remote HLS segment is stored
-- [ ] Verify no local playback session is created for remote video
-- [ ] Verify no local payment is accepted for remote video
-- [ ] Verify blocked instances are excluded
-- [ ] Verify duplicate activities are idempotent
+- [x] Verify no remote media file is downloaded
+- [x] Verify no remote HLS segment is stored
+- [x] Verify no local playback session is created for remote video
+- [x] Verify no local payment is accepted for remote video
+- [x] Verify blocked instances are excluded
+- [x] Verify duplicate activities are idempotent
 
 ## Phase 9: Documentation and Operations
 
