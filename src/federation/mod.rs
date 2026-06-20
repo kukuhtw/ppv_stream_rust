@@ -3,6 +3,7 @@ pub mod catalog;
 pub mod collections;
 pub mod delivery;
 pub mod keys;
+pub mod moderation;
 pub mod resolver;
 pub mod signatures;
 pub mod video_index;
@@ -140,10 +141,35 @@ pub fn router(pool: PgPool, default_base_url: &str) -> Result<Router, String> {
         .route("/videos/:id", get(catalog::video_ap_object))
         // Federated catalog
         .route("/api/federation/catalog", get(catalog::catalog))
-        // Admin moderation
+        // Admin moderation — domain rules
+        .route(
+            "/api/federation/admin/domain-rules",
+            get(moderation::list_domain_rules).post(moderation::set_domain_rule),
+        )
+        .route(
+            "/api/federation/admin/domain-rules/:domain",
+            axum::routing::delete(moderation::delete_domain_rule),
+        )
+        // Admin moderation — follow management
         .route(
             "/api/federation/follows/:id/reject",
             axum::routing::post(admin_reject_follow),
+        )
+        // Admin — overview and known instances
+        .route("/api/federation/admin/overview", get(moderation::admin_overview))
+        .route("/api/federation/admin/instances", get(moderation::list_instances))
+        // Admin — activity log
+        .route("/api/federation/admin/activities", get(moderation::list_activities))
+        // Admin — delivery queue
+        .route("/api/federation/admin/delivery", get(moderation::list_delivery_jobs))
+        .route(
+            "/api/federation/admin/delivery/:id/retry",
+            axum::routing::post(moderation::retry_delivery_job),
+        )
+        // Admin — remote content removal
+        .route(
+            "/api/federation/admin/remote-videos/:domain",
+            axum::routing::delete(moderation::purge_remote_videos),
         )
         .with_state(state))
 }

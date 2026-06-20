@@ -204,7 +204,27 @@ async fn process_inbox(
         .unwrap_or_default()
         .to_string();
 
-    // 3. Verify Digest header if present
+    // 3. Domain rule enforcement — reject activities from blocked/suspended domains
+    {
+        let actor_domain = actor_uri_in_activity
+            .strip_prefix("https://")
+            .or_else(|| actor_uri_in_activity.strip_prefix("http://"))
+            .and_then(|rest| rest.split('/').next())
+            .unwrap_or("");
+
+        if !actor_domain.is_empty()
+            && crate::federation::moderation::is_domain_blocked(&state.pool, actor_domain).await
+        {
+            tracing::info!(
+                actor = %actor_uri_in_activity,
+                "inbox: rejected activity from blocked/suspended domain {}",
+                actor_domain
+            );
+            return api_error(StatusCode::FORBIDDEN, "domain is blocked");
+        }
+    }
+
+    // 4. Verify Digest header if present
     if let Some(digest_header) = headers.get("digest") {
         if let Ok(digest_str) = digest_header.to_str() {
             if let Err(e) = crate::federation::signatures::verify_digest(&body, digest_str) {
@@ -214,7 +234,7 @@ async fn process_inbox(
         }
     }
 
-    // 4. Verify HTTP Signature
+    // 5. Verify HTTP Signature
     let sig_header = match headers.get("signature").and_then(|v| v.to_str().ok()) {
         Some(s) => s.to_owned(),
         None => {
@@ -274,7 +294,7 @@ async fn process_inbox(
         return api_error(StatusCode::UNAUTHORIZED, "HTTP Signature verification failed");
     }
 
-    // 5. Deduplication: reject already-processed activity URIs
+    // 6. Deduplication: reject already-processed activity URIs
     if !activity_uri.is_empty() {
         let already_seen: Option<bool> = sqlx::query_scalar(
             "SELECT TRUE FROM federation_activities WHERE activity_uri = $1 LIMIT 1",
@@ -290,7 +310,7 @@ async fn process_inbox(
         }
     }
 
-    // 6. Store the inbound activity for async processing
+    // 7. Store the inbound activity for async processing
     let activity_id = Uuid::new_v4();
     let object_uri = activity
         .get("object")

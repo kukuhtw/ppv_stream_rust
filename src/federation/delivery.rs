@@ -59,6 +59,34 @@ async fn process_due_jobs(pool: &PgPool, app_secret: &[u8]) -> anyhow::Result<()
     .context("delivery job query failed")?;
 
     for job in jobs {
+        // Skip delivery to blocked/suspended domains without consuming retry budget.
+        let target_domain = job
+            .target_inbox_url
+            .strip_prefix("https://")
+            .or_else(|| job.target_inbox_url.strip_prefix("http://"))
+            .and_then(|rest| rest.split('/').next())
+            .unwrap_or("");
+
+        if !target_domain.is_empty()
+            && crate::federation::moderation::is_domain_blocked(pool, target_domain).await
+        {
+            tracing::info!(
+                job_id = %job.id,
+                target = %job.target_inbox_url,
+                "delivery skipped: domain {} is blocked/suspended",
+                target_domain
+            );
+            sqlx::query(
+                "UPDATE federation_delivery_jobs \
+                 SET status = 'failed', last_error = 'domain blocked', updated_at = NOW() \
+                 WHERE id = $1",
+            )
+            .bind(job.id)
+            .execute(pool)
+            .await?;
+            continue;
+        }
+
         // Claim the job
         sqlx::query(
             "UPDATE federation_delivery_jobs SET status = 'processing' WHERE id = $1",

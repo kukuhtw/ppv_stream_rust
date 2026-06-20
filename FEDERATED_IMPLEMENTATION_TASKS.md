@@ -98,17 +98,17 @@ Remote PPV Stream instances may exchange public creator identity and public vide
 
 ## Phase 6: Moderation and Administration
 
-- [ ] Add domain allow rule
-- [ ] Add domain silence rule
-- [ ] Add domain media-rejection rule
-- [ ] Add domain suspension rule
-- [ ] Add domain block rule
-- [ ] Add federation overview endpoint
-- [ ] Add known-instances endpoint
-- [ ] Add activity log endpoint
-- [ ] Add delivery queue endpoint
-- [ ] Add failed-delivery retry action
-- [ ] Add cached remote-content removal action
+- [x] Add domain allow rule
+- [x] Add domain silence rule
+- [x] Add domain media-rejection rule
+- [x] Add domain suspension rule
+- [x] Add domain block rule
+- [x] Add federation overview endpoint
+- [x] Add known-instances endpoint
+- [x] Add activity log endpoint
+- [x] Add delivery queue endpoint
+- [x] Add failed-delivery retry action
+- [x] Add cached remote-content removal action
 
 ## Phase 7: Provider Referral and Revenue Sharing
 
@@ -177,10 +177,8 @@ Completed:
 
 Next tasks:
 
-1. Reject local playback requests for remote videos (stream.rs)
-2. Implement `Reject` (manual Follow moderation — Phase 4 remainder)
-3. Prevent remote records from entering upload / FFmpeg / storage migration workers
-4. Phase 6: domain allow/silence/block moderation admin endpoints
+1. Phase 7: revenue sharing tables and referral payload
+2. Phase 8: integration tests and safety verification
 
 ## First Batch Result
 
