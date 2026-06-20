@@ -90,7 +90,7 @@ Remote PPV Stream instances may exchange public creator identity and public vide
 - [x] Add `hosting_type` to catalog responses
 - [x] Display origin instance for remote videos
 - [x] Add canonical origin watch and checkout links
-- [ ] Reject local payment requests for remote videos
+- [x] Reject local payment requests for remote videos
 - [ ] Reject local playback requests for remote videos
 - [ ] Prevent remote records from entering upload workers
 - [ ] Prevent remote records from entering FFmpeg workers
@@ -177,11 +177,10 @@ Completed:
 
 Next tasks:
 
-1. Add rejection guards for remote video payment/playback requests
-2. Add `federation_visibility` toggle to video management API
-3. Wire `publish_create` / `publish_update` / `publish_delete` to video admin handlers
-4. Implement Reject (manual Follow moderation — Phase 4 remainder)
-5. Phase 6: domain allow/silence/block moderation admin endpoints
+1. Reject local playback requests for remote videos (stream.rs)
+2. Implement `Reject` (manual Follow moderation — Phase 4 remainder)
+3. Prevent remote records from entering upload / FFmpeg / storage migration workers
+4. Phase 6: domain allow/silence/block moderation admin endpoints
 
 ## First Batch Result
 

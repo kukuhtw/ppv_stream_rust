@@ -38,6 +38,26 @@ use crate::handlers::video::VideoState;
 use crate::payment_settings::load_payment_settings;
 use crate::sessions;
 
+/// Check whether `video_id` belongs to a remote federated video.
+///
+/// Returns `Some(checkout_url_opt)` when the ID is found in `remote_video_catalog`,
+/// or `None` when the video is not a known remote video.
+async fn remote_video_checkout_url(
+    pool: &sqlx::PgPool,
+    video_id: &str,
+) -> Option<Option<String>> {
+    let row = sqlx::query(
+        "SELECT checkout_url FROM remote_video_catalog \
+         WHERE object_uri = $1 AND is_deleted = FALSE LIMIT 1",
+    )
+    .bind(video_id)
+    .fetch_optional(pool)
+    .await
+    .ok()
+    .flatten();
+    row.map(|r| r.try_get::<Option<String>, _>("checkout_url").ok().flatten())
+}
+
 /// Returns the available payment configuration for one video.
 ///
 /// Route: `GET /api/pay/options?video_id=<id>`
@@ -75,6 +95,13 @@ pub async fn pay_options(
     };
 
     let Some(video_metadata) = row else {
+        if let Some(checkout_url) = remote_video_checkout_url(&st.pool, &video_id).await {
+            let mut resp = json!({"ok": false, "error": "This video is hosted on a remote instance. Complete payment on the origin server."});
+            if let Some(url) = checkout_url {
+                resp["checkout_url"] = serde_json::Value::String(url);
+            }
+            return Json(resp);
+        }
         return Json(json!({"ok": false, "error": "video not found"}));
     };
 
@@ -217,6 +244,13 @@ pub async fn x402_start(
     .unwrap_or(None);
 
     let Some(video_metadata) = video_metadata else {
+        if let Some(checkout_url) = remote_video_checkout_url(&st.pool, &body.video_id).await {
+            let mut resp = json!({"ok": false, "error": "This video is hosted on a remote instance. Complete payment on the origin server."});
+            if let Some(url) = checkout_url {
+                resp["checkout_url"] = serde_json::Value::String(url);
+            }
+            return Json(resp);
+        }
         return Json(json!({"ok": false, "error": "video not found"}));
     };
 
@@ -923,7 +957,16 @@ pub async fn all_options(
 
     let video_row = match video_row {
         Ok(Some(r)) => r,
-        Ok(None) => return Json(json!({"ok": false, "error": "video not found"})),
+        Ok(None) => {
+            if let Some(checkout_url) = remote_video_checkout_url(&st.pool, &video_id).await {
+                let mut resp = json!({"ok": false, "error": "This video is hosted on a remote instance. Complete payment on the origin server."});
+                if let Some(url) = checkout_url {
+                    resp["checkout_url"] = serde_json::Value::String(url);
+                }
+                return Json(resp);
+            }
+            return Json(json!({"ok": false, "error": "video not found"}));
+        }
         Err(e) => return Json(json!({"ok": false, "error": format!("db: {e}")})),
     };
 
