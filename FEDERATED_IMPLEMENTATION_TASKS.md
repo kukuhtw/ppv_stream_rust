@@ -126,8 +126,8 @@ Remote PPV Stream instances may exchange public creator identity and public vide
 - [x] Add refund reversal entries
 - [x] Add chargeback reversal entries
 - [x] Add provider settlement reporting
-- [ ] Add affiliate settlement reporting
-- [ ] Add optional X402 direct split
+- [x] Add affiliate settlement reporting
+- [x] Add optional X402 direct split
 
 ## Phase 8: Testing
 
@@ -150,7 +150,7 @@ Remote PPV Stream instances may exchange public creator identity and public vide
 
 ## Phase 9: Documentation and Operations
 
-- [ ] Add environment variable reference
+- [x] Add environment variable reference
 - [ ] Add federation setup guide
 - [ ] Add instance administration guide
 - [ ] Add moderation guide

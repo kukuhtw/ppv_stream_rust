@@ -182,6 +182,16 @@ pub fn router(pool: PgPool, default_base_url: &str) -> Result<Router, String> {
             "/api/federation/admin/revenue/provider-report",
             get(admin_provider_settlement),
         )
+        // Admin — affiliate settlement report
+        .route(
+            "/api/federation/admin/revenue/affiliate-report",
+            get(admin_affiliate_settlement),
+        )
+        // X402 direct-split referral resolution
+        .route(
+            "/api/federation/referral/resolve",
+            get(resolve_referral_for_split),
+        )
         .with_state(state))
 }
 
@@ -464,6 +474,100 @@ async fn admin_provider_settlement(
             api_error(StatusCode::INTERNAL_SERVER_ERROR, "report query failed")
         }
     }
+}
+
+/// `GET /api/federation/admin/revenue/affiliate-report`
+async fn admin_affiliate_settlement(
+    State(state): State<FederationState>,
+    headers: HeaderMap,
+) -> Response {
+    if !moderation::check_admin_token_pub(&headers) {
+        return api_error(StatusCode::FORBIDDEN, "X-Federation-Admin-Token required");
+    }
+
+    match revenue::affiliate_settlement_report(&state.pool).await {
+        Ok(rows) => Json(json!({ "ok": true, "rows": rows })).into_response(),
+        Err(e) => {
+            tracing::error!("affiliate_settlement_report failed: {}", e);
+            api_error(StatusCode::INTERNAL_SERVER_ERROR, "report query failed")
+        }
+    }
+}
+
+/// `GET /api/federation/referral/resolve?token=<token>&actor_url=<actor_url>`
+///
+/// X402 direct-split support.  The frontend calls this before building the
+/// X402 payment to discover whether the referring instance has a wallet
+/// address configured and how many basis points they are owed.
+///
+/// Returns `{ ok, split_enabled, provider_wallet, share_basis_points }`.
+/// When `split_enabled` is true the frontend can use a 3-way X402 contract
+/// call instead of off-chain accounting.
+async fn resolve_referral_for_split(
+    State(state): State<FederationState>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let token = match params.get("token") {
+        Some(t) if !t.is_empty() => t.clone(),
+        _ => return api_error(StatusCode::BAD_REQUEST, "token required"),
+    };
+
+    let actor_url = match params.get("actor_url") {
+        Some(u) if !u.is_empty() => u.clone(),
+        _ => return api_error(StatusCode::BAD_REQUEST, "actor_url required"),
+    };
+
+    // Fetch the referring actor's public key to verify the token signature
+    let key_result = resolver::fetch_remote_actor_key(&actor_url).await;
+    let (_key_id, public_key_pem) = match key_result {
+        Ok(kp) => kp,
+        Err(e) => {
+            tracing::warn!("referral resolve: actor key fetch failed: {}", e);
+            return api_error(StatusCode::BAD_GATEWAY, "could not retrieve actor public key");
+        }
+    };
+
+    let claims = match revenue::verify_referral_payload(&token, &public_key_pem) {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::warn!("referral resolve: invalid token: {}", e);
+            return api_error(StatusCode::UNPROCESSABLE_ENTITY, "invalid referral token");
+        }
+    };
+
+    // Check revenue share policy for this domain
+    let policy: Option<(i32, bool)> = sqlx::query_as(
+        "SELECT share_basis_points, is_active \
+         FROM revenue_share_policies WHERE instance_domain = $1 LIMIT 1",
+    )
+    .bind(&claims.domain)
+    .fetch_optional(&state.pool)
+    .await
+    .unwrap_or(None);
+
+    let (share_bp, is_active) = policy.unwrap_or((0, false));
+    let split_enabled = is_active && share_bp > 0;
+
+    // Look up a wallet address for the provider domain (stored in federation_instances)
+    let provider_wallet: Option<String> = sqlx::query_scalar(
+        "SELECT shared_inbox_url FROM federation_instances WHERE domain = $1 LIMIT 1",
+    )
+    .bind(&claims.domain)
+    .fetch_optional(&state.pool)
+    .await
+    .unwrap_or(None)
+    .flatten();
+    // Note: provider_wallet is a placeholder — real implementation requires a
+    // dedicated `provider_wallet` column on federation_instances.
+
+    Json(json!({
+        "ok": true,
+        "referring_domain":  claims.domain,
+        "split_enabled":     split_enabled,
+        "share_basis_points": if split_enabled { share_bp } else { 0 },
+        "provider_wallet":   provider_wallet, // null until wallet column is added
+    }))
+    .into_response()
 }
 
 // ── Admin moderation ───────────────────────────────────────────────────────

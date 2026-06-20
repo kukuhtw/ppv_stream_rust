@@ -388,6 +388,63 @@ pub async fn provider_settlement_report(
         .collect())
 }
 
+/// Summary row returned by the affiliate settlement report.
+///
+/// "Affiliate" here refers to domains for which we hold revenue shares that
+/// still need to be paid out.  The report groups ledger entries by type so
+/// the administrator can see the net position for each domain.
+#[derive(Debug, serde::Serialize)]
+pub struct AffiliateSettlementRow {
+    pub referring_domain: String,
+    pub share_basis_points: i32,
+    pub total_gross_cents: i64,
+    pub total_share_cents: i64,
+    pub pending_count: i64,
+    pub settled_count: i64,
+    pub reversed_count: i64,
+}
+
+/// Per-domain settlement summary — grouped by referring instance.
+pub async fn affiliate_settlement_report(
+    pool: &PgPool,
+) -> anyhow::Result<Vec<AffiliateSettlementRow>> {
+    let rows: Vec<(String, i32, i64, i64, i64, i64, i64)> = sqlx::query_as(
+        r#"
+        SELECT
+            rs.referring_domain,
+            COALESCE(rsp.share_basis_points, 0),
+            COALESCE(SUM(rs.gross_cents), 0)                                      AS total_gross,
+            COALESCE(SUM(rs.share_cents), 0)                                      AS total_share,
+            COUNT(*) FILTER (WHERE rs.status = 'pending')                         AS pending,
+            COUNT(*) FILTER (WHERE rs.status = 'settled')                         AS settled,
+            COUNT(*) FILTER (WHERE rs.status = 'reversed')                        AS reversed
+        FROM federation_revenue_shares rs
+        LEFT JOIN revenue_share_policies rsp ON rsp.instance_domain = rs.referring_domain
+        WHERE rs.referring_domain IS NOT NULL
+        GROUP BY rs.referring_domain, rsp.share_basis_points
+        ORDER BY total_share DESC, rs.referring_domain
+        "#,
+    )
+    .fetch_all(pool)
+    .await
+    .context("affiliate settlement report query failed")?;
+
+    Ok(rows
+        .into_iter()
+        .map(|(domain, bp, gross, share, pending, settled, reversed)| {
+            AffiliateSettlementRow {
+                referring_domain: domain,
+                share_basis_points: bp,
+                total_gross_cents: gross,
+                total_share_cents: share,
+                pending_count: pending,
+                settled_count: settled,
+                reversed_count: reversed,
+            }
+        })
+        .collect())
+}
+
 // ── Policy management ──────────────────────────────────────────────────────
 
 /// Upsert a revenue share policy for a remote instance.
