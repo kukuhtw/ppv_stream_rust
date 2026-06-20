@@ -46,7 +46,6 @@ pub fn build_referral_payload(
     domain: &str,
     private_key_pem: &str,
 ) -> anyhow::Result<String> {
-    use rand::RngCore;
     use signature::{RandomizedSigner, SignatureEncoding};
 
     let mut nonce_bytes = [0u8; 8];
