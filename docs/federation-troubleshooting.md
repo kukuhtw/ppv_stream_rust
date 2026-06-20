@@ -86,6 +86,41 @@ If the worker crashes repeatedly, check:
 
 ---
 
+## Running the integration test suite
+
+A Docker Compose environment spins up two isolated PPV Stream instances
+(`instance-a` and `instance-b`) that federate over a private Docker network.
+
+```sh
+# Build and start both instances
+docker compose -f docker-compose.federation-test.yml up --build -d
+
+# Wait for the health-check to pass, then run the test script
+bash tests/federation_integration.sh
+
+# Tear down and remove all volumes when done
+docker compose -f docker-compose.federation-test.yml down -v
+```
+
+The test script drives 13 phases: NodeInfo, WebFinger, actor document,
+Follow delivery, video Create/Delete injection, payment and playback
+rejection, domain blocking, deduplication, and admin overview.
+
+**Troubleshooting the test environment**
+
+| Problem | Fix |
+|---|---|
+| Instances won't start | Run `docker compose logs instance-a` / `instance-b` |
+| "actor not found" in actor init | `federation_enabled` not set — check Phase 3 psql step |
+| "delivery did not complete" | Increase the wait loop count or check `docker compose logs instance-a` for worker errors |
+| Phase 9 returns unexpected HTTP 200 | The rejection guard may be returning checkout info in the body; the test also accepts that form |
+
+The test containers run with `FEDERATION_DEV_HTTP_BYPASS=1` so they can
+reach each other via Docker private IPs without requiring HTTPS.  This flag
+must never be set in production.
+
+---
+
 ## Revenue share not calculating
 
 1. Confirm a policy exists for the referring domain:

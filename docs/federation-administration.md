@@ -103,6 +103,65 @@ GET /api/federation/admin/revenue/affiliate-report
 
 ---
 
+## Actor key management
+
+```sh
+# Initialise (or rotate) RSA keys for a local user
+POST /api/federation/admin/actors/init
+Content-Type: application/json
+{ "username": "alice" }
+```
+
+Idempotent — safe to call multiple times.  On the first call it generates a
+2048-bit RSA key pair, encrypts the private key with `HMAC_SECRET`, and
+writes the `federation_actors` record.  On subsequent calls it returns the
+existing public key.
+
+The actor record must exist before the user can send or receive federation
+activities.
+
+---
+
+## Outbound follow (admin-initiated)
+
+```sh
+POST /api/federation/admin/follow
+Content-Type: application/json
+{
+  "local_username": "alice",
+  "remote_actor_url": "https://remote.example/users/bob"
+}
+```
+
+Fetches the remote actor document, queues a signed `Follow` activity, and
+returns the `follow_activity_uri`.  The delivery worker sends it on the
+next cycle.
+
+---
+
+## Dev / test helpers
+
+These endpoints are only available when `FEDERATION_DEV_HTTP_BYPASS=1` and
+**must never be enabled in production**.
+
+```sh
+# Inject an inbound ActivityPub activity without signature verification
+POST /api/federation/admin/inject-inbound
+Content-Type: application/json
+X-Federation-Admin-Token: <token>
+<ActivityPub JSON body>
+```
+
+Processes the supplied activity through the normal inbound pipeline
+(`handle_inbound_activity`) without requiring an HTTP Signature.
+Useful in integration tests and local development to simulate receiving
+`Create`, `Update`, `Delete`, or `Follow` activities from a remote instance.
+
+Returns `{"status":"accepted"}` on first call and `{"status":"duplicate"}`
+if the activity `id` has already been seen.
+
+---
+
 ## Domain moderation
 
 See [federation-moderation.md](federation-moderation.md) for the full
