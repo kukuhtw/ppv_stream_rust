@@ -42,10 +42,7 @@ pub struct ReferralClaims {
 ///
 /// The signature covers exactly the base64url-encoded claims string.
 /// The caller supplies the referring actor's RSA private key in PKCS#8 PEM.
-pub fn build_referral_payload(
-    domain: &str,
-    private_key_pem: &str,
-) -> anyhow::Result<String> {
+pub fn build_referral_payload(domain: &str, private_key_pem: &str) -> anyhow::Result<String> {
     use signature::{RandomizedSigner, SignatureEncoding};
 
     let mut nonce_bytes = [0u8; 8];
@@ -116,7 +113,10 @@ pub fn verify_referral_payload(
     // Reject tokens older than 24 hours
     let age_secs = chrono::Utc::now().timestamp() - claims.ts;
     if age_secs > 86_400 || age_secs < -300 {
-        anyhow::bail!("referral token is expired or from the future (age {}s)", age_secs);
+        anyhow::bail!(
+            "referral token is expired or from the future (age {}s)",
+            age_secs
+        );
     }
 
     Ok(claims)
@@ -170,10 +170,7 @@ pub fn calculate_share_cents(gross_cents: i64, basis_points: i32) -> i64 {
 /// Validate that `basis_points` is in the allowed range \[0, 5 000\].
 pub fn validate_basis_points(bp: i32) -> anyhow::Result<()> {
     if bp < 0 || bp > 5_000 {
-        anyhow::bail!(
-            "basis_points {} is out of range [0, 5000] (max 50 %)",
-            bp
-        );
+        anyhow::bail!("basis_points {} is out of range [0, 5000] (max 50 %)", bp);
     }
     Ok(())
 }
@@ -312,7 +309,10 @@ pub async fn reverse_revenue_share(
     entry_type: &str,
 ) -> anyhow::Result<()> {
     if entry_type != "refund" && entry_type != "chargeback" {
-        anyhow::bail!("entry_type must be 'refund' or 'chargeback', got '{}'", entry_type);
+        anyhow::bail!(
+            "entry_type must be 'refund' or 'chargeback', got '{}'",
+            entry_type
+        );
     }
 
     let row: Option<(Uuid, i64)> = sqlx::query_as(
@@ -377,13 +377,15 @@ pub async fn provider_settlement_report(
 
     Ok(rows
         .into_iter()
-        .map(|(domain, pending, settled, reversed, count)| ProviderSettlementRow {
-            referring_domain: domain,
-            pending_cents: pending,
-            settled_cents: settled,
-            reversed_cents: reversed,
-            payment_count: count,
-        })
+        .map(
+            |(domain, pending, settled, reversed, count)| ProviderSettlementRow {
+                referring_domain: domain,
+                pending_cents: pending,
+                settled_cents: settled,
+                reversed_cents: reversed,
+                payment_count: count,
+            },
+        )
         .collect())
 }
 
@@ -430,8 +432,8 @@ pub async fn affiliate_settlement_report(
 
     Ok(rows
         .into_iter()
-        .map(|(domain, bp, gross, share, pending, settled, reversed)| {
-            AffiliateSettlementRow {
+        .map(
+            |(domain, bp, gross, share, pending, settled, reversed)| AffiliateSettlementRow {
                 referring_domain: domain,
                 share_basis_points: bp,
                 total_gross_cents: gross,
@@ -439,8 +441,8 @@ pub async fn affiliate_settlement_report(
                 pending_count: pending,
                 settled_count: settled,
                 reversed_count: reversed,
-            }
-        })
+            },
+        )
         .collect())
 }
 

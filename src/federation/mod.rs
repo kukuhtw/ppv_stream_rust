@@ -153,15 +153,9 @@ pub fn router(pool: PgPool, default_base_url: &str) -> Result<Router, String> {
             post(admin_inject_inbound),
         )
         // Admin actor management
-        .route(
-            "/api/federation/admin/actors/init",
-            post(admin_init_actor),
-        )
+        .route("/api/federation/admin/actors/init", post(admin_init_actor))
         // Admin outbound follow
-        .route(
-            "/api/federation/admin/follow",
-            post(admin_send_follow),
-        )
+        .route("/api/federation/admin/follow", post(admin_send_follow))
         // Admin moderation — domain rules
         .route(
             "/api/federation/admin/domain-rules",
@@ -177,12 +171,24 @@ pub fn router(pool: PgPool, default_base_url: &str) -> Result<Router, String> {
             axum::routing::post(admin_reject_follow),
         )
         // Admin — overview and known instances
-        .route("/api/federation/admin/overview", get(moderation::admin_overview))
-        .route("/api/federation/admin/instances", get(moderation::list_instances))
+        .route(
+            "/api/federation/admin/overview",
+            get(moderation::admin_overview),
+        )
+        .route(
+            "/api/federation/admin/instances",
+            get(moderation::list_instances),
+        )
         // Admin — activity log
-        .route("/api/federation/admin/activities", get(moderation::list_activities))
+        .route(
+            "/api/federation/admin/activities",
+            get(moderation::list_activities),
+        )
         // Admin — delivery queue
-        .route("/api/federation/admin/delivery", get(moderation::list_delivery_jobs))
+        .route(
+            "/api/federation/admin/delivery",
+            get(moderation::list_delivery_jobs),
+        )
         .route(
             "/api/federation/admin/delivery/:id/retry",
             axum::routing::post(moderation::retry_delivery_job),
@@ -227,7 +233,10 @@ async fn webfinger(
     Query(query): Query<WebFingerQuery>,
 ) -> Response {
     let Some(handle) = query.resource.strip_prefix("acct:") else {
-        return api_error(StatusCode::BAD_REQUEST, "resource must use acct:username@domain");
+        return api_error(
+            StatusCode::BAD_REQUEST,
+            "resource must use acct:username@domain",
+        );
     };
 
     let Some((username, domain)) = handle.rsplit_once('@') else {
@@ -344,9 +353,8 @@ async fn local_actor(
     State(state): State<FederationState>,
     Path(username): Path<String>,
 ) -> Response {
-    let row: Option<(String, Option<String>, Option<String>, Option<String>)> =
-        sqlx::query_as(
-            "SELECT u.id, u.profile_desc, u.actor_uri, fa.public_key_pem \
+    let row: Option<(String, Option<String>, Option<String>, Option<String>)> = sqlx::query_as(
+        "SELECT u.id, u.profile_desc, u.actor_uri, fa.public_key_pem \
              FROM users u \
              LEFT JOIN federation_actors fa \
                ON fa.local_user_id = u.id AND fa.is_local = TRUE \
@@ -354,11 +362,11 @@ async fn local_actor(
                AND u.federation_enabled = TRUE \
                AND u.discoverable = TRUE \
              LIMIT 1",
-        )
-        .bind(&username)
-        .fetch_optional(&state.pool)
-        .await
-        .unwrap_or(None);
+    )
+    .bind(&username)
+    .fetch_optional(&state.pool)
+    .await
+    .unwrap_or(None);
 
     let Some((_user_id, profile_desc, actor_uri, public_key_pem)) = row else {
         return api_error(StatusCode::NOT_FOUND, "actor not found");
@@ -543,7 +551,10 @@ async fn resolve_referral_for_split(
         Ok(kp) => kp,
         Err(e) => {
             tracing::warn!("referral resolve: actor key fetch failed: {}", e);
-            return api_error(StatusCode::BAD_GATEWAY, "could not retrieve actor public key");
+            return api_error(
+                StatusCode::BAD_GATEWAY,
+                "could not retrieve actor public key",
+            );
         }
     };
 
@@ -641,13 +652,12 @@ async fn admin_inject_inbound(
     }
 
     // Deduplication: if we already have this activity, return early.
-    let existing: Option<uuid::Uuid> = sqlx::query_scalar(
-        "SELECT id FROM federation_activities WHERE activity_uri = $1 LIMIT 1",
-    )
-    .bind(&activity_uri)
-    .fetch_optional(&state.pool)
-    .await
-    .unwrap_or(None);
+    let existing: Option<uuid::Uuid> =
+        sqlx::query_scalar("SELECT id FROM federation_activities WHERE activity_uri = $1 LIMIT 1")
+            .bind(&activity_uri)
+            .fetch_optional(&state.pool)
+            .await
+            .unwrap_or(None);
 
     if existing.is_some() {
         return Json(json!({
@@ -673,7 +683,10 @@ async fn admin_inject_inbound(
     .await
     {
         tracing::error!("inject-inbound insert failed: {}", e);
-        return api_error(StatusCode::INTERNAL_SERVER_ERROR, "failed to store activity");
+        return api_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "failed to store activity",
+        );
     }
 
     // Process the activity in the background (mirrors normal inbox processing).
@@ -726,13 +739,12 @@ async fn admin_init_actor(
         .map(|s| s.into_bytes())
         .unwrap_or_default();
 
-    let user_id: Option<String> = sqlx::query_scalar(
-        "SELECT id FROM users WHERE username = $1 LIMIT 1",
-    )
-    .bind(&username)
-    .fetch_optional(&state.pool)
-    .await
-    .unwrap_or(None);
+    let user_id: Option<String> =
+        sqlx::query_scalar("SELECT id FROM users WHERE username = $1 LIMIT 1")
+            .bind(&username)
+            .fetch_optional(&state.pool)
+            .await
+            .unwrap_or(None);
 
     let Some(user_id) = user_id else {
         return api_error(StatusCode::NOT_FOUND, "user not found");
@@ -789,7 +801,10 @@ async fn admin_send_follow(
     let local_username = body.local_username.trim().to_lowercase();
     let remote_actor_url = body.remote_actor_url.trim().to_string();
     if local_username.is_empty() || remote_actor_url.is_empty() {
-        return api_error(StatusCode::BAD_REQUEST, "local_username and remote_actor_url required");
+        return api_error(
+            StatusCode::BAD_REQUEST,
+            "local_username and remote_actor_url required",
+        );
     }
 
     let local_actor_url = format!("{}/users/{}", state.config.base_url, local_username);
@@ -831,13 +846,9 @@ async fn admin_send_follow(
         "published": chrono::Utc::now().to_rfc3339()
     });
 
-    if let Err(e) = activities::queue_outbound_activity(
-        &state.pool,
-        &local_actor_url,
-        &follow,
-        &remote_actor,
-    )
-    .await
+    if let Err(e) =
+        activities::queue_outbound_activity(&state.pool, &local_actor_url, &follow, &remote_actor)
+            .await
     {
         tracing::error!("admin_send_follow: queue failed: {}", e);
         return api_error(StatusCode::INTERNAL_SERVER_ERROR, "failed to queue follow");

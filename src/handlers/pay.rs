@@ -42,10 +42,7 @@ use crate::sessions;
 ///
 /// Returns `Some(checkout_url_opt)` when the ID is found in `remote_video_catalog`,
 /// or `None` when the video is not a known remote video.
-async fn remote_video_checkout_url(
-    pool: &sqlx::PgPool,
-    video_id: &str,
-) -> Option<Option<String>> {
+async fn remote_video_checkout_url(pool: &sqlx::PgPool, video_id: &str) -> Option<Option<String>> {
     let row = sqlx::query(
         "SELECT checkout_url FROM remote_video_catalog \
          WHERE object_uri = $1 AND is_deleted = FALSE LIMIT 1",
@@ -55,7 +52,11 @@ async fn remote_video_checkout_url(
     .await
     .ok()
     .flatten();
-    row.map(|r| r.try_get::<Option<String>, _>("checkout_url").ok().flatten())
+    row.map(|r| {
+        r.try_get::<Option<String>, _>("checkout_url")
+            .ok()
+            .flatten()
+    })
 }
 
 /// Returns the available payment configuration for one video.

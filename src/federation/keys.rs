@@ -63,7 +63,11 @@ pub fn encrypt_private_key(pem: &str, app_secret: &[u8]) -> anyhow::Result<Strin
         }
     }
 
-    Ok(format!("v1:{}:{}", B64.encode(nonce), B64.encode(&ciphertext)))
+    Ok(format!(
+        "v1:{}:{}",
+        B64.encode(nonce),
+        B64.encode(&ciphertext)
+    ))
 }
 
 pub fn decrypt_private_key(encrypted: &str, app_secret: &[u8]) -> anyhow::Result<String> {
@@ -76,7 +80,9 @@ pub fn decrypt_private_key(encrypted: &str, app_secret: &[u8]) -> anyhow::Result
     }
 
     let nonce = B64.decode(parts[1]).context("nonce base64 decode failed")?;
-    let mut ciphertext = B64.decode(parts[2]).context("ciphertext base64 decode failed")?;
+    let mut ciphertext = B64
+        .decode(parts[2])
+        .context("ciphertext base64 decode failed")?;
 
     let mut root_mac =
         Hmac::<Sha256>::new_from_slice(app_secret).context("HMAC initialisation failed")?;

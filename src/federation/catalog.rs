@@ -57,11 +57,11 @@ pub async fn catalog(
     // ── Local public videos ────────────────────────────────────────────────
     if q.hosting_type.is_empty() || q.hosting_type == "local" {
         let local_rows: Vec<(
-            String,        // id
-            String,        // title
-            String,        // description
-            i64,           // price_cents
-            Option<String>,// object_uri
+            String,         // id
+            String,         // title
+            String,         // description
+            i64,            // price_cents
+            Option<String>, // object_uri
         )> = sqlx::query_as(
             "SELECT v.id, v.title, v.description, v.price_cents, v.object_uri \
              FROM videos v \
@@ -127,8 +127,15 @@ pub async fn catalog(
         .unwrap_or_default();
 
         for (
-            object_uri, title, description, canonical_url, checkout_url,
-            thumbnail_url, origin_domain, content_rating, published_at,
+            object_uri,
+            title,
+            description,
+            canonical_url,
+            checkout_url,
+            thumbnail_url,
+            origin_domain,
+            content_rating,
+            published_at,
         ) in remote_rows
         {
             entries.push(CatalogEntry {
@@ -147,7 +154,8 @@ pub async fn catalog(
         }
     }
 
-    if entries.is_empty() && !q.hosting_type.is_empty()
+    if entries.is_empty()
+        && !q.hosting_type.is_empty()
         && q.hosting_type != "local"
         && q.hosting_type != "remote"
     {
@@ -180,11 +188,13 @@ pub async fn video_ap_object(
         .and_then(|v| v.to_str().ok())
         .unwrap_or_default();
 
-    if !accept.contains("application/activity+json")
-        && !accept.contains("application/ld+json")
-    {
+    if !accept.contains("application/activity+json") && !accept.contains("application/ld+json") {
         // Not an ActivityPub request — let the HTML handler take it
-        return (StatusCode::NOT_ACCEPTABLE, "use Accept: application/activity+json").into_response();
+        return (
+            StatusCode::NOT_ACCEPTABLE,
+            "use Accept: application/activity+json",
+        )
+            .into_response();
     }
 
     match crate::federation::video_index::build_video_object(

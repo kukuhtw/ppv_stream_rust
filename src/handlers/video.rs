@@ -415,10 +415,12 @@ pub async fn update_video(
 
 fn federation_enabled() -> bool {
     std::env::var("FEDERATION_ENABLED")
-        .map(|v| matches!(
-            v.trim().to_ascii_lowercase().as_str(),
-            "1" | "true" | "yes" | "on"
-        ))
+        .map(|v| {
+            matches!(
+                v.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
         .unwrap_or(false)
 }
 

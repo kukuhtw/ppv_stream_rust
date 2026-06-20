@@ -23,9 +23,7 @@ pub fn is_safe_ip(ip: IpAddr) -> bool {
                 && !v4.is_unspecified()
                 && !v4.is_documentation()
         }
-        IpAddr::V6(v6) => {
-            !v6.is_loopback() && !v6.is_multicast() && !v6.is_unspecified()
-        }
+        IpAddr::V6(v6) => !v6.is_loopback() && !v6.is_multicast() && !v6.is_unspecified(),
     }
 }
 
@@ -140,10 +138,7 @@ pub async fn fetch_remote_actor_key(actor_url: &str) -> Result<(String, String),
     let doc = fetch_remote_object(actor_url).await?;
 
     // Validate that this is an Actor type we recognise
-    let actor_type = doc
-        .get("type")
-        .and_then(|t| t.as_str())
-        .unwrap_or_default();
+    let actor_type = doc.get("type").and_then(|t| t.as_str()).unwrap_or_default();
     if !matches!(
         actor_type,
         "Person" | "Organization" | "Application" | "Service" | "Group"

@@ -31,8 +31,7 @@ pub fn start_delivery_worker(pool: PgPool) {
 }
 
 async fn run_delivery_loop(pool: PgPool, app_secret: Vec<u8>) {
-    let mut interval =
-        tokio::time::interval(std::time::Duration::from_secs(POLL_INTERVAL_SECS));
+    let mut interval = tokio::time::interval(std::time::Duration::from_secs(POLL_INTERVAL_SECS));
 
     loop {
         interval.tick().await;
@@ -88,12 +87,10 @@ async fn process_due_jobs(pool: &PgPool, app_secret: &[u8]) -> anyhow::Result<()
         }
 
         // Claim the job
-        sqlx::query(
-            "UPDATE federation_delivery_jobs SET status = 'processing' WHERE id = $1",
-        )
-        .bind(job.id)
-        .execute(pool)
-        .await?;
+        sqlx::query("UPDATE federation_delivery_jobs SET status = 'processing' WHERE id = $1")
+            .bind(job.id)
+            .execute(pool)
+            .await?;
 
         let job_id = job.id;
         let activity_id = job.activity_id;
@@ -174,11 +171,7 @@ async fn process_due_jobs(pool: &PgPool, app_secret: &[u8]) -> anyhow::Result<()
     Ok(())
 }
 
-async fn deliver_job(
-    pool: &PgPool,
-    job: &DeliveryJob,
-    app_secret: &[u8],
-) -> anyhow::Result<()> {
+async fn deliver_job(pool: &PgPool, job: &DeliveryJob, app_secret: &[u8]) -> anyhow::Result<()> {
     // Load the activity payload and the sending actor's URI
     let (actor_uri, payload): (String, serde_json::Value) = sqlx::query_as(
         "SELECT actor_uri, payload FROM federation_activities WHERE id = $1 LIMIT 1",
@@ -199,8 +192,8 @@ async fn deliver_job(
     .context("actor lookup failed")?
     .flatten();
 
-    let user_id = local_user_id
-        .ok_or_else(|| anyhow::anyhow!("no local actor record for {}", actor_uri))?;
+    let user_id =
+        local_user_id.ok_or_else(|| anyhow::anyhow!("no local actor record for {}", actor_uri))?;
 
     let (private_key_pem, key_id) =
         crate::federation::keys::load_actor_private_key(pool, &user_id, app_secret)

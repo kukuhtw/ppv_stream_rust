@@ -4,6 +4,8 @@
 
 This document defines the technical work required to evolve PPV Stream Rust from a single-instance pay-per-view platform into a federated video commerce network inspired by Mastodon and PeerTube.
 
+If you are new to the federation work, start with [FEDERATED_LEARN.md](FEDERATED_LEARN.md) for the conceptual overview, then read [FEDERATED_INDEX_ONLY_ARCHITECTURE.md](FEDERATED_INDEX_ONLY_ARCHITECTURE.md) for the core boundary decision.
+
 The target architecture allows independent PPV Stream servers to communicate with one another while keeping video files, payment processing, playback authorization, watermark generation, and private user data under the control of the origin server.
 
 The recommended approach is:

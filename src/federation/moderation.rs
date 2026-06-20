@@ -174,12 +174,10 @@ pub async fn delete_domain_rule(
 ) -> Response {
     require_admin!(headers);
 
-    let result = sqlx::query(
-        "DELETE FROM federation_domain_rules WHERE domain = $1",
-    )
-    .bind(domain.trim().to_lowercase())
-    .execute(&state.pool)
-    .await;
+    let result = sqlx::query("DELETE FROM federation_domain_rules WHERE domain = $1")
+        .bind(domain.trim().to_lowercase())
+        .execute(&state.pool)
+        .await;
 
     match result {
         Ok(r) if r.rows_affected() > 0 => {
@@ -197,10 +195,7 @@ pub async fn delete_domain_rule(
 // ── Overview ───────────────────────────────────────────────────────────────
 
 /// `GET /api/federation/admin/overview`
-pub async fn admin_overview(
-    State(state): State<FederationState>,
-    headers: HeaderMap,
-) -> Response {
+pub async fn admin_overview(State(state): State<FederationState>, headers: HeaderMap) -> Response {
     require_admin!(headers);
 
     let remote_actors: i64 =
@@ -233,11 +228,10 @@ pub async fn admin_overview(
             .await
             .unwrap_or(0);
 
-    let domain_rules: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM federation_domain_rules")
-            .fetch_one(&state.pool)
-            .await
-            .unwrap_or(0);
+    let domain_rules: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM federation_domain_rules")
+        .fetch_one(&state.pool)
+        .await
+        .unwrap_or(0);
 
     Json(json!({
         "ok": true,
@@ -317,19 +311,26 @@ pub async fn list_activities(
     let limit = q.limit.clamp(1, 200);
     let offset = q.offset.max(0);
 
-    let rows: Vec<(String, String, String, String, String, Option<String>, Option<String>)> =
-        sqlx::query_as(
-            "SELECT id::text, activity_type, actor_uri, direction, \
+    let rows: Vec<(
+        String,
+        String,
+        String,
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+    )> = sqlx::query_as(
+        "SELECT id::text, activity_type, actor_uri, direction, \
                     processing_status, error_message, created_at::text \
              FROM federation_activities \
              ORDER BY created_at DESC \
              LIMIT $1 OFFSET $2",
-        )
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(&state.pool)
-        .await
-        .unwrap_or_default();
+    )
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(&state.pool)
+    .await
+    .unwrap_or_default();
 
     let activities: Vec<Value> = rows
         .into_iter()
@@ -386,18 +387,20 @@ pub async fn list_delivery_jobs(
 
     let jobs: Vec<Value> = rows
         .into_iter()
-        .map(|(id, inbox, attempts, max, status, http_status, error, next_at)| {
-            json!({
-                "id":               id,
-                "target_inbox_url": inbox,
-                "attempt_count":    attempts,
-                "max_attempts":     max,
-                "status":           status,
-                "last_http_status": http_status,
-                "last_error":       error,
-                "next_attempt_at":  next_at,
-            })
-        })
+        .map(
+            |(id, inbox, attempts, max, status, http_status, error, next_at)| {
+                json!({
+                    "id":               id,
+                    "target_inbox_url": inbox,
+                    "attempt_count":    attempts,
+                    "max_attempts":     max,
+                    "status":           status,
+                    "last_http_status": http_status,
+                    "last_error":       error,
+                    "next_attempt_at":  next_at,
+                })
+            },
+        )
         .collect();
 
     Json(json!({ "ok": true, "jobs": jobs })).into_response()
@@ -434,7 +437,10 @@ pub async fn retry_delivery_job(
 
     match result {
         Ok(r) if r.rows_affected() > 0 => Json(json!({ "ok": true })).into_response(),
-        Ok(_) => api_error(StatusCode::NOT_FOUND, "job not found or not in failed state"),
+        Ok(_) => api_error(
+            StatusCode::NOT_FOUND,
+            "job not found or not in failed state",
+        ),
         Err(e) => {
             tracing::error!("retry_delivery_job failed: {}", e);
             api_error(StatusCode::INTERNAL_SERVER_ERROR, "database error")

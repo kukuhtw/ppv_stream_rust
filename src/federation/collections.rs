@@ -139,7 +139,10 @@ pub async fn actor_inbox_get(
     State(_state): State<FederationState>,
     Path(_username): Path<String>,
 ) -> Response {
-    api_error(StatusCode::FORBIDDEN, "actor inbox is not publicly readable")
+    api_error(
+        StatusCode::FORBIDDEN,
+        "actor inbox is not publicly readable",
+    )
 }
 
 // ── POST /users/:username/inbox ────────────────────────────────────────────
@@ -262,7 +265,10 @@ async fn process_inbox(
                 actor_uri_in_activity,
                 e
             );
-            return api_error(StatusCode::UNAUTHORIZED, "could not retrieve actor public key");
+            return api_error(
+                StatusCode::UNAUTHORIZED,
+                "could not retrieve actor public key",
+            );
         }
     };
 
@@ -291,7 +297,10 @@ async fn process_inbox(
             key_id,
             e
         );
-        return api_error(StatusCode::UNAUTHORIZED, "HTTP Signature verification failed");
+        return api_error(
+            StatusCode::UNAUTHORIZED,
+            "HTTP Signature verification failed",
+        );
     }
 
     // 6. Deduplication: reject already-processed activity URIs
@@ -312,15 +321,15 @@ async fn process_inbox(
 
     // 7. Store the inbound activity for async processing
     let activity_id = Uuid::new_v4();
-    let object_uri = activity
-        .get("object")
-        .and_then(|o| {
-            if o.is_string() {
-                o.as_str().map(|s| s.to_string())
-            } else {
-                o.get("id").and_then(|id| id.as_str()).map(|s| s.to_string())
-            }
-        });
+    let object_uri = activity.get("object").and_then(|o| {
+        if o.is_string() {
+            o.as_str().map(|s| s.to_string())
+        } else {
+            o.get("id")
+                .and_then(|id| id.as_str())
+                .map(|s| s.to_string())
+        }
+    });
 
     let insert_result = sqlx::query(
         r#"
@@ -334,7 +343,11 @@ async fn process_inbox(
         "#,
     )
     .bind(activity_id)
-    .bind(if activity_uri.is_empty() { None } else { Some(activity_uri.as_str()) })
+    .bind(if activity_uri.is_empty() {
+        None
+    } else {
+        Some(activity_uri.as_str())
+    })
     .bind(&activity_type)
     .bind(&actor_uri_in_activity)
     .bind(object_uri.as_deref())

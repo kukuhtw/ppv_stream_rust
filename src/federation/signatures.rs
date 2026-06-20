@@ -2,8 +2,8 @@ use anyhow::Context;
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use chrono::Utc;
 use rsa::pkcs1v15::{SigningKey, VerifyingKey};
-use signature::{RandomizedSigner, SignatureEncoding, Verifier};
 use sha2::{Digest, Sha256};
+use signature::{RandomizedSigner, SignatureEncoding, Verifier};
 use std::collections::HashMap;
 
 /// Maximum allowed age of a signed request (clock skew tolerance).
@@ -91,17 +91,14 @@ pub struct IncomingSignature<'a> {
 /// Returns the `keyId` from the signature on success, so the caller can
 /// confirm it matches the actor they fetched the key for.
 pub fn verify_signature(input: &IncomingSignature<'_>) -> anyhow::Result<String> {
-    let params = parse_signature_header(input.signature_header)
-        .context("malformed Signature header")?;
+    let params =
+        parse_signature_header(input.signature_header).context("malformed Signature header")?;
 
     let key_id = params
         .get("keyId")
         .ok_or_else(|| anyhow::anyhow!("Signature header missing keyId"))?
         .clone();
-    let header_names_str = params
-        .get("headers")
-        .map(|s| s.as_str())
-        .unwrap_or("date");
+    let header_names_str = params.get("headers").map(|s| s.as_str()).unwrap_or("date");
     let sig_b64 = params
         .get("signature")
         .ok_or_else(|| anyhow::anyhow!("Signature header missing signature value"))?;
@@ -120,7 +117,9 @@ pub fn verify_signature(input: &IncomingSignature<'_>) -> anyhow::Result<String>
     let signing_string =
         build_signing_string(input.method, input.path_and_query, &names, &header_map);
 
-    let sig_bytes = B64.decode(sig_b64).context("Signature base64 decode failed")?;
+    let sig_bytes = B64
+        .decode(sig_b64)
+        .context("Signature base64 decode failed")?;
 
     let public_key = crate::federation::keys::parse_public_key(input.public_key_pem)?;
     let verifying_key = VerifyingKey::<Sha256>::new(public_key);
@@ -146,7 +145,11 @@ fn build_signing_string(
         .iter()
         .map(|&name| {
             if name == "(request-target)" {
-                format!("(request-target): {} {}", method.to_lowercase(), path_and_query)
+                format!(
+                    "(request-target): {} {}",
+                    method.to_lowercase(),
+                    path_and_query
+                )
             } else {
                 let val = headers.get(name).copied().unwrap_or("");
                 format!("{}: {}", name, val)
@@ -215,7 +218,9 @@ mod tests {
     fn signature_round_trip() {
         let keys = crate::federation::keys::generate_actor_keys().expect("keygen");
 
-        let date = chrono::Utc::now().format("%a, %d %b %Y %H:%M:%S GMT").to_string();
+        let date = chrono::Utc::now()
+            .format("%a, %d %b %Y %H:%M:%S GMT")
+            .to_string();
 
         let input = SignatureInput {
             key_id: "https://example.com/users/alice#main-key",

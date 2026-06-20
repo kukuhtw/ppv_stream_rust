@@ -19,11 +19,11 @@ pub async fn build_video_object(
     base_url: &str,
 ) -> anyhow::Result<Option<Value>> {
     let row: Option<(
-        String,  // title
-        String,  // description
-        i64,     // price_cents
-        String,  // owner_id
-        String,  // federation_visibility
+        String,         // title
+        String,         // description
+        i64,            // price_cents
+        String,         // owner_id
+        String,         // federation_visibility
         Option<String>, // object_uri
     )> = sqlx::query_as(
         "SELECT title, description, price_cents, owner_id, \
@@ -45,21 +45,19 @@ pub async fn build_video_object(
     }
 
     // Resolve the actor URI for the owner
-    let actor_uri: Option<String> = sqlx::query_scalar(
-        "SELECT actor_uri FROM users WHERE id = $1 LIMIT 1",
-    )
-    .bind(&owner_id)
-    .fetch_optional(pool)
-    .await
-    .context("owner actor URI lookup failed")?
-    .flatten();
+    let actor_uri: Option<String> =
+        sqlx::query_scalar("SELECT actor_uri FROM users WHERE id = $1 LIMIT 1")
+            .bind(&owner_id)
+            .fetch_optional(pool)
+            .await
+            .context("owner actor URI lookup failed")?
+            .flatten();
 
-    let actor_uri =
-        actor_uri.unwrap_or_else(|| format!("{}/users/{}", base_url, owner_id));
+    let actor_uri = actor_uri.unwrap_or_else(|| format!("{}/users/{}", base_url, owner_id));
 
     // Assign or reuse the object URI
-    let object_uri = existing_object_uri
-        .unwrap_or_else(|| format!("{}/videos/{}", base_url, video_id));
+    let object_uri =
+        existing_object_uri.unwrap_or_else(|| format!("{}/videos/{}", base_url, video_id));
 
     // Price in major units (e.g. cents → dollars)
     let price_major = (price_cents as f64) / 100.0;
@@ -148,11 +146,7 @@ pub async fn publish_create(
 
 /// Broadcast an `Update` for an already-federated local video.
 #[allow(dead_code)]
-pub async fn publish_update(
-    pool: &PgPool,
-    video_id: &str,
-    base_url: &str,
-) -> anyhow::Result<()> {
+pub async fn publish_update(pool: &PgPool, video_id: &str, base_url: &str) -> anyhow::Result<()> {
     let video_obj = build_video_object(pool, video_id, base_url).await?;
     let Some(video_obj) = video_obj else {
         return Ok(());
@@ -163,13 +157,11 @@ pub async fn publish_update(
         .unwrap_or_default()
         .to_string();
 
-    sqlx::query(
-        "UPDATE videos SET federation_updated_at = NOW() WHERE id = $1",
-    )
-    .bind(video_id)
-    .execute(pool)
-    .await
-    .context("video federation_updated_at refresh failed")?;
+    sqlx::query("UPDATE videos SET federation_updated_at = NOW() WHERE id = $1")
+        .bind(video_id)
+        .execute(pool)
+        .await
+        .context("video federation_updated_at refresh failed")?;
 
     let activity = json!({
         "@context": "https://www.w3.org/ns/activitystreams",
@@ -185,35 +177,28 @@ pub async fn publish_update(
 
 /// Broadcast a `Delete` for a local video that is being removed or hidden.
 #[allow(dead_code)]
-pub async fn publish_delete(
-    pool: &PgPool,
-    video_id: &str,
-    base_url: &str,
-) -> anyhow::Result<()> {
+pub async fn publish_delete(pool: &PgPool, video_id: &str, base_url: &str) -> anyhow::Result<()> {
     // Look up the owner and object_uri before the video is removed
-    let row: Option<(String, Option<String>)> = sqlx::query_as(
-        "SELECT owner_id, object_uri FROM videos WHERE id = $1 LIMIT 1",
-    )
-    .bind(video_id)
-    .fetch_optional(pool)
-    .await
-    .context("video lookup for Delete failed")?;
+    let row: Option<(String, Option<String>)> =
+        sqlx::query_as("SELECT owner_id, object_uri FROM videos WHERE id = $1 LIMIT 1")
+            .bind(video_id)
+            .fetch_optional(pool)
+            .await
+            .context("video lookup for Delete failed")?;
 
     let Some((owner_id, Some(object_uri))) = row else {
         return Ok(()); // Video was never federated
     };
 
-    let actor_uri: Option<String> = sqlx::query_scalar(
-        "SELECT actor_uri FROM users WHERE id = $1 LIMIT 1",
-    )
-    .bind(&owner_id)
-    .fetch_optional(pool)
-    .await
-    .context("owner actor lookup failed")?
-    .flatten();
+    let actor_uri: Option<String> =
+        sqlx::query_scalar("SELECT actor_uri FROM users WHERE id = $1 LIMIT 1")
+            .bind(&owner_id)
+            .fetch_optional(pool)
+            .await
+            .context("owner actor lookup failed")?
+            .flatten();
 
-    let actor_uri =
-        actor_uri.unwrap_or_else(|| format!("{}/users/{}", base_url, owner_id));
+    let actor_uri = actor_uri.unwrap_or_else(|| format!("{}/users/{}", base_url, owner_id));
 
     let activity = json!({
         "@context": "https://www.w3.org/ns/activitystreams",
@@ -248,10 +233,7 @@ pub async fn process_remote_update(
 }
 
 /// Process a remote `Delete` activity (object may be a URI string or object).
-pub async fn process_remote_delete(
-    pool: &PgPool,
-    object_uri: &str,
-) -> anyhow::Result<()> {
+pub async fn process_remote_delete(pool: &PgPool, object_uri: &str) -> anyhow::Result<()> {
     sqlx::query(
         "UPDATE remote_video_catalog \
          SET is_deleted = TRUE, availability_status = 'deleted', updated_at = NOW() \
@@ -436,10 +418,7 @@ async fn broadcast_to_followers(
 
     for inbox_url in inboxes {
         crate::federation::activities::queue_outbound_activity(
-            pool,
-            actor_uri,
-            activity,
-            &inbox_url,
+            pool, actor_uri, activity, &inbox_url,
         )
         .await
         .context("queuing broadcast delivery failed")?;
@@ -450,10 +429,7 @@ async fn broadcast_to_followers(
 
 /// Returns deduplicated delivery URLs for all accepted followers of `actor_uri`.
 /// Uses shared inbox where available to reduce delivery volume.
-async fn follower_delivery_inboxes(
-    pool: &PgPool,
-    actor_uri: &str,
-) -> anyhow::Result<Vec<String>> {
+async fn follower_delivery_inboxes(pool: &PgPool, actor_uri: &str) -> anyhow::Result<Vec<String>> {
     let rows: Vec<(Option<String>, String)> = sqlx::query_as(
         "SELECT fa.shared_inbox_url, fa.inbox_url \
          FROM federation_follows ff \
@@ -485,7 +461,9 @@ mod tests {
 
     #[test]
     fn is_video_object_correct() {
-        assert!(is_video_object(&json!({"type": "Video", "id": "https://ex.com/v/1"})));
+        assert!(is_video_object(
+            &json!({"type": "Video", "id": "https://ex.com/v/1"})
+        ));
         assert!(!is_video_object(&json!({"type": "Note"})));
         assert!(!is_video_object(&json!({})));
     }
@@ -523,7 +501,9 @@ mod tests {
             {"type": "Link", "href": "https://ex.com/hls/video.m3u8", "mediaType": "application/x-mpegURL"},
             {"type": "Link", "href": "https://ex.com/watch/1", "mediaType": "text/html"}
         ]);
-        let html = urls.as_array().unwrap()
+        let html = urls
+            .as_array()
+            .unwrap()
             .iter()
             .find(|item| {
                 item.get("mediaType")

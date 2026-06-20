@@ -313,8 +313,8 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
             cfg: cfg.clone(),
         });
 
-    let federation_router = federation::router(pool.clone(), &cfg.base_url)
-        .map_err(anyhow::Error::msg)?;
+    let federation_router =
+        federation::router(pool.clone(), &cfg.base_url).map_err(anyhow::Error::msg)?;
 
     if parse_bool_env("FEDERATION_ENABLED") {
         federation::delivery::start_delivery_worker(pool.clone());
@@ -384,6 +384,11 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
 fn parse_bool_env(name: &str) -> bool {
     std::env::var(name)
         .ok()
-        .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .map(|v| {
+            matches!(
+                v.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
         .unwrap_or(false)
 }

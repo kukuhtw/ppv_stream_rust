@@ -14,10 +14,7 @@ pub async fn handle_inbound_activity(
     activity: &Value,
     activity_db_id: Uuid,
 ) -> anyhow::Result<()> {
-    let activity_type = activity
-        .get("type")
-        .and_then(|t| t.as_str())
-        .unwrap_or("");
+    let activity_type = activity.get("type").and_then(|t| t.as_str()).unwrap_or("");
 
     let result = match activity_type {
         "Follow" => handle_follow(pool, actor_uri, activity, activity_db_id).await,
@@ -56,10 +53,7 @@ async fn handle_follow(
     let object_uri = extract_object_id(activity)
         .ok_or_else(|| anyhow::anyhow!("Follow activity has no recognisable object"))?;
 
-    let follow_activity_uri = activity
-        .get("id")
-        .and_then(|id| id.as_str())
-        .unwrap_or("");
+    let follow_activity_uri = activity.get("id").and_then(|id| id.as_str()).unwrap_or("");
 
     // Find local actor record
     let local: Option<(Uuid, String)> = sqlx::query_as(
@@ -77,8 +71,7 @@ async fn handle_follow(
     };
 
     // Upsert remote actor (fetch from network if not cached)
-    let (follower_db_id, follower_inbox) =
-        upsert_remote_actor(pool, follower_uri).await?;
+    let (follower_db_id, follower_inbox) = upsert_remote_actor(pool, follower_uri).await?;
 
     // Record the follow as accepted (this instance auto-accepts all follows)
     sqlx::query(
@@ -105,7 +98,8 @@ async fn handle_follow(
 
     // Queue an Accept{Follow} back to the follower's inbox
     let accept = build_accept(&local_actor_uri, activity);
-    queue_outbound_activity(pool, &local_actor_uri, &accept, &follower_inbox).await
+    queue_outbound_activity(pool, &local_actor_uri, &accept, &follower_inbox)
+        .await
         .context("queuing Accept{Follow} failed")?;
 
     tracing::info!(
@@ -182,10 +176,7 @@ async fn handle_reject(
 /// Called from the admin API when a moderator explicitly rejects an incoming
 /// follow request.  `follow_db_id` is the UUID primary key of the
 /// `federation_follows` row.
-pub async fn send_reject(
-    pool: &PgPool,
-    follow_db_id: Uuid,
-) -> anyhow::Result<()> {
+pub async fn send_reject(pool: &PgPool, follow_db_id: Uuid) -> anyhow::Result<()> {
     // Load the follow row: follower inbox + local actor URI + follow activity URI
     let row: Option<(String, String, String, String)> = sqlx::query_as(
         r#"
@@ -207,7 +198,10 @@ pub async fn send_reject(
     .context("follow lookup for Reject failed")?;
 
     let Some((follower_uri, follower_inbox, local_actor_uri, follow_activity_uri)) = row else {
-        anyhow::bail!("follow record {} not found or not targeting a local actor", follow_db_id);
+        anyhow::bail!(
+            "follow record {} not found or not targeting a local actor",
+            follow_db_id
+        );
     };
 
     // Mark the follow as rejected
@@ -286,11 +280,7 @@ async fn handle_undo(
 
     mark_activity(pool, activity_db_id, "processed").await?;
 
-    tracing::info!(
-        actor_uri,
-        follow_uri,
-        "Undo{{Follow}} processed"
-    );
+    tracing::info!(actor_uri, follow_uri, "Undo{{Follow}} processed");
     Ok(())
 }
 
@@ -335,15 +325,13 @@ async fn handle_delete(
     activity: &Value,
     activity_db_id: Uuid,
 ) -> anyhow::Result<()> {
-    let object_uri = activity
-        .get("object")
-        .and_then(|o| {
-            if o.is_string() {
-                o.as_str()
-            } else {
-                o.get("id")?.as_str()
-            }
-        });
+    let object_uri = activity.get("object").and_then(|o| {
+        if o.is_string() {
+            o.as_str()
+        } else {
+            o.get("id")?.as_str()
+        }
+    });
 
     if let Some(uri) = object_uri {
         crate::federation::video_index::process_remote_delete(pool, uri)
@@ -380,10 +368,7 @@ fn build_accept(local_actor_uri: &str, follow_activity: &Value) -> Value {
 ///
 /// Fetches the actor document from the network if no cached record exists.
 /// Returns `(actor_db_id, inbox_url)`.
-pub async fn upsert_remote_actor(
-    pool: &PgPool,
-    actor_uri: &str,
-) -> anyhow::Result<(Uuid, String)> {
+pub async fn upsert_remote_actor(pool: &PgPool, actor_uri: &str) -> anyhow::Result<(Uuid, String)> {
     // Fast path: record already in DB
     let existing: Option<(Uuid, String)> = sqlx::query_as(
         "SELECT id, inbox_url FROM federation_actors \
@@ -530,11 +515,7 @@ pub async fn queue_outbound_activity(
     Ok(())
 }
 
-async fn mark_activity(
-    pool: &PgPool,
-    id: Uuid,
-    status: &str,
-) -> anyhow::Result<()> {
+async fn mark_activity(pool: &PgPool, id: Uuid, status: &str) -> anyhow::Result<()> {
     sqlx::query(
         "UPDATE federation_activities \
          SET processing_status = $2, processed_at = NOW() \
@@ -580,7 +561,8 @@ mod tests {
 
     #[test]
     fn extract_object_id_from_object() {
-        let activity = json!({ "object": { "id": "https://example.com/users/alice", "type": "Person" } });
+        let activity =
+            json!({ "object": { "id": "https://example.com/users/alice", "type": "Person" } });
         assert_eq!(
             extract_object_id(&activity),
             Some("https://example.com/users/alice")
@@ -596,8 +578,8 @@ mod tests {
     #[test]
     fn reject_activity_has_required_fields() {
         let local_actor = "https://local.example/users/alice";
-        let follow_uri  = "https://remote.example/activities/f1";
-        let follower    = "https://remote.example/users/bob";
+        let follow_uri = "https://remote.example/activities/f1";
+        let follower = "https://remote.example/users/bob";
 
         let reject = json!({
             "@context": "https://www.w3.org/ns/activitystreams",
