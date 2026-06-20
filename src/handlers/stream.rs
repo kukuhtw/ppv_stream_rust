@@ -57,6 +57,36 @@ pub async fn request_play(
         }
     };
 
+    // Guard: remote federated videos must be played on the origin instance.
+    // This check runs before the access check so users receive a helpful message
+    // rather than a generic "no access" error.
+    {
+        let remote_row = sqlx::query(
+            "SELECT canonical_url FROM remote_video_catalog \
+             WHERE object_uri = $1 AND is_deleted = FALSE LIMIT 1",
+        )
+        .bind(&q.video_id)
+        .fetch_optional(&st.pool)
+        .await
+        .ok()
+        .flatten();
+
+        if let Some(row) = remote_row {
+            let watch_url = row
+                .try_get::<Option<String>, _>("canonical_url")
+                .ok()
+                .flatten();
+            let mut body = json!({
+                "ok": false,
+                "error": "This video is hosted on a remote instance. Watch it on the origin server."
+            });
+            if let Some(url) = watch_url {
+                body["watch_url"] = serde_json::Value::String(url);
+            }
+            return (StatusCode::UNPROCESSABLE_ENTITY, Json(body)).into_response();
+        }
+    }
+
     match user_has_view_access(&st.pool, &q.video_id, &user_id).await {
         Ok(true) => {}
         Ok(false) => {

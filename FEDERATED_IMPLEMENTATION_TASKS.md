@@ -91,7 +91,7 @@ Remote PPV Stream instances may exchange public creator identity and public vide
 - [x] Display origin instance for remote videos
 - [x] Add canonical origin watch and checkout links
 - [x] Reject local payment requests for remote videos
-- [ ] Reject local playback requests for remote videos
+- [x] Reject local playback requests for remote videos
 - [ ] Prevent remote records from entering upload workers
 - [ ] Prevent remote records from entering FFmpeg workers
 - [ ] Prevent remote records from entering storage migration workers
