@@ -316,6 +316,11 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
     let federation_router = federation::router(pool.clone(), &cfg.base_url)
         .map_err(anyhow::Error::msg)?;
 
+    if parse_bool_env("FEDERATION_ENABLED") {
+        federation::delivery::start_delivery_worker(pool.clone());
+        tracing::info!("federation delivery worker started");
+    }
+
     let app = static_router
         .merge(admin_pages_router)
         .merge(user_auth_router)
@@ -374,4 +379,11 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
     axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+fn parse_bool_env(name: &str) -> bool {
+    std::env::var(name)
+        .ok()
+        .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false)
 }

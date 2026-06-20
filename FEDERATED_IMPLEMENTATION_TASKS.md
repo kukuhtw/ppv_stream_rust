@@ -69,13 +69,13 @@ Remote PPV Stream instances may exchange public creator identity and public vide
 - [x] Implement actor outbox
 - [x] Implement followers collection
 - [x] Implement following collection
-- [ ] Implement `Follow`
-- [ ] Implement `Accept`
+- [x] Implement `Follow`
+- [x] Implement `Accept`
 - [ ] Implement `Reject`
-- [ ] Implement `Undo`
+- [x] Implement `Undo`
 - [x] Add activity deduplication
-- [ ] Add delivery queue worker
-- [ ] Add exponential retry with jitter
+- [x] Add delivery queue worker
+- [x] Add exponential retry with jitter
 
 ## Phase 5: Video Index Federation
 
@@ -177,10 +177,10 @@ Completed:
 
 Next tasks:
 
-1. Implement Follow, Accept, Reject, Undo activity processing
-2. Add delivery queue worker
-3. Add exponential retry with jitter
-4. Begin Phase 5: video index federation (Create/Update/Delete)
+1. Implement Reject (for manual moderation of Follow requests)
+2. Begin Phase 5: video index federation (Create/Update/Delete)
+3. Build combined local + remote video catalog query
+4. Add `hosting_type` field to catalog responses
 
 ## First Batch Result
 

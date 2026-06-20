@@ -1,4 +1,6 @@
+pub mod activities;
 pub mod collections;
+pub mod delivery;
 pub mod keys;
 pub mod resolver;
 pub mod signatures;

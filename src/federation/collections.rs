@@ -330,6 +330,27 @@ async fn process_inbox(
         );
     }
 
+    // Spawn async processing (Follow/Undo) without blocking the response
+    let pool_clone = state.pool.clone();
+    let actor_clone = actor_uri_in_activity.clone();
+    let act_clone = activity.clone();
+    tokio::spawn(async move {
+        if let Err(e) = crate::federation::activities::handle_inbound_activity(
+            &pool_clone,
+            &actor_clone,
+            &act_clone,
+            activity_id,
+        )
+        .await
+        {
+            tracing::error!(
+                actor_uri = %actor_clone,
+                "inbound activity processing error: {}",
+                e
+            );
+        }
+    });
+
     (StatusCode::ACCEPTED, Json(json!({ "status": "accepted" }))).into_response()
 }
 
