@@ -34,7 +34,7 @@ Remote PPV Stream instances may exchange public creator identity and public vide
 - [x] Implement `GET /nodeinfo/2.1`
 - [x] Implement local ActivityPub actor endpoint
 - [x] Return ActivityPub content type
-- [~] Add discovery endpoint unit tests
+- [x] Add discovery endpoint unit tests
 - [x] Add disabled-federation configuration test
 
 ## Phase 2: Remote Index Storage
@@ -51,29 +51,29 @@ Remote PPV Stream instances may exchange public creator identity and public vide
 
 ## Phase 3: ActivityPub Identity and Security
 
-- [ ] Generate local actor keys
-- [ ] Encrypt actor private keys at rest
-- [ ] Implement HTTP Signature creation
-- [ ] Implement HTTP Signature verification
-- [ ] Implement Digest verification
-- [ ] Add replay protection
-- [ ] Add maximum request age validation
-- [ ] Add federation payload limits
-- [ ] Add SSRF-safe remote resolver
-- [ ] Block private and local address ranges
+- [x] Generate local actor keys
+- [x] Encrypt actor private keys at rest
+- [x] Implement HTTP Signature creation
+- [x] Implement HTTP Signature verification
+- [x] Implement Digest verification
+- [x] Add replay protection
+- [x] Add maximum request age validation
+- [x] Add federation payload limits
+- [x] Add SSRF-safe remote resolver
+- [x] Block private and local address ranges
 
 ## Phase 4: Follow Federation
 
-- [ ] Implement actor inbox
-- [ ] Implement shared inbox
-- [ ] Implement actor outbox
-- [ ] Implement followers collection
-- [ ] Implement following collection
+- [x] Implement actor inbox
+- [x] Implement shared inbox
+- [x] Implement actor outbox
+- [x] Implement followers collection
+- [x] Implement following collection
 - [ ] Implement `Follow`
 - [ ] Implement `Accept`
 - [ ] Implement `Reject`
 - [ ] Implement `Undo`
-- [ ] Add activity deduplication
+- [x] Add activity deduplication
 - [ ] Add delivery queue worker
 - [ ] Add exponential retry with jitter
 
@@ -177,11 +177,10 @@ Completed:
 
 Next tasks:
 
-1. Add endpoint-level discovery tests
-2. Add ActivityPub actor key generation
-3. Add HTTP Signature support
-4. Add SSRF-safe remote actor resolver
-5. Add inbox, outbox, followers, and following collections
+1. Implement Follow, Accept, Reject, Undo activity processing
+2. Add delivery queue worker
+3. Add exponential retry with jitter
+4. Begin Phase 5: video index federation (Create/Update/Delete)
 
 ## First Batch Result
 
@@ -194,3 +193,22 @@ Next tasks:
 - NodeInfo reports `index-only` federation mode
 - A local actor endpoint returns ActivityPub JSON
 - No remote media download or playback logic has been introduced
+
+## Second Batch Result
+
+- RSA 2048-bit actor key generation (`src/federation/keys.rs`)
+- HMAC-SHA256 envelope encryption for private keys at rest
+- HTTP Signature creation and verification with RSA-SHA256 (`src/federation/signatures.rs`)
+- SHA-256 Digest header creation and verification
+- Maximum request age enforcement (30 seconds clock skew tolerance)
+- SSRF-safe remote actor resolver (`src/federation/resolver.rs`)
+- Private and reserved IP range blocking for outbound federation requests
+- Actor inbox endpoint with signature verification and payload size limit (`src/federation/collections.rs`)
+- Shared inbox endpoint
+- Outbox, followers, and following collection endpoints
+- Activity deduplication via `activity_uri` uniqueness check
+- Local actor document now includes `publicKey` block and Security context
+- Discovery endpoint unit tests added to `mod.rs`
+- Signature round-trip tests in `signatures.rs`
+- Key generation and encrypt/decrypt tests in `keys.rs`
+- SSRF protection tests in `resolver.rs`

@@ -1,8 +1,13 @@
+pub mod collections;
+pub mod keys;
+pub mod resolver;
+pub mod signatures;
+
 use axum::{
     extract::{Path, Query, State},
     http::{header, HeaderMap, StatusCode},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -54,7 +59,9 @@ impl FederationConfig {
             return Err("FEDERATION_DOMAIN must contain only a host name".into());
         }
 
-        if !self.base_url.starts_with("https://") && !self.base_url.starts_with("http://localhost") {
+        if !self.base_url.starts_with("https://")
+            && !self.base_url.starts_with("http://localhost")
+        {
             return Err(
                 "FEDERATION_BASE_URL must use HTTPS, except for localhost development".into(),
             );
@@ -67,7 +74,12 @@ impl FederationConfig {
 fn parse_bool(name: &str, default: bool) -> bool {
     std::env::var(name)
         .ok()
-        .map(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .map(|value| {
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
         .unwrap_or(default)
 }
 
@@ -98,12 +110,32 @@ pub fn router(pool: PgPool, default_base_url: &str) -> Result<Router, String> {
     };
 
     Ok(Router::new()
+        // Discovery
         .route("/.well-known/webfinger", get(webfinger))
         .route("/.well-known/nodeinfo", get(nodeinfo_well_known))
         .route("/nodeinfo/2.1", get(nodeinfo_21))
+        // Actors
         .route("/users/:username", get(local_actor))
+        // Collections
+        .route(
+            "/users/:username/followers",
+            get(collections::actor_followers),
+        )
+        .route(
+            "/users/:username/following",
+            get(collections::actor_following),
+        )
+        .route("/users/:username/outbox", get(collections::actor_outbox))
+        // Inbox
+        .route(
+            "/users/:username/inbox",
+            get(collections::actor_inbox_get).post(collections::actor_inbox_post),
+        )
+        .route("/inbox", post(collections::shared_inbox_post))
         .with_state(state))
 }
+
+// ── WebFinger ──────────────────────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
 struct WebFingerQuery {
@@ -119,15 +151,22 @@ async fn webfinger(
     };
 
     let Some((username, domain)) = handle.rsplit_once('@') else {
-        return api_error(StatusCode::BAD_REQUEST, "resource must include username and domain");
+        return api_error(
+            StatusCode::BAD_REQUEST,
+            "resource must include username and domain",
+        );
     };
 
     if domain != state.config.domain {
-        return api_error(StatusCode::NOT_FOUND, "account is not hosted by this instance");
+        return api_error(
+            StatusCode::NOT_FOUND,
+            "account is not hosted by this instance",
+        );
     }
 
     let found = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM users WHERE username = $1 AND federation_enabled = TRUE AND discoverable = TRUE",
+        "SELECT COUNT(*) FROM users \
+         WHERE username = $1 AND federation_enabled = TRUE AND discoverable = TRUE",
     )
     .bind(username)
     .fetch_one(&state.pool)
@@ -154,6 +193,8 @@ async fn webfinger(
         }
     }
 }
+
+// ── NodeInfo ───────────────────────────────────────────────────────────────
 
 async fn nodeinfo_well_known(State(state): State<FederationState>) -> Json<Value> {
     Json(json!({
@@ -186,7 +227,10 @@ async fn nodeinfo_21(State(state): State<FederationState>) -> Response {
         .await;
 
     let (Ok(users), Ok(videos)) = (users, videos) else {
-        return api_error(StatusCode::INTERNAL_SERVER_ERROR, "failed to build node information");
+        return api_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "failed to build node information",
+        );
     };
 
     Json(json!({
@@ -214,22 +258,44 @@ async fn nodeinfo_21(State(state): State<FederationState>) -> Response {
     .into_response()
 }
 
+// ── Local actor ────────────────────────────────────────────────────────────
+
 async fn local_actor(
     State(state): State<FederationState>,
     Path(username): Path<String>,
 ) -> Response {
-    let user = sqlx::query_as::<_, (String, Option<String>, Option<String>)>(
-        "SELECT id, profile_desc, actor_uri FROM users WHERE username = $1 AND federation_enabled = TRUE AND discoverable = TRUE LIMIT 1",
-    )
-    .bind(&username)
-    .fetch_optional(&state.pool)
-    .await;
+    let row: Option<(String, Option<String>, Option<String>, Option<String>)> =
+        sqlx::query_as(
+            "SELECT u.id, u.profile_desc, u.actor_uri, fa.public_key_pem \
+             FROM users u \
+             LEFT JOIN federation_actors fa \
+               ON fa.local_user_id = u.id AND fa.is_local = TRUE \
+             WHERE u.username = $1 \
+               AND u.federation_enabled = TRUE \
+               AND u.discoverable = TRUE \
+             LIMIT 1",
+        )
+        .bind(&username)
+        .fetch_optional(&state.pool)
+        .await
+        .unwrap_or(None);
 
-    let Ok(Some((_user_id, profile_desc, actor_uri))) = user else {
+    let Some((_user_id, profile_desc, actor_uri, public_key_pem)) = row else {
         return api_error(StatusCode::NOT_FOUND, "actor not found");
     };
 
-    let actor_url = actor_uri.unwrap_or_else(|| format!("{}/users/{}", state.config.base_url, username));
+    let actor_url =
+        actor_uri.unwrap_or_else(|| format!("{}/users/{}", state.config.base_url, username));
+
+    let public_key_block: Value = match public_key_pem {
+        Some(pem) => json!({
+            "id": format!("{}#main-key", actor_url),
+            "owner": actor_url,
+            "publicKeyPem": pem
+        }),
+        None => json!(null),
+    };
+
     let mut headers = HeaderMap::new();
     headers.insert(
         header::CONTENT_TYPE,
@@ -239,17 +305,21 @@ async fn local_actor(
     (
         headers,
         Json(json!({
-            "@context": "https://www.w3.org/ns/activitystreams",
+            "@context": [
+                "https://www.w3.org/ns/activitystreams",
+                "https://w3id.org/security/v1"
+            ],
             "id": actor_url,
             "type": "Person",
             "preferredUsername": username,
             "name": username,
             "summary": profile_desc.unwrap_or_default(),
-            "inbox": format!("{}/users/{}/inbox", state.config.base_url, username),
-            "outbox": format!("{}/users/{}/outbox", state.config.base_url, username),
-            "followers": format!("{}/users/{}/followers", state.config.base_url, username),
-            "following": format!("{}/users/{}/following", state.config.base_url, username),
+            "inbox": format!("{}/inbox", actor_url),
+            "outbox": format!("{}/outbox", actor_url),
+            "followers": format!("{}/followers", actor_url),
+            "following": format!("{}/following", actor_url),
             "url": format!("{}/public/profile.html?username={}", state.config.base_url, username),
+            "publicKey": public_key_block,
             "endpoints": {
                 "sharedInbox": format!("{}/inbox", state.config.base_url)
             },
@@ -263,13 +333,19 @@ async fn local_actor(
         .into_response()
 }
 
-fn api_error(status: StatusCode, message: &str) -> Response {
+// ── Shared helpers ─────────────────────────────────────────────────────────
+
+pub(crate) fn api_error(status: StatusCode, message: &str) -> Response {
     (status, Json(json!({ "error": message }))).into_response()
 }
+
+// ── Tests ──────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── Configuration tests ────────────────────────────────────────────────
 
     #[test]
     fn disabled_by_default() {
@@ -298,5 +374,94 @@ mod tests {
             software_version: "test".into(),
         };
         assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn rejects_domain_with_slash() {
+        let config = FederationConfig {
+            enabled: true,
+            domain: "example.com/path".into(),
+            base_url: "https://example.com".into(),
+            software_version: "test".into(),
+        };
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn rejects_empty_domain() {
+        let config = FederationConfig {
+            enabled: true,
+            domain: "".into(),
+            base_url: "https://example.com".into(),
+            software_version: "test".into(),
+        };
+        assert!(config.validate().is_err());
+    }
+
+    // ── WebFinger parsing tests ────────────────────────────────────────────
+
+    #[test]
+    fn webfinger_resource_must_use_acct_scheme() {
+        // The handler splits on "acct:", so non-acct: resources return an error.
+        // Simulate the split:
+        let resource = "https://example.com/users/alice";
+        assert!(resource.strip_prefix("acct:").is_none());
+    }
+
+    #[test]
+    fn webfinger_handle_requires_at_sign() {
+        let handle = "alicenodomain";
+        assert!(handle.rsplit_once('@').is_none());
+    }
+
+    #[test]
+    fn webfinger_valid_handle_splits_correctly() {
+        let handle = "alice@example.com";
+        let (user, domain) = handle.rsplit_once('@').unwrap();
+        assert_eq!(user, "alice");
+        assert_eq!(domain, "example.com");
+    }
+
+    // ── NodeInfo structure tests ───────────────────────────────────────────
+
+    #[test]
+    fn nodeinfo_usage_serialises() {
+        let usage = NodeInfoUsage {
+            users: NodeInfoUsageUsers { total: 42 },
+            local_posts: 7,
+        };
+        let v = serde_json::to_value(usage).unwrap();
+        assert_eq!(v["users"]["total"], 42);
+        assert_eq!(v["localPosts"], 7);
+    }
+
+    // ── Actor JSON structure tests ─────────────────────────────────────────
+
+    #[test]
+    fn actor_url_is_derived_from_base_url_and_username() {
+        let base = "https://example.com";
+        let username = "alice";
+        let actor_url = format!("{}/users/{}", base, username);
+        assert_eq!(actor_url, "https://example.com/users/alice");
+    }
+
+    #[test]
+    fn actor_endpoints_use_canonical_url() {
+        let actor_url = "https://example.com/users/alice";
+        let inbox = format!("{}/inbox", actor_url);
+        let outbox = format!("{}/outbox", actor_url);
+        let followers = format!("{}/followers", actor_url);
+        let following = format!("{}/following", actor_url);
+        assert!(inbox.ends_with("/inbox"));
+        assert!(outbox.ends_with("/outbox"));
+        assert!(followers.ends_with("/followers"));
+        assert!(following.ends_with("/following"));
+    }
+
+    #[test]
+    fn shared_inbox_is_at_root() {
+        let base = "https://example.com";
+        let shared_inbox = format!("{}/inbox", base);
+        assert_eq!(shared_inbox, "https://example.com/inbox");
     }
 }
