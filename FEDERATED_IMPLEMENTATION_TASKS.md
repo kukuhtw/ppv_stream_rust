@@ -20,33 +20,33 @@ Remote PPV Stream instances may exchange public creator identity and public vide
 - [x] Add index-only architecture decision
 - [x] Add federated revenue-sharing documentation
 - [x] Create implementation task checklist
-- [~] Add federation configuration to `Config`
-- [ ] Add configuration validation
-- [ ] Add federation database migration
-- [ ] Add federation module skeleton
-- [ ] Add federation feature flag to application routing
-- [ ] Add unit tests for configuration defaults
+- [x] Add dedicated federation configuration
+- [x] Add configuration validation
+- [x] Add federation database migration to runtime `sql` directory
+- [x] Add federation module skeleton
+- [x] Add federation feature flag to application routing
+- [x] Add unit tests for configuration defaults and HTTPS validation
 
 ## Phase 1: Discovery
 
-- [ ] Implement `GET /.well-known/webfinger`
-- [ ] Implement `GET /.well-known/nodeinfo`
-- [ ] Implement `GET /nodeinfo/2.1`
-- [ ] Implement local ActivityPub actor endpoint
-- [ ] Return ActivityPub content type
-- [ ] Add discovery unit tests
-- [ ] Add disabled-federation behavior tests
+- [x] Implement `GET /.well-known/webfinger`
+- [x] Implement `GET /.well-known/nodeinfo`
+- [x] Implement `GET /nodeinfo/2.1`
+- [x] Implement local ActivityPub actor endpoint
+- [x] Return ActivityPub content type
+- [~] Add discovery endpoint unit tests
+- [x] Add disabled-federation configuration test
 
 ## Phase 2: Remote Index Storage
 
-- [ ] Create `federation_instances`
-- [ ] Create `federation_actors`
-- [ ] Create `federation_activities`
-- [ ] Create `federation_delivery_jobs`
-- [ ] Create `remote_video_catalog`
-- [ ] Create `federation_domain_rules`
-- [ ] Add indexes and constraints
-- [ ] Confirm remote catalog has no media storage columns
+- [x] Create `federation_instances`
+- [x] Create `federation_actors`
+- [x] Create `federation_activities`
+- [x] Create `federation_delivery_jobs`
+- [x] Create `remote_video_catalog`
+- [x] Create `federation_domain_rules`
+- [x] Add indexes and constraints
+- [x] Confirm remote catalog has no media storage columns
 - [ ] Add migration rollback documentation
 
 ## Phase 3: ActivityPub Identity and Security
@@ -161,29 +161,36 @@ Remote PPV Stream instances may exchange public creator identity and public vide
 - [ ] Add monitoring metrics documentation
 - [ ] Add backup and key-rotation guide
 
-## Immediate Implementation Order
+## Current Implementation Batch
 
-The first implementation batch follows this order:
+Completed:
 
 1. Federation configuration
 2. Configuration validation
-3. Database migration
+3. Runtime database migration
 4. Federation module skeleton
 5. WebFinger endpoint
 6. NodeInfo endpoints
 7. Local actor endpoint
-8. Unit tests
+8. Basic configuration tests
+9. Application router integration
 
-## Definition of Done for the First Batch
+Next tasks:
 
-The first batch is complete when:
+1. Add endpoint-level discovery tests
+2. Add ActivityPub actor key generation
+3. Add HTTP Signature support
+4. Add SSRF-safe remote actor resolver
+5. Add inbox, outbox, followers, and following collections
+
+## First Batch Result
 
 - Federation is disabled by default
 - Federation can be enabled using environment variables
+- Public federation requires HTTPS, except localhost development
 - The local domain and base URL are validated
-- Database tables for the index-only federation foundation exist
-- WebFinger can resolve a local user
-- NodeInfo reports the PPV Stream software and federation status
-- A local actor endpoint returns valid ActivityPub JSON
-- No remote media download or playback logic is introduced
-- Unit tests cover basic discovery behavior
+- Database tables for index-only federation are registered in runtime migrations
+- WebFinger can resolve a discoverable local user
+- NodeInfo reports `index-only` federation mode
+- A local actor endpoint returns ActivityPub JSON
+- No remote media download or playback logic has been introduced
