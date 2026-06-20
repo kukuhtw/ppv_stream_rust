@@ -10,6 +10,7 @@ mod commission;
 mod config;
 mod db;
 mod email;
+mod federation;
 mod ffmpeg;
 mod handlers;
 mod middleware;
@@ -312,6 +313,9 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
             cfg: cfg.clone(),
         });
 
+    let federation_router = federation::router(pool.clone(), &cfg.base_url)
+        .map_err(anyhow::Error::msg)?;
+
     let app = static_router
         .merge(admin_pages_router)
         .merge(user_auth_router)
@@ -328,6 +332,7 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
         .merge(admin_wallet_router)
         .merge(affiliate_router)
         .merge(chat_router)
+        .merge(federation_router)
         .layer(from_fn(middleware::security_headers))
         .layer(from_fn_with_state(
             cfg.clone(),
