@@ -267,9 +267,13 @@ async fn deliver_job(pool: &PgPool, job: &DeliveryJob, app_secret: &[u8]) -> any
 /// Exponential backoff: 2^attempt seconds + up to 30 s jitter, capped at 1 h.
 fn compute_next_retry(attempt: i32) -> chrono::DateTime<chrono::Utc> {
     use rand::Rng;
-    let base: u64 = (2u64).saturating_pow(attempt as u32).min(3600);
+    let base: u64 = compute_retry_delay_seconds(attempt);
     let jitter: u64 = rand::thread_rng().gen_range(0..=30);
     chrono::Utc::now() + chrono::Duration::seconds((base + jitter) as i64)
+}
+
+fn compute_retry_delay_seconds(attempt: i32) -> u64 {
+    (2u64).saturating_pow(attempt as u32).min(3600)
 }
 
 fn parse_url_host_path(url: &str) -> anyhow::Result<(String, String)> {
@@ -322,8 +326,8 @@ mod tests {
 
     #[test]
     fn next_retry_grows_with_attempt() {
-        let r1 = compute_next_retry(1);
-        let r3 = compute_next_retry(3);
-        assert!(r3 > r1);
+        assert!(compute_retry_delay_seconds(3) > compute_retry_delay_seconds(1));
+        assert_eq!(compute_retry_delay_seconds(0), 1);
+        assert_eq!(compute_retry_delay_seconds(12), 3600);
     }
 }
