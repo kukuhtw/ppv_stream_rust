@@ -42,6 +42,7 @@ pub struct ReferralClaims {
 ///
 /// The signature covers exactly the base64url-encoded claims string.
 /// The caller supplies the referring actor's RSA private key in PKCS#8 PEM.
+#[allow(dead_code)]
 pub fn build_referral_payload(domain: &str, private_key_pem: &str) -> anyhow::Result<String> {
     use signature::{RandomizedSigner, SignatureEncoding};
 
@@ -112,7 +113,7 @@ pub fn verify_referral_payload(
 
     // Reject tokens older than 24 hours
     let age_secs = chrono::Utc::now().timestamp() - claims.ts;
-    if age_secs > 86_400 || age_secs < -300 {
+    if !(-300..=86_400).contains(&age_secs) {
         anyhow::bail!(
             "referral token is expired or from the future (age {}s)",
             age_secs
@@ -128,6 +129,7 @@ pub fn verify_referral_payload(
 ///
 /// `verified` should be `true` only when `verify_referral_payload` succeeded.
 /// Returns the new row's primary key.
+#[allow(dead_code)]
 pub async fn record_referral(
     pool: &PgPool,
     referring_domain: &str,
@@ -160,6 +162,7 @@ pub async fn record_referral(
 ///
 /// `basis_points`: 100 = 1 %, 500 = 5 %, 10 000 = 100 %.
 /// Uses floor division; the remainder stays with the destination instance.
+#[allow(dead_code)]
 pub fn calculate_share_cents(gross_cents: i64, basis_points: i32) -> i64 {
     if basis_points <= 0 || gross_cents <= 0 {
         return 0;
@@ -169,7 +172,7 @@ pub fn calculate_share_cents(gross_cents: i64, basis_points: i32) -> i64 {
 
 /// Validate that `basis_points` is in the allowed range \[0, 5 000\].
 pub fn validate_basis_points(bp: i32) -> anyhow::Result<()> {
-    if bp < 0 || bp > 5_000 {
+    if !(0..=5_000).contains(&bp) {
         anyhow::bail!("basis_points {} is out of range [0, 5000] (max 50 %)", bp);
     }
     Ok(())
@@ -184,6 +187,7 @@ pub fn validate_basis_points(bp: i32) -> anyhow::Result<()> {
 ///
 /// Returns `Ok(Some(share_cents))` when a new share entry was created, or
 /// `Ok(None)` when skipped (no policy, no referral, or already processed).
+#[allow(dead_code)]
 pub async fn process_revenue_share(
     pool: &PgPool,
     invoice_id: &str,
@@ -273,6 +277,7 @@ pub async fn process_revenue_share(
 }
 
 /// Append an immutable ledger line for a revenue share record.
+#[allow(dead_code)]
 pub async fn record_ledger_entry(
     pool: &PgPool,
     revenue_share_id: Uuid,
@@ -302,6 +307,7 @@ pub async fn record_ledger_entry(
 ///
 /// Sets `status = 'reversed'` and appends a debit/chargeback ledger line.
 /// `entry_type` must be `"refund"` or `"chargeback"`.
+#[allow(dead_code)]
 pub async fn reverse_revenue_share(
     pool: &PgPool,
     invoice_id: &str,

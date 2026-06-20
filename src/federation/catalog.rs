@@ -25,6 +25,18 @@ pub struct CatalogEntry {
     pub published_at: Option<String>,
 }
 
+type RemoteCatalogRow = (
+    String,
+    String,
+    Option<String>,
+    String,
+    Option<String>,
+    Option<String>,
+    String,
+    Option<String>,
+    Option<String>,
+);
+
 #[derive(Debug, Deserialize)]
 pub struct CatalogQuery {
     #[serde(default = "default_limit")]
@@ -101,17 +113,7 @@ pub async fn catalog(
 
     // ── Remote video catalog ───────────────────────────────────────────────
     if q.hosting_type.is_empty() || q.hosting_type == "remote" {
-        let remote_rows: Vec<(
-            String,         // object_uri
-            String,         // title
-            Option<String>, // description
-            String,         // canonical_url
-            Option<String>, // checkout_url
-            Option<String>, // thumbnail_url
-            String,         // origin_domain
-            Option<String>, // content_rating
-            Option<String>, // published_at (as text from TIMESTAMPTZ)
-        )> = sqlx::query_as(
+        let remote_rows: Vec<RemoteCatalogRow> = sqlx::query_as(
             "SELECT object_uri, title, description, canonical_url, checkout_url, \
                     thumbnail_url, origin_domain, content_rating, \
                     TO_CHAR(published_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') \

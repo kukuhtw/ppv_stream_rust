@@ -11,6 +11,28 @@ use uuid::Uuid;
 
 use super::{api_error, FederationState};
 
+type DomainRuleRow = (String, String, Option<String>, String);
+type InstanceRow = (String, i64, i64, Option<String>);
+type ActivityLogRow = (
+    String,
+    String,
+    String,
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+);
+type DeliveryJobRow = (
+    String,
+    String,
+    i32,
+    i32,
+    String,
+    Option<i32>,
+    Option<String>,
+    Option<String>,
+);
+
 // ── Admin token auth ───────────────────────────────────────────────────────
 
 /// Checks `X-Federation-Admin-Token` header against `FEDERATION_ADMIN_TOKEN` env var.
@@ -94,7 +116,7 @@ pub async fn list_domain_rules(
 ) -> Response {
     require_admin!(headers);
 
-    let rows: Vec<(String, String, Option<String>, String)> = sqlx::query_as(
+    let rows: Vec<DomainRuleRow> = sqlx::query_as(
         "SELECT domain, action, reason, created_at::text \
          FROM federation_domain_rules \
          ORDER BY action, domain",
@@ -263,7 +285,7 @@ pub async fn list_instances(
     let limit = q.limit.clamp(1, 200);
     let offset = q.offset.max(0);
 
-    let rows: Vec<(String, i64, i64, Option<String>)> = sqlx::query_as(
+    let rows: Vec<InstanceRow> = sqlx::query_as(
         "SELECT fa.domain,
                 COUNT(DISTINCT fa.id)   AS actor_count,
                 COUNT(DISTINCT rvc.id)  AS video_count,
@@ -311,15 +333,7 @@ pub async fn list_activities(
     let limit = q.limit.clamp(1, 200);
     let offset = q.offset.max(0);
 
-    let rows: Vec<(
-        String,
-        String,
-        String,
-        String,
-        String,
-        Option<String>,
-        Option<String>,
-    )> = sqlx::query_as(
+    let rows: Vec<ActivityLogRow> = sqlx::query_as(
         "SELECT id::text, activity_type, actor_uri, direction, \
                     processing_status, error_message, created_at::text \
              FROM federation_activities \
@@ -363,16 +377,7 @@ pub async fn list_delivery_jobs(
     let limit = q.limit.clamp(1, 200);
     let offset = q.offset.max(0);
 
-    let rows: Vec<(
-        String,
-        String,
-        i32,
-        i32,
-        String,
-        Option<i32>,
-        Option<String>,
-        Option<String>,
-    )> = sqlx::query_as(
+    let rows: Vec<DeliveryJobRow> = sqlx::query_as(
         "SELECT id::text, target_inbox_url, attempt_count, max_attempts, \
                 status, last_http_status, last_error, next_attempt_at::text \
          FROM federation_delivery_jobs \

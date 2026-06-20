@@ -100,6 +100,8 @@ pub struct FederationState {
     pub config: Arc<FederationConfig>,
 }
 
+type LocalActorRow = (String, Option<String>, Option<String>, Option<String>);
+
 pub fn router(pool: PgPool, default_base_url: &str) -> Result<Router, String> {
     let config = FederationConfig::from_env(default_base_url);
     config.validate()?;
@@ -353,7 +355,7 @@ async fn local_actor(
     State(state): State<FederationState>,
     Path(username): Path<String>,
 ) -> Response {
-    let row: Option<(String, Option<String>, Option<String>, Option<String>)> = sqlx::query_as(
+    let row: Option<LocalActorRow> = sqlx::query_as(
         "SELECT u.id, u.profile_desc, u.actor_uri, fa.public_key_pem \
              FROM users u \
              LEFT JOIN federation_actors fa \

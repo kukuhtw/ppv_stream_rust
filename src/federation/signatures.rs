@@ -14,7 +14,7 @@ const MAX_AGE_SECS: i64 = 30;
 /// Build a `Digest: SHA-256=<b64>` header value for a request body.
 pub fn build_digest(body: &[u8]) -> String {
     let hash = Sha256::digest(body);
-    format!("SHA-256={}", B64.encode(&hash))
+    format!("SHA-256={}", B64.encode(hash))
 }
 
 /// Verify a `Digest` header against the actual request body.
