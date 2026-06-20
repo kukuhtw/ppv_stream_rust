@@ -3,6 +3,14 @@ use std::net::IpAddr;
 /// Maximum allowed response body size when fetching remote ActivityPub objects.
 const MAX_BODY_BYTES: usize = 128 * 1024; // 128 KB
 
+/// Returns true when FEDERATION_DEV_HTTP_BYPASS is enabled.
+/// Only for local dev / integration-test Docker environments.
+fn dev_bypass_enabled() -> bool {
+    std::env::var("FEDERATION_DEV_HTTP_BYPASS")
+        .map(|v| matches!(v.trim(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false)
+}
+
 /// Returns `true` when the IP address is safe to contact from a server
 /// context (i.e. not a private, loopback, link-local, or reserved range).
 pub fn is_safe_ip(ip: IpAddr) -> bool {
@@ -37,7 +45,18 @@ fn extract_host_port(url: &str) -> Option<(String, u16)> {
 }
 
 /// Check that `url` is HTTPS and resolves only to publicly routable addresses.
+///
+/// When `FEDERATION_DEV_HTTP_BYPASS=1` all checks are skipped so that two
+/// Docker containers (with private 172.x IPs) can federate during integration
+/// testing.  Never set this in production.
 async fn assert_safe_url(url: &str) -> Result<(), String> {
+    if dev_bypass_enabled() {
+        if url.is_empty() {
+            return Err("URL is empty".into());
+        }
+        return Ok(());
+    }
+
     if !url.starts_with("https://") {
         return Err("remote URL must use HTTPS".into());
     }
@@ -69,13 +88,16 @@ async fn assert_safe_url(url: &str) -> Result<(), String> {
 /// Fetch an ActivityPub JSON-LD document from a remote URL.
 ///
 /// Performs SSRF protection (HTTPS only, no private IPs) and enforces a
-/// 128 KB body limit and a 10-second timeout.
+/// 128 KB body limit and a 10-second timeout.  When
+/// `FEDERATION_DEV_HTTP_BYPASS=1` the SSRF check is skipped so that
+/// integration-test Docker containers can reach each other via private IPs.
 pub async fn fetch_remote_object(url: &str) -> Result<serde_json::Value, String> {
     assert_safe_url(url).await?;
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .redirect(reqwest::redirect::Policy::limited(3))
+        .danger_accept_invalid_certs(dev_bypass_enabled()) // allow self-signed in dev
         .build()
         .map_err(|e| format!("HTTP client build error: {e}"))?;
 

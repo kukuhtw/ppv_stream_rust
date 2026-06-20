@@ -65,7 +65,12 @@ impl FederationConfig {
             return Err("FEDERATION_DOMAIN must contain only a host name".into());
         }
 
-        if !self.base_url.starts_with("https://")
+        let dev_bypass = std::env::var("FEDERATION_DEV_HTTP_BYPASS")
+            .map(|v| matches!(v.trim(), "1" | "true" | "yes" | "on"))
+            .unwrap_or(false);
+
+        if !dev_bypass
+            && !self.base_url.starts_with("https://")
             && !self.base_url.starts_with("http://localhost")
         {
             return Err(
@@ -142,6 +147,16 @@ pub fn router(pool: PgPool, default_base_url: &str) -> Result<Router, String> {
         .route("/videos/:id", get(catalog::video_ap_object))
         // Federated catalog
         .route("/api/federation/catalog", get(catalog::catalog))
+        // Admin actor management
+        .route(
+            "/api/federation/admin/actors/init",
+            post(admin_init_actor),
+        )
+        // Admin outbound follow
+        .route(
+            "/api/federation/admin/follow",
+            post(admin_send_follow),
+        )
         // Admin moderation — domain rules
         .route(
             "/api/federation/admin/domain-rules",
@@ -566,6 +581,167 @@ async fn resolve_referral_for_split(
         "split_enabled":     split_enabled,
         "share_basis_points": if split_enabled { share_bp } else { 0 },
         "provider_wallet":   provider_wallet, // null until wallet column is added
+    }))
+    .into_response()
+}
+
+// ── Admin actor management ─────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct ActorInitBody {
+    username: String,
+}
+
+/// `POST /api/federation/admin/actors/init`
+///
+/// Ensure a local federation actor record and RSA key pair exist for the given
+/// `username`.  Idempotent — safe to call multiple times.  Returns the public
+/// key PEM.  Intended for integration testing and initial instance setup.
+async fn admin_init_actor(
+    State(state): State<FederationState>,
+    headers: HeaderMap,
+    Json(body): Json<ActorInitBody>,
+) -> Response {
+    if !moderation::check_admin_token_pub(&headers) {
+        return api_error(StatusCode::FORBIDDEN, "X-Federation-Admin-Token required");
+    }
+
+    let username = body.username.trim().to_lowercase();
+    if username.is_empty() {
+        return api_error(StatusCode::BAD_REQUEST, "username required");
+    }
+
+    let app_secret: Vec<u8> = std::env::var("HMAC_SECRET")
+        .map(|s| s.into_bytes())
+        .unwrap_or_default();
+
+    let user_id: Option<String> = sqlx::query_scalar(
+        "SELECT id FROM users WHERE username = $1 LIMIT 1",
+    )
+    .bind(&username)
+    .fetch_optional(&state.pool)
+    .await
+    .unwrap_or(None);
+
+    let Some(user_id) = user_id else {
+        return api_error(StatusCode::NOT_FOUND, "user not found");
+    };
+
+    match keys::ensure_local_actor_keys(
+        &state.pool,
+        &user_id,
+        &username,
+        &state.config.base_url,
+        &state.config.domain,
+        &app_secret,
+    )
+    .await
+    {
+        Ok(public_key_pem) => {
+            let actor_url = format!("{}/users/{}", state.config.base_url, username);
+            Json(json!({
+                "ok": true,
+                "actor_url": actor_url,
+                "public_key_pem": public_key_pem
+            }))
+            .into_response()
+        }
+        Err(e) => {
+            tracing::error!("admin_init_actor failed for {}: {}", username, e);
+            api_error(StatusCode::INTERNAL_SERVER_ERROR, "actor init failed")
+        }
+    }
+}
+
+// ── Admin outbound Follow ──────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct AdminFollowBody {
+    local_username: String,
+    remote_actor_url: String,
+}
+
+/// `POST /api/federation/admin/follow`
+///
+/// Queue an outbound `Follow` activity from a local actor to a remote actor.
+/// The delivery worker will sign and POST it to the remote inbox.
+/// Used in integration tests and admin-driven federation setup.
+async fn admin_send_follow(
+    State(state): State<FederationState>,
+    headers: HeaderMap,
+    Json(body): Json<AdminFollowBody>,
+) -> Response {
+    if !moderation::check_admin_token_pub(&headers) {
+        return api_error(StatusCode::FORBIDDEN, "X-Federation-Admin-Token required");
+    }
+
+    let local_username = body.local_username.trim().to_lowercase();
+    let remote_actor_url = body.remote_actor_url.trim().to_string();
+    if local_username.is_empty() || remote_actor_url.is_empty() {
+        return api_error(StatusCode::BAD_REQUEST, "local_username and remote_actor_url required");
+    }
+
+    let local_actor_url = format!("{}/users/{}", state.config.base_url, local_username);
+
+    // Verify the local actor exists
+    let actor_exists: Option<i64> = sqlx::query_scalar(
+        "SELECT 1 FROM federation_actors WHERE actor_uri = $1 AND is_local = TRUE LIMIT 1",
+    )
+    .bind(&local_actor_url)
+    .fetch_optional(&state.pool)
+    .await
+    .unwrap_or(None);
+
+    if actor_exists.is_none() {
+        return api_error(
+            StatusCode::NOT_FOUND,
+            "local actor not found — call /admin/actors/init first",
+        );
+    }
+
+    // Fetch the remote actor to get their inbox URL
+    let remote_actor = match activities::upsert_remote_actor(&state.pool, &remote_actor_url).await {
+        Ok((_id, inbox)) => inbox,
+        Err(e) => {
+            tracing::warn!("admin_send_follow: remote actor fetch failed: {}", e);
+            return api_error(StatusCode::BAD_GATEWAY, "could not retrieve remote actor");
+        }
+    };
+
+    let follow_activity_id = uuid::Uuid::new_v4();
+    let follow_activity_uri = format!("{}/activities/{}", local_actor_url, follow_activity_id);
+
+    let follow = serde_json::json!({
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "id": follow_activity_uri,
+        "type": "Follow",
+        "actor": local_actor_url,
+        "object": remote_actor_url,
+        "published": chrono::Utc::now().to_rfc3339()
+    });
+
+    if let Err(e) = activities::queue_outbound_activity(
+        &state.pool,
+        &local_actor_url,
+        &follow,
+        &remote_actor,
+    )
+    .await
+    {
+        tracing::error!("admin_send_follow: queue failed: {}", e);
+        return api_error(StatusCode::INTERNAL_SERVER_ERROR, "failed to queue follow");
+    }
+
+    tracing::info!(
+        local_actor = %local_actor_url,
+        remote_actor = %remote_actor_url,
+        "admin Follow queued"
+    );
+
+    Json(json!({
+        "ok": true,
+        "follow_activity_uri": follow_activity_uri,
+        "remote_inbox": remote_actor
     }))
     .into_response()
 }

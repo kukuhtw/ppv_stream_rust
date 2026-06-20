@@ -66,7 +66,7 @@ dotenvy = "0.15"
 thiserror = "1.0"
 
 # ActivityPub / federation
-rsa = { version = "0.9", features = ["sha2", "pkcs1", "pkcs8"] }
+rsa = { version = "0.9", features = ["sha2"] }
 rand = "0.8"
 signature = "2"
 

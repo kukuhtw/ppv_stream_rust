@@ -140,7 +140,7 @@ Remote PPV Stream instances may exchange public creator identity and public vide
 - [x] Unit test SSRF protections
 - [x] Unit test referral verification
 - [x] Unit test revenue calculations
-- [ ] Integration test two PPV Stream instances
+- [x] Integration test two PPV Stream instances
 - [x] Verify no remote media file is downloaded
 - [x] Verify no remote HLS segment is stored
 - [x] Verify no local playback session is created for remote video

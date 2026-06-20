@@ -1,0 +1,153 @@
+# Integration test environment: two PPV Stream instances federating with each other.
+#
+# Usage:
+#   docker compose -f docker-compose.federation-test.yml up --build -d
+#   bash tests/federation_integration.sh
+#   docker compose -f docker-compose.federation-test.yml down -v
+#
+# Both instances run with FEDERATION_DEV_HTTP_BYPASS=1 so they can reach each
+# other via Docker private IPs without requiring HTTPS.  Never use this flag
+# in production.
+
+services:
+  # ── Instance A databases ────────────────────────────────────────────────────
+  db-a:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ppv_stream
+      POSTGRES_USER: ppv
+      POSTGRES_PASSWORD: secret
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ppv -d ppv_stream"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - pgdata-a:/var/lib/postgresql/data
+
+  # ── Instance B database ─────────────────────────────────────────────────────
+  db-b:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ppv_stream
+      POSTGRES_USER: ppv
+      POSTGRES_PASSWORD: secret
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ppv -d ppv_stream"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - pgdata-b:/var/lib/postgresql/data
+
+  # ── Instance A ──────────────────────────────────────────────────────────────
+  instance-a:
+    build:
+      context: .
+      args:
+        - BUILD_REV=fed-test
+    image: ppv_stream:fed-test
+    depends_on:
+      db-a:
+        condition: service_healthy
+    ports:
+      - "18082:8080"
+    environment:
+      DATABASE_URL: postgres://ppv:secret@db-a:5432/ppv_stream
+      BIND: 0.0.0.0:8080
+      BASE_URL: http://instance-a:8080
+      RUST_LOG: info
+      PUBLIC_DIR: /app/public
+
+      # Federation
+      FEDERATION_ENABLED: "true"
+      FEDERATION_BASE_URL: http://instance-a:8080
+      FEDERATION_DOMAIN: instance-a
+      FEDERATION_DEV_HTTP_BYPASS: "1"
+      FEDERATION_ADMIN_TOKEN: fed-test-token-a
+
+      # Security
+      HMAC_SECRET: test-hmac-secret-instance-a-32bytes
+      SESSION_TOKEN_TTL: "3600"
+      SESSION_COOKIE_SECURE: "false"
+
+      # Bootstrap
+      ADMIN_BOOTSTRAP_TOKEN: bootstrap-a
+      ADMIN_BOOTSTRAP_EMAIL: admin@instance-a.test
+      ADMIN_BOOTSTRAP_PASSWORD: TestPass123!
+
+      # Disabled features (no payment gateway in tests)
+      PAYMENT_PLUGINS: ""
+      PAYMENT_DEFAULT_PROVIDER: ""
+
+      # Storage
+      STORAGE_BACKEND: local
+      STORAGE_DIR: /data
+      UPLOAD_DIR: /data
+      HLS_ROOT: /tmp/hls
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - appdata-a:/data
+    restart: "no"
+
+  # ── Instance B ──────────────────────────────────────────────────────────────
+  instance-b:
+    image: ppv_stream:fed-test
+    depends_on:
+      db-b:
+        condition: service_healthy
+      instance-a:
+        condition: service_healthy  # ensures image is built before B starts
+    ports:
+      - "18083:8080"
+    environment:
+      DATABASE_URL: postgres://ppv:secret@db-b:5432/ppv_stream
+      BIND: 0.0.0.0:8080
+      BASE_URL: http://instance-b:8080
+      RUST_LOG: info
+      PUBLIC_DIR: /app/public
+
+      # Federation
+      FEDERATION_ENABLED: "true"
+      FEDERATION_BASE_URL: http://instance-b:8080
+      FEDERATION_DOMAIN: instance-b
+      FEDERATION_DEV_HTTP_BYPASS: "1"
+      FEDERATION_ADMIN_TOKEN: fed-test-token-b
+
+      # Security
+      HMAC_SECRET: test-hmac-secret-instance-b-32bytes
+      SESSION_TOKEN_TTL: "3600"
+      SESSION_COOKIE_SECURE: "false"
+
+      # Bootstrap
+      ADMIN_BOOTSTRAP_TOKEN: bootstrap-b
+      ADMIN_BOOTSTRAP_EMAIL: admin@instance-b.test
+      ADMIN_BOOTSTRAP_PASSWORD: TestPass123!
+
+      # Disabled features
+      PAYMENT_PLUGINS: ""
+      PAYMENT_DEFAULT_PROVIDER: ""
+
+      # Storage
+      STORAGE_BACKEND: local
+      STORAGE_DIR: /data
+      UPLOAD_DIR: /data
+      HLS_ROOT: /tmp/hls
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - appdata-b:/data
+    restart: "no"
+
+volumes:
+  pgdata-a: {}
+  pgdata-b: {}
+  appdata-a: {}
+  appdata-b: {}
