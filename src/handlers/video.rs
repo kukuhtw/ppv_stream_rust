@@ -311,6 +311,10 @@ pub struct UpdateVideoForm {
     pub title: String,
     pub description: String,
     pub price_cents: i64,
+    /// Optional federation visibility toggle: `"public"` or `"local_only"`.
+    /// Omitting the field leaves the current value unchanged.
+    #[serde(default)]
+    pub federation_visibility: Option<String>,
 }
 
 pub async fn update_video(
@@ -323,26 +327,103 @@ pub async fn update_video(
         None => return Json(serde_json::json!({"ok": false, "error": "not logged in"})),
     };
 
+    // Validate and normalise the requested visibility change.
+    // `None` (field absent) → leave unchanged; `Some("")` → also leave unchanged.
+    let new_vis: Option<&str> = match f.federation_visibility.as_deref() {
+        Some("public") => Some("public"),
+        Some("local_only") => Some("local_only"),
+        None | Some("") => None,
+        Some(_) => {
+            return Json(serde_json::json!({
+                "ok": false,
+                "error": "federation_visibility must be 'local_only' or 'public'"
+            }));
+        }
+    };
+
+    // When federation is active, snapshot the video's current visibility before
+    // the update so we know which AP activity to broadcast afterwards.
+    let prev_vis: String = if federation_enabled() {
+        sqlx::query_scalar::<_, String>(
+            "SELECT federation_visibility FROM videos \
+             WHERE id = $1 AND owner_id = $2 LIMIT 1",
+        )
+        .bind(&f.id)
+        .bind(&uid)
+        .fetch_optional(&st.pool)
+        .await
+        .unwrap_or(None)
+        .unwrap_or_else(|| "local_only".to_string())
+    } else {
+        String::new()
+    };
+
     let res = sqlx::query(
         r#"
         UPDATE videos
-        SET title = $2, description = $3, price_cents = $4
-        WHERE id = $1 AND owner_id = $5
+        SET title = $2, description = $3, price_cents = $4,
+            federation_visibility = COALESCE($5, federation_visibility)
+        WHERE id = $1 AND owner_id = $6
         "#,
     )
     .bind(&f.id)
     .bind(f.title.trim())
     .bind(f.description.trim())
     .bind(f.price_cents)
+    .bind(new_vis)
     .bind(&uid)
     .execute(&st.pool)
     .await;
 
     match res {
-        Ok(r) if r.rows_affected() > 0 => Json(serde_json::json!({"ok": true})),
+        Ok(r) if r.rows_affected() > 0 => {
+            // Determine effective new visibility (fall back to unchanged prev).
+            let eff_new = new_vis.unwrap_or(prev_vis.as_str());
+            let was_public = prev_vis == "public";
+            let now_public = eff_new == "public";
+
+            if federation_enabled() {
+                let video_id = f.id.clone();
+                let pool = st.pool.clone();
+                let base_url = federation_base_url();
+                tokio::spawn(async move {
+                    let result = if !was_public && now_public {
+                        crate::federation::video_index::publish_create(&pool, &video_id, &base_url)
+                            .await
+                            .map(|_| ())
+                    } else if was_public && now_public {
+                        crate::federation::video_index::publish_update(&pool, &video_id, &base_url)
+                            .await
+                    } else if was_public && !now_public {
+                        crate::federation::video_index::publish_delete(&pool, &video_id, &base_url)
+                            .await
+                    } else {
+                        return; // neither was nor is public — no federation action
+                    };
+                    if let Err(e) = result {
+                        tracing::warn!(%video_id, "federation publish after update failed: {}", e);
+                    }
+                });
+            }
+
+            Json(serde_json::json!({"ok": true}))
+        }
         Ok(_) => Json(serde_json::json!({"ok": false, "error": "not owner / not found"})),
         Err(e) => Json(serde_json::json!({"ok": false, "error": e.to_string()})),
     }
+}
+
+fn federation_enabled() -> bool {
+    std::env::var("FEDERATION_ENABLED")
+        .map(|v| matches!(
+            v.trim().to_ascii_lowercase().as_str(),
+            "1" | "true" | "yes" | "on"
+        ))
+        .unwrap_or(false)
+}
+
+fn federation_base_url() -> String {
+    std::env::var("FEDERATION_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string())
 }
 
 /// AuthZ helper.
