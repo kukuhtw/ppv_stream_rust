@@ -47,7 +47,7 @@ Remote PPV Stream instances may exchange public creator identity and public vide
 - [x] Create `federation_domain_rules`
 - [x] Add indexes and constraints
 - [x] Confirm remote catalog has no media storage columns
-- [ ] Add migration rollback documentation
+- [x] Add migration rollback documentation
 
 ## Phase 3: ActivityPub Identity and Security
 
@@ -151,15 +151,15 @@ Remote PPV Stream instances may exchange public creator identity and public vide
 ## Phase 9: Documentation and Operations
 
 - [x] Add environment variable reference
-- [ ] Add federation setup guide
-- [ ] Add instance administration guide
-- [ ] Add moderation guide
-- [ ] Add troubleshooting guide
-- [ ] Add provider settlement guide
-- [ ] Add privacy documentation
-- [ ] Add security threat model
-- [ ] Add monitoring metrics documentation
-- [ ] Add backup and key-rotation guide
+- [x] Add federation setup guide
+- [x] Add instance administration guide
+- [x] Add moderation guide
+- [x] Add troubleshooting guide
+- [x] Add provider settlement guide
+- [x] Add privacy documentation
+- [x] Add security threat model
+- [x] Add monitoring metrics documentation
+- [x] Add backup and key-rotation guide
 
 ## Current Implementation Batch
 
