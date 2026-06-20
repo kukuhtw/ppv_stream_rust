@@ -71,7 +71,7 @@ Remote PPV Stream instances may exchange public creator identity and public vide
 - [x] Implement following collection
 - [x] Implement `Follow`
 - [x] Implement `Accept`
-- [ ] Implement `Reject`
+- [x] Implement `Reject`
 - [x] Implement `Undo`
 - [x] Add activity deduplication
 - [x] Add delivery queue worker
@@ -92,9 +92,9 @@ Remote PPV Stream instances may exchange public creator identity and public vide
 - [x] Add canonical origin watch and checkout links
 - [x] Reject local payment requests for remote videos
 - [x] Reject local playback requests for remote videos
-- [ ] Prevent remote records from entering upload workers
-- [ ] Prevent remote records from entering FFmpeg workers
-- [ ] Prevent remote records from entering storage migration workers
+- [x] Prevent remote records from entering upload workers
+- [x] Prevent remote records from entering FFmpeg workers
+- [x] Prevent remote records from entering storage migration workers
 
 ## Phase 6: Moderation and Administration
 

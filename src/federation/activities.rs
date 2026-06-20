@@ -21,6 +21,8 @@ pub async fn handle_inbound_activity(
 
     let result = match activity_type {
         "Follow" => handle_follow(pool, actor_uri, activity, activity_db_id).await,
+        "Accept" => handle_accept(pool, actor_uri, activity, activity_db_id).await,
+        "Reject" => handle_reject(pool, actor_uri, activity, activity_db_id).await,
         "Undo" => handle_undo(pool, actor_uri, activity, activity_db_id).await,
         "Create" => handle_create_or_update(pool, actor_uri, activity, activity_db_id).await,
         "Update" => handle_create_or_update(pool, actor_uri, activity, activity_db_id).await,
@@ -110,6 +112,136 @@ async fn handle_follow(
         follower_uri,
         local_actor_uri = %local_actor_uri,
         "Follow accepted"
+    );
+    Ok(())
+}
+
+// ── Accept ─────────────────────────────────────────────────────────────────
+
+/// Handle an incoming `Accept{Follow}` from a remote actor — they approved a
+/// Follow that this instance sent.  Currently a no-op placeholder: we don't
+/// send outbound Follows yet, but when we do the accepted follow record will
+/// need to be updated here.
+async fn handle_accept(
+    pool: &PgPool,
+    _actor_uri: &str,
+    activity: &Value,
+    activity_db_id: Uuid,
+) -> anyhow::Result<()> {
+    // The object should be the original Follow activity URI we sent.
+    let follow_uri = extract_object_id(activity).unwrap_or("");
+
+    if !follow_uri.is_empty() {
+        sqlx::query(
+            "UPDATE federation_follows ff SET status = 'accepted', updated_at = NOW()
+             FROM federation_actors fa
+             WHERE fa.id = ff.following_actor_id
+               AND fa.is_local = TRUE
+               AND ff.activity_uri = $1",
+        )
+        .bind(follow_uri)
+        .execute(pool)
+        .await
+        .context("Accept{Follow} status update failed")?;
+    }
+
+    mark_activity(pool, activity_db_id, "processed").await
+}
+
+// ── Reject ─────────────────────────────────────────────────────────────────
+
+/// Handle an incoming `Reject{Follow}` from a remote actor — they declined a
+/// Follow that this instance sent.  Marks the follow record as `rejected`.
+async fn handle_reject(
+    pool: &PgPool,
+    _actor_uri: &str,
+    activity: &Value,
+    activity_db_id: Uuid,
+) -> anyhow::Result<()> {
+    let follow_uri = extract_object_id(activity).unwrap_or("");
+
+    if !follow_uri.is_empty() {
+        sqlx::query(
+            "UPDATE federation_follows ff SET status = 'rejected', updated_at = NOW()
+             FROM federation_actors fa
+             WHERE fa.id = ff.following_actor_id
+               AND fa.is_local = TRUE
+               AND ff.activity_uri = $1",
+        )
+        .bind(follow_uri)
+        .execute(pool)
+        .await
+        .context("Reject{Follow} status update failed")?;
+    }
+
+    mark_activity(pool, activity_db_id, "processed").await
+}
+
+/// Send a `Reject{Follow}` to a remote follower and cancel the follow record.
+///
+/// Called from the admin API when a moderator explicitly rejects an incoming
+/// follow request.  `follow_db_id` is the UUID primary key of the
+/// `federation_follows` row.
+pub async fn send_reject(
+    pool: &PgPool,
+    follow_db_id: Uuid,
+) -> anyhow::Result<()> {
+    // Load the follow row: follower inbox + local actor URI + follow activity URI
+    let row: Option<(String, String, String, String)> = sqlx::query_as(
+        r#"
+        SELECT
+            follower.actor_uri,
+            follower.inbox_url,
+            local_actor.actor_uri,
+            ff.activity_uri
+        FROM federation_follows ff
+        JOIN federation_actors follower   ON follower.id   = ff.follower_actor_id
+        JOIN federation_actors local_actor ON local_actor.id = ff.following_actor_id
+        WHERE ff.id = $1 AND local_actor.is_local = TRUE
+        LIMIT 1
+        "#,
+    )
+    .bind(follow_db_id)
+    .fetch_optional(pool)
+    .await
+    .context("follow lookup for Reject failed")?;
+
+    let Some((follower_uri, follower_inbox, local_actor_uri, follow_activity_uri)) = row else {
+        anyhow::bail!("follow record {} not found or not targeting a local actor", follow_db_id);
+    };
+
+    // Mark the follow as rejected
+    sqlx::query(
+        "UPDATE federation_follows SET status = 'rejected', updated_at = NOW() WHERE id = $1",
+    )
+    .bind(follow_db_id)
+    .execute(pool)
+    .await
+    .context("follow status → rejected failed")?;
+
+    // Build and queue the Reject activity
+    let reject = json!({
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "id": format!("{}/activities/{}", local_actor_uri, Uuid::new_v4()),
+        "type": "Reject",
+        "actor": local_actor_uri,
+        "object": {
+            "type": "Follow",
+            "id":   follow_activity_uri,
+            "actor": follower_uri,
+            "object": local_actor_uri
+        },
+        "published": chrono::Utc::now().to_rfc3339()
+    });
+
+    queue_outbound_activity(pool, &local_actor_uri, &reject, &follower_inbox)
+        .await
+        .context("queuing Reject{Follow} failed")?;
+
+    tracing::info!(
+        %follower_uri,
+        %local_actor_uri,
+        "Reject{{Follow}} queued"
     );
     Ok(())
 }
@@ -459,5 +591,30 @@ mod tests {
     fn extract_object_id_missing_returns_none() {
         let activity = json!({ "type": "Follow" });
         assert!(extract_object_id(&activity).is_none());
+    }
+
+    #[test]
+    fn reject_activity_has_required_fields() {
+        let local_actor = "https://local.example/users/alice";
+        let follow_uri  = "https://remote.example/activities/f1";
+        let follower    = "https://remote.example/users/bob";
+
+        let reject = json!({
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "id":     format!("{}/activities/{}", local_actor, uuid::Uuid::new_v4()),
+            "type":   "Reject",
+            "actor":  local_actor,
+            "object": {
+                "type":   "Follow",
+                "id":     follow_uri,
+                "actor":  follower,
+                "object": local_actor
+            }
+        });
+
+        assert_eq!(reject["type"], "Reject");
+        assert_eq!(reject["actor"], local_actor);
+        assert_eq!(reject["object"]["type"], "Follow");
+        assert_eq!(reject["object"]["id"], follow_uri);
     }
 }

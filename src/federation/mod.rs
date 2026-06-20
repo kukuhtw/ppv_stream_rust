@@ -140,6 +140,11 @@ pub fn router(pool: PgPool, default_base_url: &str) -> Result<Router, String> {
         .route("/videos/:id", get(catalog::video_ap_object))
         // Federated catalog
         .route("/api/federation/catalog", get(catalog::catalog))
+        // Admin moderation
+        .route(
+            "/api/federation/follows/:id/reject",
+            axum::routing::post(admin_reject_follow),
+        )
         .with_state(state))
 }
 
@@ -339,6 +344,31 @@ async fn local_actor(
         })),
     )
         .into_response()
+}
+
+// ── Admin moderation ───────────────────────────────────────────────────────
+
+/// `POST /api/federation/follows/:id/reject`
+///
+/// Admin endpoint: send a `Reject{Follow}` to a remote follower and cancel
+/// the follow record.  `id` is the UUID primary key of the
+/// `federation_follows` row.
+async fn admin_reject_follow(
+    State(state): State<FederationState>,
+    Path(follow_id): Path<String>,
+) -> Response {
+    let id = match uuid::Uuid::parse_str(&follow_id) {
+        Ok(id) => id,
+        Err(_) => return api_error(StatusCode::BAD_REQUEST, "invalid follow id"),
+    };
+
+    match activities::send_reject(&state.pool, id).await {
+        Ok(()) => Json(json!({ "ok": true })).into_response(),
+        Err(e) => {
+            tracing::error!("admin reject follow {} failed: {}", follow_id, e);
+            api_error(StatusCode::INTERNAL_SERVER_ERROR, "reject failed")
+        }
+    }
 }
 
 // ── Shared helpers ─────────────────────────────────────────────────────────
