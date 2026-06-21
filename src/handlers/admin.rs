@@ -365,8 +365,10 @@ pub async fn admin_payments(
     let status = q.status.as_deref().unwrap_or("");
     info!(admin_user_id = %admin_user_id, action = "admin_payments_view", provider = provider, status = status, limit = limit, "admin payments viewed");
 
-    // Build WHERE clauses dynamically using runtime query (not macro) to avoid DB-at-build-time
-    let base_sql = r#"
+    // Build WHERE clauses with bound parameters via QueryBuilder (no raw string interpolation
+    // of user input into SQL) to avoid SQL injection while still allowing optional filters.
+    let mut qb: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+        r#"
         SELECT
             fi.invoice_uid,
             fi.provider,
@@ -386,28 +388,22 @@ pub async fn admin_payments(
         JOIN users  buyer   ON buyer.id   = fi.user_id
         JOIN videos v       ON v.id       = fi.video_id
         JOIN users  creator ON creator.id = fi.creator_id
-    "#;
+        "#,
+    );
 
-    let mut conditions: Vec<String> = vec![];
+    let mut has_condition = false;
     if !provider.is_empty() {
-        conditions.push(format!("fi.provider = '{}'", provider.replace('\'', "''")));
+        qb.push(" WHERE fi.provider = ").push_bind(provider.to_string());
+        has_condition = true;
     }
     if !status.is_empty() {
-        conditions.push(format!("fi.status = '{}'", status.replace('\'', "''")));
+        qb.push(if has_condition { " AND fi.status = " } else { " WHERE fi.status = " })
+            .push_bind(status.to_string());
     }
 
-    let where_clause = if conditions.is_empty() {
-        String::new()
-    } else {
-        format!("WHERE {}", conditions.join(" AND "))
-    };
+    qb.push(" ORDER BY fi.created_at DESC LIMIT ").push_bind(limit);
 
-    let sql = format!("{base_sql} {where_clause} ORDER BY fi.created_at DESC LIMIT {limit}");
-
-    let rows = sqlx::query(&sql)
-        .fetch_all(&st.pool)
-        .await
-        .unwrap_or_default();
+    let rows = qb.build().fetch_all(&st.pool).await.unwrap_or_default();
 
     let items: Vec<serde_json::Value> = rows
         .iter()
@@ -1886,20 +1882,8 @@ pub async fn admin_wallet_transactions(
     let status = q.status.as_deref().unwrap_or("");
     info!(admin_user_id = %admin_user_id, action = "admin_wallet_transactions_view", txn_type = ttype, status = status, limit = limit, "wallet transactions viewed");
 
-    let mut conditions: Vec<String> = vec![];
-    if !ttype.is_empty() {
-        conditions.push(format!("wt.txn_type = '{}'", ttype.replace('\'', "''")));
-    }
-    if !status.is_empty() {
-        conditions.push(format!("wt.status = '{}'", status.replace('\'', "''")));
-    }
-    let where_clause = if conditions.is_empty() {
-        String::new()
-    } else {
-        format!("WHERE {}", conditions.join(" AND "))
-    };
-
-    let sql = format!(
+    // Bound parameters via QueryBuilder (no raw string interpolation of user input into SQL).
+    let mut qb: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
         r#"SELECT wt.id, wt.txn_type, wt.amount_cents, wt.balance_after, wt.status,
                   wt.note, wt.admin_note, wt.created_at::TEXT AS created_at,
                   u.username,
@@ -1907,15 +1891,22 @@ pub async fn admin_wallet_transactions(
            FROM wallet_transactions wt
            JOIN users u  ON u.id  = wt.user_id
            LEFT JOIN users u2 ON u2.id = wt.ref_user_id
-           {where_clause}
-           ORDER BY wt.created_at DESC
-           LIMIT {limit}"#
+        "#,
     );
 
-    let rows = sqlx::query(&sql)
-        .fetch_all(&st.pool)
-        .await
-        .unwrap_or_default();
+    let mut has_condition = false;
+    if !ttype.is_empty() {
+        qb.push(" WHERE wt.txn_type = ").push_bind(ttype.to_string());
+        has_condition = true;
+    }
+    if !status.is_empty() {
+        qb.push(if has_condition { " AND wt.status = " } else { " WHERE wt.status = " })
+            .push_bind(status.to_string());
+    }
+
+    qb.push(" ORDER BY wt.created_at DESC LIMIT ").push_bind(limit);
+
+    let rows = qb.build().fetch_all(&st.pool).await.unwrap_or_default();
 
     let items: Vec<serde_json::Value> = rows
         .iter()

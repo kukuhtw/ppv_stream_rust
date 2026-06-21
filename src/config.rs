@@ -56,7 +56,7 @@ impl Config {
     pub fn from_env() -> Self {
         // DB & server
         let database_url = env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "postgres://ppv:secret@localhost:5432/ppv_stream".into());
+            .expect("DATABASE_URL must be set (no insecure default credentials)");
         let bind = env::var("BIND").unwrap_or_else(|_| "0.0.0.0:8080".into());
         let base_url = env::var("BASE_URL").unwrap_or_else(|_| "http://localhost:8080".into());
         let trust_proxy_headers = env::var("TRUST_PROXY_HEADERS")
@@ -115,7 +115,7 @@ impl Config {
             .unwrap_or(3600);
         let hmac_secret = env::var("HMAC_SECRET")
             .map(|s| s.into_bytes())
-            .unwrap_or_else(|_| b"dev-secret-change-me".to_vec());
+            .expect("HMAC_SECRET must be set (no insecure default secret)");
 
         // HW accel & upload limit
         let hwaccel = env::var("HWACCEL").unwrap_or_else(|_| "none".into());
