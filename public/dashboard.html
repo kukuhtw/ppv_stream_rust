@@ -36,6 +36,32 @@
   <h1 class="mb-1 fs-4 fw-bold">Dashboard</h1>
   <p class="text-body-secondary small mb-4">Manage your content, profile, and access control.</p>
 
+  <div class="card shadow-sm mb-4">
+    <div class="card-header d-flex align-items-center gap-2">
+      <span class="fw-semibold me-auto">Internal Wallet</span>
+      <span id="walletBalanceChip" class="balance-chip low">Loading...</span>
+    </div>
+    <div class="card-body">
+      <div class="row g-3 align-items-center">
+        <div class="col-lg-8">
+          <div class="text-body-secondary small mb-1">Available Balance</div>
+          <div class="fs-3 fw-bold" id="walletBalanceDisplay">$0.00</div>
+          <div class="text-body-secondary small mb-2" id="walletBalanceHint">Use wallet balance for instant video purchases and internal transfers.</div>
+          <div class="alert alert-info small mb-0">
+            Internal wallet top-up is currently a manual request. Submit a top-up request first, then admin will approve it after off-system payment is received.
+          </div>
+        </div>
+        <div class="col-lg-4">
+          <div class="d-grid gap-2">
+            <a class="btn btn-primary" href="/public/wallet.html?tab=deposit">Top Up Internal Wallet</a>
+            <a class="btn btn-outline-secondary" href="/public/wallet.html?tab=history">View Wallet History</a>
+            <a class="btn btn-outline-secondary" href="/public/wallet.html?tab=withdraw">Withdraw Funds</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Profile -->
   <div class="card shadow-sm mb-4">
     <div class="card-header fw-semibold">Profile &amp; Payout Info</div>
@@ -270,6 +296,26 @@ function showPwAlert(type, msg) {
   const el = document.getElementById('pwAlert');
   el.className = `alert alert-${type}`;
   el.textContent = msg;
+}
+
+async function loadDashboardWallet() {
+  try {
+    const j = await fetch('/api/wallet/balance').then(r => r.json());
+    const cents = j.ok ? (j.balance_cents || 0) : 0;
+    const lowBalance = cents < 1000;
+    document.getElementById('walletBalanceDisplay').textContent = '$' + (cents / 100).toFixed(2);
+    const chip = document.getElementById('walletBalanceChip');
+    chip.textContent = lowBalance ? 'Needs top-up' : 'Ready to spend';
+    chip.classList.toggle('low', lowBalance);
+    document.getElementById('walletBalanceHint').textContent = j.ok
+      ? 'Use wallet balance for instant video purchases and internal transfers.'
+      : 'Wallet balance is unavailable right now.';
+  } catch {
+    document.getElementById('walletBalanceDisplay').textContent = '-';
+    document.getElementById('walletBalanceChip').textContent = 'Unavailable';
+    document.getElementById('walletBalanceChip').classList.add('low');
+    document.getElementById('walletBalanceHint').textContent = 'Wallet balance is unavailable right now.';
+  }
 }
 
 // ── profile ──
@@ -593,6 +639,7 @@ document.getElementById('chatForm').addEventListener('submit', async e => {
 (async () => { await loadMyVideos(); await renderMyVideos(); })();
 document.getElementById('refreshBtn').addEventListener('click', async () => { await loadMyVideos(); await renderMyVideos(); });
 setChatComposerEnabled(false);
+loadDashboardWallet();
 loadChatConversations();
 chatState.pollHandle = setInterval(() => {
   loadChatConversations(chatState.activeConversationId);

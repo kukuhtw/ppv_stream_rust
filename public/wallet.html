@@ -202,7 +202,16 @@ function showTab(name) {
   document.querySelectorAll('#walletTabs .nav-link').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + name).classList.remove('d-none');
   document.querySelector(`#walletTabs [data-tab="${name}"]`).classList.add('active');
+  const url = new URL(location.href);
+  url.searchParams.set('tab', name);
+  history.replaceState(null, '', url);
   if (name === 'history') loadHistory();
+}
+
+function initTabFromUrl() {
+  const tab = new URL(location.href).searchParams.get('tab');
+  const allowed = new Set(['deposit', 'withdraw', 'transfer', 'history']);
+  showTab(allowed.has(tab) ? tab : 'deposit');
 }
 
 async function loadBalance() {
@@ -370,6 +379,7 @@ async function loadHistory() {
 }
 
 loadBalance();
+initTabFromUrl();
 </script>
 </body>
 </html>
