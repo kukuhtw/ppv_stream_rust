@@ -4,6 +4,7 @@ pub mod affiliate;
 pub mod auth_admin;
 pub mod auth_user;
 pub mod chat;
+pub mod creator_block;
 pub mod kurs; // <-- WAJIB: expose router /api/kurs
 pub mod me;
 pub mod pay;

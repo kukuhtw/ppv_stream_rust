@@ -8,6 +8,7 @@ mod services {
 
 mod commission;
 mod config;
+mod creator_block;
 mod db;
 mod email;
 mod federation;
@@ -64,6 +65,7 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
             ensure_support_conversation, list_conversations, list_messages, search_chat_users,
             send_message, start_direct_conversation, ChatState,
         },
+        creator_block::{block_user, list_blocked_users, unblock_user, CreatorBlockState},
         kurs::{router as kurs_router, KursState},
         payment_plugins::{
             confirm_default_payment, confirm_payment, create_default_payment_invoice,
@@ -293,6 +295,15 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
         )
         .with_state(affiliate_state);
 
+    let creator_block_router = Router::new()
+        .route("/api/creator/blocked_users", get(list_blocked_users))
+        .route("/api/creator/block_user", post(block_user))
+        .route("/api/creator/unblock_user", post(unblock_user))
+        .with_state(CreatorBlockState {
+            pool: pool.clone(),
+            cfg: cfg.clone(),
+        });
+
     let chat_router = Router::new()
         .route("/api/chat/users", get(search_chat_users))
         .route("/api/chat/conversations", get(list_conversations))
@@ -336,6 +347,7 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
         .merge(wallet_router)
         .merge(admin_wallet_router)
         .merge(affiliate_router)
+        .merge(creator_block_router)
         .merge(chat_router)
         .merge(federation_router)
         .layer(from_fn(middleware::security_headers))
