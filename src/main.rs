@@ -8,7 +8,6 @@ mod services {
 
 mod commission;
 mod config;
-mod creator_block;
 mod db;
 mod email;
 mod federation;
