@@ -37,7 +37,12 @@ struct BlockedUserItem {
 }
 
 fn normalize_ban_type(input: Option<String>) -> String {
-    match input.unwrap_or_else(|| "soft".to_string()).trim().to_lowercase().as_str() {
+    match input
+        .unwrap_or_else(|| "soft".to_string())
+        .trim()
+        .to_lowercase()
+        .as_str()
+    {
         "hard" => "hard".to_string(),
         _ => "soft".to_string(),
     }
@@ -92,7 +97,11 @@ pub async fn block_user(
     .await;
 
     match res {
-        Ok(_) => Json(json!({"ok": true, "blocked_user_id": blocked_user_id, "ban_type": ban_type})),
+        Ok(_) => Json(json!({
+            "ok": true,
+            "blocked_user_id": blocked_user_id,
+            "ban_type": ban_type
+        })),
         Err(e) => Json(json!({"ok": false, "error": format!("db: {e}")})),
     }
 }
@@ -170,7 +179,10 @@ pub async fn list_blocked_users(
             ban_type: r.try_get("ban_type").unwrap_or_default(),
             reason: r.try_get("reason").unwrap_or(None),
             expires_at: r.try_get("expires_at").unwrap_or(None),
-            created_at: r.try_get::<Option<String>, _>("created_at").unwrap_or(None).unwrap_or_default(),
+            created_at: r
+                .try_get::<Option<String>, _>("created_at")
+                .unwrap_or(None)
+                .unwrap_or_default(),
         })
         .collect();
 
