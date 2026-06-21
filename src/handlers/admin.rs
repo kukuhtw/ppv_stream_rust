@@ -393,15 +393,21 @@ pub async fn admin_payments(
 
     let mut has_condition = false;
     if !provider.is_empty() {
-        qb.push(" WHERE fi.provider = ").push_bind(provider.to_string());
+        qb.push(" WHERE fi.provider = ")
+            .push_bind(provider.to_string());
         has_condition = true;
     }
     if !status.is_empty() {
-        qb.push(if has_condition { " AND fi.status = " } else { " WHERE fi.status = " })
-            .push_bind(status.to_string());
+        qb.push(if has_condition {
+            " AND fi.status = "
+        } else {
+            " WHERE fi.status = "
+        })
+        .push_bind(status.to_string());
     }
 
-    qb.push(" ORDER BY fi.created_at DESC LIMIT ").push_bind(limit);
+    qb.push(" ORDER BY fi.created_at DESC LIMIT ")
+        .push_bind(limit);
 
     let rows = qb.build().fetch_all(&st.pool).await.unwrap_or_default();
 
@@ -1896,15 +1902,21 @@ pub async fn admin_wallet_transactions(
 
     let mut has_condition = false;
     if !ttype.is_empty() {
-        qb.push(" WHERE wt.txn_type = ").push_bind(ttype.to_string());
+        qb.push(" WHERE wt.txn_type = ")
+            .push_bind(ttype.to_string());
         has_condition = true;
     }
     if !status.is_empty() {
-        qb.push(if has_condition { " AND wt.status = " } else { " WHERE wt.status = " })
-            .push_bind(status.to_string());
+        qb.push(if has_condition {
+            " AND wt.status = "
+        } else {
+            " WHERE wt.status = "
+        })
+        .push_bind(status.to_string());
     }
 
-    qb.push(" ORDER BY wt.created_at DESC LIMIT ").push_bind(limit);
+    qb.push(" ORDER BY wt.created_at DESC LIMIT ")
+        .push_bind(limit);
 
     let rows = qb.build().fetch_all(&st.pool).await.unwrap_or_default();
 
