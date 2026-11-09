@@ -54,26 +54,7 @@ jobs:
         run: rustc --version && cargo --version
 
       - name: Apply SQL and migration files when available
-        shell: bash
-        run: |
-          apply_sql_dir() {
-            local dir="$1"
-            if [ ! -d "$dir" ]; then
-              return 0
-            fi
-
-            shopt -s nullglob
-            for file in "$dir"/*.sql; do
-              if [ -f "$file" ]; then
-                echo "Applying $file"
-                psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$file"
-              fi
-            done
-            shopt -u nullglob
-          }
-
-          apply_sql_dir sql
-          apply_sql_dir migrations
+        run: bash scripts/apply-sql.sh
 
       - name: Check formatting
         run: cargo fmt --all -- --check
@@ -86,3 +67,62 @@ jobs:
 
       - name: Test
         run: cargo test --all-features
+
+  smoke-run:
+    name: Smoke run (start app + HTTP checks)
+    runs-on: ubuntu-latest
+    needs: rust-check
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ppv_stream_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Schema for the sqlx compile-time checks.
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/ppv_stream_test
+      # Empty database the app migrates by itself at startup.
+      SMOKE_DATABASE_URL: postgres://postgres:postgres@localhost:5432/ppv_smoke
+      SMOKE_LOG: smoke-server.log
+      SQLX_OFFLINE: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry and target
+        uses: Swatinem/rust-cache@v2
+
+      - name: Apply SQL and migration files for compile-time checks
+        run: bash scripts/apply-sql.sh
+
+      - name: Build server binary
+        run: cargo build --locked --bin ppv_stream
+
+      - name: Create empty smoke database
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE DATABASE ppv_smoke"
+
+      - name: Run smoke test
+        run: bash scripts/smoke-test.sh target/debug/ppv_stream
+
+      - name: Upload server log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-server-log
+          path: smoke-server.log
+          retention-days: 7
+          if-no-files-found: ignore
