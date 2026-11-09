@@ -1,0 +1,77 @@
+# docker-compose.dokploy.yml
+# Dipakai oleh Dokploy (Service type: Docker Compose).
+# - Tidak ada `ports:` → trafik masuk lewat Traefik Dokploy (atur di tab Domains).
+# - Semua secret diisi di tab Environment Dokploy (lihat .env.dokploy.example).
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ppv_stream}
+      POSTGRES_USER: ${POSTGRES_USER:-ppv}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      TZ: ${TZ:-Asia/Jakarta}
+      PGTZ: ${TZ:-Asia/Jakarta}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_REV: ${BUILD_REV:-dokploy}
+        ENABLE_WATCHER: ${ENABLE_WATCHER:-0}
+    image: ppv_stream:dokploy
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-ppv}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-ppv_stream}
+      BIND: 0.0.0.0:8080
+      TRUST_PROXY_HEADERS: "true"
+      SESSION_COOKIE_SECURE: "true"
+    expose:
+      - "8080"
+    volumes:
+      - appdata:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+
+  # Opsional: watcher x402 sebagai sidecar.
+  # Aktifkan dengan menambah env COMPOSE_PROFILES=watcher di Dokploy
+  # (dan build dengan ENABLE_WATCHER=1).
+  watcher:
+    image: ppv_stream:dokploy
+    profiles: ["watcher"]
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      app:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-ppv}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-ppv_stream}
+      BIND: 0.0.0.0:8080
+      WATCHER_ENABLE: "1"
+    volumes:
+      - appdata:/data
+
+volumes:
+  pgdata: {}
+  appdata: {}

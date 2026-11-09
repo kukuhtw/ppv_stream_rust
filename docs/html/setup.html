@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Setup PPV Stream</title>
+<meta name="description" content="Panduan setup aplikasi, Dokploy, gateway pembayaran, kurs, dan smart contract x402 di Polygon.">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,750&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: left rail of domain links + one reading column; each domain = diagram, then table dictionary */
+:root{
+  --bg:#f5f7f8; --surface:#ffffff; --ink:#132029; --muted:#5a6b75; --line:#d9e1e5;
+  --accent:#0b6e79; --accent-soft:#e1f1f2; --pii:#a3470f; --pii-soft:#fbeadf; --code-bg:#edf2f4;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f171c; --surface:#16222a; --ink:#e3ebef; --muted:#93a5ae; --line:#26363f;
+  --accent:#4fc0c9; --accent-soft:#163a3f; --pii:#f0a06b; --pii-soft:#3a2416; --code-bg:#1c2b33; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f171c; --surface:#16222a; --ink:#e3ebef; --muted:#93a5ae; --line:#26363f;
+  --accent:#4fc0c9; --accent-soft:#163a3f; --pii:#f0a06b; --pii-soft:#3a2416; --code-bg:#1c2b33; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--f-body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1180px;margin:0 auto;padding-block:40px 80px;display:grid;grid-template-columns:220px minmax(0,1fr);gap:48px}
+nav{position:sticky;top:calc(env(safe-area-inset-top,0px) + 24px);align-self:start;display:flex;flex-direction:column;gap:4px;font-size:13.5px}
+nav .lbl{font:600 11px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+nav a{color:var(--muted);text-decoration:none;padding:4px 10px;border-left:2px solid var(--line)}
+nav a:hover,nav a:focus-visible{color:var(--accent);border-left-color:var(--accent);outline:none}
+main{min-width:0;display:flex;flex-direction:column;gap:56px}
+header{display:flex;flex-direction:column;gap:14px}
+.eyebrow{font:500 12px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+h1{font:750 clamp(34px,5vw,52px)/1.05 var(--f-display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h2{font:700 28px/1.15 var(--f-display);margin:0;text-wrap:balance}
+h3{font:600 16px/1.3 var(--f-mono);margin:0}
+p{margin:0;max-width:68ch}
+.lede{font-size:17px;color:var(--muted)}
+.meta{display:flex;flex-wrap:wrap;gap:8px 20px;font:13px var(--f-mono);color:var(--muted)}
+.meta b{color:var(--ink);font-weight:500}
+section{display:flex;flex-direction:column;gap:18px;scroll-margin-top:24px}
+.diagram{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:20px;overflow-x:auto}
+.diagram pre.mermaid{margin:0;background:none;text-align:center}
+.tables{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.tbl{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.tbl p{font-size:14px;color:var(--muted)}
+.cols{font:12.5px/1.7 var(--f-mono);display:flex;flex-wrap:wrap;gap:4px 6px}
+.cols span{background:var(--code-bg);padding:0 6px;border-radius:3px}
+.cols span.pk{background:var(--accent-soft);color:var(--accent);font-weight:500}
+.cols span.pii{background:var(--pii-soft);color:var(--pii)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font:12.5px var(--f-mono);color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:600 11.5px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+tr:last-child td{border-bottom:0}
+code{font:13px var(--f-mono);background:var(--code-bg);padding:1px 5px;border-radius:3px}
+.chip{display:inline-block;font:500 11px var(--f-mono);padding:2px 8px;border-radius:99px;white-space:nowrap}
+.chip.high{background:var(--pii-soft);color:var(--pii)} .chip.med{background:var(--accent-soft);color:var(--accent)}
+ul{margin:0;padding-left:20px;max-width:68ch;display:flex;flex-direction:column;gap:6px}
+@media (max-width:860px){.wrap{grid-template-columns:1fr;gap:24px}nav{position:static;flex-direction:row;flex-wrap:wrap}nav .lbl{width:100%}nav a{border-left:0;border-bottom:2px solid var(--line)}}
+</style>
+</head>
+<body>
+<style>
+.answers{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.ans{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.ans .q{font:600 12px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.ans .a{font:700 22px/1.1 var(--f-display);color:var(--accent)}
+.ans p{font-size:14px;color:var(--muted)}
+.ans a{font-size:14px}
+.chip.ok{background:var(--accent-soft);color:var(--accent)}
+.chip.warn{background:var(--pii-soft);color:var(--pii)}
+.chip.mute{background:var(--code-bg);color:var(--muted)}
+.calc{font:13px/1.8 var(--f-mono);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;overflow-x:auto}
+.calc .row{display:flex;justify-content:space-between;gap:16px;min-width:300px}
+.calc .row span:last-child{font-variant-numeric:tabular-nums}
+.calc .tot{border-top:1px solid var(--line);margin-top:6px;padding-top:6px;font-weight:500}
+.calc .neg{color:var(--pii)} .calc .pos{color:var(--accent)}
+.calcs{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.calcs h4{margin:0 0 8px;font:600 14px var(--f-body)}
+ol.steps{margin:0;padding-left:0;list-style:none;counter-reset:s;display:flex;flex-direction:column;gap:10px;max-width:78ch}
+ol.steps>li{counter-increment:s;display:grid;grid-template-columns:32px minmax(0,1fr);gap:12px;align-items:start}
+ol.steps>li::before{content:counter(s);font:600 13px/28px var(--f-mono);text-align:center;width:28px;height:28px;border-radius:50%;background:var(--accent-soft);color:var(--accent)}
+.callout{border:1px solid var(--pii);background:var(--pii-soft);border-radius:6px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;max-width:82ch}
+.callout b{color:var(--pii)}
+.note{border-left:3px solid var(--accent);padding:4px 0 4px 14px;max-width:78ch;color:var(--muted);font-size:14px}
+h3{margin:8px 0 0;font:650 18px/1.3 var(--f-display)}
+h4{margin:0;font:600 15px var(--f-body)}
+.split{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}
+.split>div{min-width:0;display:flex;flex-direction:column;gap:10px}
+pre.code{margin:0;background:var(--code-bg);border-radius:6px;padding:14px 16px;overflow-x:auto;font:12.5px/1.6 var(--f-mono)}
+.role{display:inline-block;font:600 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
+</style>
+
+<div class="wrap">
+<nav aria-label="Isi">
+  <span class="lbl">Isi</span>
+  <a href="#ringkas">Peta setup</a>
+  <a href="#prasyarat">Prasyarat</a>
+  <a href="#lokal">1 · Jalankan lokal</a>
+  <a href="#dokploy">2 · Deploy Dokploy</a>
+  <a href="#admin">3 · Admin pertama</a>
+  <a href="#env">4 · Referensi env</a>
+  <a href="#gateway">5 · Gateway fiat</a>
+  <a href="#deposit">6 · Deposit wallet</a>
+  <a href="#fx">7 · Kurs &amp; oracle</a>
+  <a href="#kontrak">8 · Setup kontrak x402</a>
+  <a href="#nilai">· Cara dapat tiap nilai</a>
+  <a href="#deploy-kontrak">· Deploy kontrak</a>
+  <a href="#token">· Token pembayaran</a>
+  <a href="#watcher">· Watcher</a>
+  <a href="#uji-x402">· Uji pembayaran</a>
+  <a href="#mainnet">· Pindah ke mainnet</a>
+  <a href="#federation">9 · Federation</a>
+  <a href="#cek">Checklist go-live</a>
+  <a href="#masalah">Masalah umum</a>
+  <a href="#iso">Keamanan</a>
+</nav>
+
+<main>
+<header>
+  <span class="eyebrow">Panduan setup · v0.2.0</span>
+  <h1>Setup PPV Stream</h1>
+  <p class="lede">Langkah dari nol sampai siap dipakai: menjalankan aplikasi di laptop, deploy ke Dokploy, membuat admin, mengaktifkan gateway pembayaran, dan men-deploy smart contract x402 di Polygon. Setiap variabel <code>X402_*</code> dijelaskan beserta cara mendapatkannya.</p>
+  <div class="meta"><span>Rust + PostgreSQL 16</span><span>FFmpeg</span><span>Hardhat + Polygon</span><span>Amoy chain <b>80002</b></span><span>Diperbarui <b>9 Nov 2026</b></span></div>
+</header>
+
+<section id="ringkas">
+  <span class="eyebrow">Gambaran</span>
+  <h2>Peta setup</h2>
+  <p>Hanya langkah 1–3 yang wajib. Sisanya opsional dan bisa diaktifkan satu per satu.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart TD
+  A[1 · Jalankan lokal / 2 · Deploy Dokploy] --> B[3 · Buat admin pertama]
+  B --> C{Metode bayar}
+  C --> W[Wallet internal + deposit<br/>Admin > Settings]
+  C --> G[5 · Gateway fiat<br/>PayPal / Stripe / Midtrans / Xendit]
+  C --> X[8 · Kontrak x402<br/>Polygon Amoy → mainnet]
+  X --> T[Daftarkan token + oracle harga]
+  B --> F[9 · Federation, opsional]
+</pre></div>
+  <div class="tw"><table>
+    <thead><tr><th>Komponen</th><th>Fungsi</th><th>Wajib?</th></tr></thead>
+    <tbody>
+      <tr><td>App Rust (<code>ppv_stream</code>)</td><td>Web, API, transcoding HLS, job kurs</td><td><span class="chip ok">Ya</span></td></tr>
+      <tr><td>PostgreSQL 16</td><td>Data pengguna, video, pembayaran</td><td><span class="chip ok">Ya</span></td></tr>
+      <tr><td>FFmpeg</td><td>Transcode MP4 → HLS (sudah ada di image Docker)</td><td><span class="chip ok">Ya</span></td></tr>
+      <tr><td>Kontrak <code>X402Splitter</code></td><td>Pembayaran kripto, bagi hasil on-chain</td><td><span class="chip mute">Opsional</span></td></tr>
+      <tr><td>Watcher x402</td><td>Mendengarkan event <code>Paid</code> sebagai cadangan konfirmasi</td><td><span class="chip mute">Opsional</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="prasyarat">
+  <span class="eyebrow">Sebelum mulai</span>
+  <h2>Prasyarat</h2>
+  <div class="split">
+    <div><h4>Lokal dengan Docker</h4><ul><li>Docker Desktop / Engine + Compose v2</li><li><code>make</code></li></ul></div>
+    <div><h4>Lokal tanpa Docker</h4><ul><li>Rust stable (≥ 1.91)</li><li>PostgreSQL 16 + <code>psql</code></li><li>FFmpeg</li></ul></div>
+    <div><h4>Kontrak x402</h4><ul><li>Node.js 18+ dan npm</li><li>MetaMask di browser</li><li>Akun penyedia RPC (Alchemy / Infura / QuickNode), opsional</li></ul></div>
+  </div>
+<pre class="code">rustc --version && cargo --version && psql --version && ffmpeg -version && node --version</pre>
+</section>
+
+<section id="lokal">
+  <span class="eyebrow">Langkah 1</span>
+  <h2>Menjalankan di komputer lokal</h2>
+  <div class="split">
+    <div>
+      <h4>Dengan Docker (disarankan)</h4>
+<pre class="code">cp .env.example .env      # isi HMAC_SECRET, ADMIN_BOOTSTRAP_*
+make db-up
+make wait-db
+make migrate
+make build
+make run-all
+make seed                 # opsional: pengguna dummy</pre>
+    </div>
+    <div>
+      <h4>Tanpa Docker</h4>
+<pre class="code">export DATABASE_URL=postgres://ppv:pass@localhost:5432/ppv_stream
+mkdir -p storage media hls_tmp tmp
+for f in sql/*.sql;        do psql "$DATABASE_URL" -f "$f"; done
+for f in migrations/*.sql; do psql "$DATABASE_URL" -f "$f"; done
+cargo build
+cargo run</pre>
+    </div>
+  </div>
+  <p>Buka <code>http://localhost:8080</code>. Build Rust <b>membutuhkan database aktif</b> karena makro <code>sqlx::query!</code> memeriksa SQL saat kompilasi. Jika build gagal dengan pesan <i>error communicating with database</i>, jalankan database dan migrasi terlebih dahulu.</p>
+  <p class="note">Migrasi di <code>migrations/</code> juga dijalankan otomatis saat aplikasi start (dicatat di tabel <code>_ppv_extra_migrations</code>). Matikan dengan <code>APPLY_EXTRA_MIGRATIONS=0</code>.</p>
+</section>
+
+<section id="dokploy">
+  <span class="eyebrow">Langkah 2</span>
+  <h2>Deploy ke Dokploy</h2>
+  <ol class="steps">
+    <li><div>Di Dokploy, buat <b>Project → Compose</b>, hubungkan repo Git, dan isi Compose Path <code>docker-compose.dokploy.yml</code>.</div></li>
+    <li><div>Buka tab <b>Environment</b>, salin isi <code>.env.dokploy.example</code>, lalu ganti semua <code>CHANGE_ME</code>. Buat secret dengan <code>openssl rand -hex 32</code>.</div></li>
+    <li><div>Tab <b>Domains</b>: tambahkan domain ke service <code>app</code>, port <code>8080</code>, aktifkan HTTPS (Let's Encrypt). Jangan buka port database ke publik.</div></li>
+    <li><div>Klik <b>Deploy</b>. Dockerfile menjalankan Postgres sementara di tahap build agar makro sqlx bisa memeriksa SQL, lalu image runtime hanya berisi binary, FFmpeg, dan tini.</div></li>
+    <li><div>Cek <code>https://domain/health</code> atau log service. Data tersimpan di volume <code>pgdata</code> dan <code>appdata</code> (<code>/data</code>).</div></li>
+  </ol>
+  <p class="note">Detail backup, alternatif Dokploy Postgres, dan troubleshooting ada di <code>DOKPLOY.md</code>.</p>
+</section>
+
+<section id="admin">
+  <span class="eyebrow">Langkah 3</span>
+  <h2>Membuat admin pertama</h2>
+  <ol class="steps">
+    <li><div>Isi <code>ADMIN_BOOTSTRAP_TOKEN</code>, <code>ADMIN_BOOTSTRAP_EMAIL</code>, dan <code>ADMIN_BOOTSTRAP_PASSWORD</code> (kuat, bukan default <code>ChangeMe123!</code>).</div></li>
+    <li><div>Buka <code>https://domain/setup_admin?token=TOKEN</code>. Endpoint ini mati sendiri setelah ada satu admin.</div></li>
+    <li><div>Hapus <code>ADMIN_BOOTSTRAP_TOKEN</code> dan <code>ADMIN_BOOTSTRAP_PASSWORD</code> dari env, lalu deploy ulang.</div></li>
+    <li><div>Masuk di <code>/public/admin/login.html</code>, ganti password, lalu buka <b>Settings</b> untuk branding, SMTP, storage, dan metode pembayaran.</div></li>
+  </ol>
+</section>
+
+<section id="env">
+  <span class="eyebrow">Langkah 4</span>
+  <h2>Referensi variabel lingkungan</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Grup</th><th>Variabel</th><th>Keterangan</th></tr></thead>
+    <tbody>
+      <tr><td>Database</td><td><code>POSTGRES_DB</code>, <code>POSTGRES_USER</code>, <code>POSTGRES_PASSWORD</code></td><td>Compose menyusun <code>DATABASE_URL</code> dari ketiganya</td></tr>
+      <tr><td>Inti</td><td><code>BASE_URL</code>, <code>RUST_LOG</code>, <code>TZ</code></td><td><code>BASE_URL</code> = URL publik HTTPS, dipakai untuk link dan redirect pembayaran</td></tr>
+      <tr><td>Keamanan</td><td><code>HMAC_SECRET</code>, <code>SESSION_TOKEN_TTL</code></td><td>64 karakter hex. <b>Jangan dirotasi</b> jika federation aktif (lihat dokumen federation)</td></tr>
+      <tr><td>Media</td><td><code>MAX_UPLOAD_BYTES</code>, <code>ALLOW_EXTS</code>, <code>HLS_SEGMENT_SECONDS</code>, <code>HWACCEL</code>, <code>STORAGE_BACKEND</code>, <code>S3_*</code></td><td>Storage bisa diganti dari Admin &gt; Settings</td></tr>
+      <tr><td>Harga</td><td><code>DOLLAR_USD_TO_RUPIAH</code>, <code>CREATOR_SPLIT_BP</code></td><td>Kurs cadangan; split creator dalam basis poin (9000 = 90%)</td></tr>
+      <tr><td>Kurs &amp; oracle</td><td><code>FX_*</code>, <code>COINGECKO_API_KEY</code>, <code>X402_ORACLE_MAX_AGE_SECS</code></td><td>Lihat langkah 7</td></tr>
+      <tr><td>Deposit</td><td><code>WALLET_DEPOSIT_INSTRUCTIONS</code></td><td>Lihat langkah 6</td></tr>
+      <tr><td>Gateway</td><td><code>PAYMENT_PLUGINS</code>, <code>PAYPAL_*</code>, <code>STRIPE_*</code>, <code>MIDTRANS_*</code>, <code>XENDIT_*</code></td><td>Lihat langkah 5</td></tr>
+      <tr><td>x402</td><td><code>X402_*</code>, <code>WATCHER_ENABLE</code>, <code>ENABLE_WATCHER</code></td><td>Lihat langkah 8</td></tr>
+      <tr><td>Federation</td><td><code>FEDERATION_*</code></td><td>Lihat langkah 9</td></tr>
+      <tr><td>Streaming</td><td><code>ENABLE_STATIC_HLS</code></td><td>Biarkan <code>0</code> di produksi</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="gateway">
+  <span class="eyebrow">Langkah 5</span>
+  <h2>Gateway pembayaran fiat</h2>
+  <p>Aktifkan provider di <code>PAYMENT_PLUGINS</code> (misalnya <code>paypal,xendit,midtrans,stripe</code>), isi kuncinya, lalu daftarkan URL webhook di dashboard provider. Pakai mode sandbox/test dulu.</p>
+  <div class="tw"><table>
+    <thead><tr><th>Provider</th><th>Ambil kunci di</th><th>Env</th><th>URL webhook</th></tr></thead>
+    <tbody>
+      <tr><td>Midtrans</td><td>Dashboard Midtrans → Settings → Access Keys</td><td><code>MIDTRANS_ENV</code>, <code>MIDTRANS_SERVER_KEY</code>, <code>MIDTRANS_CLIENT_KEY</code></td><td><code>/api/pay/midtrans/webhook</code> (Payment Notification URL)</td></tr>
+      <tr><td>Xendit</td><td>Dashboard Xendit → Settings → API Keys; Webhooks → verification token</td><td><code>XENDIT_ENV</code>, <code>XENDIT_SECRET_KEY</code>, <code>XENDIT_WEBHOOK_TOKEN</code></td><td><code>/api/pay/xendit/webhook</code> (Invoice paid)</td></tr>
+      <tr><td>Stripe</td><td>Dashboard Stripe → Developers → API keys; Webhooks → signing secret</td><td><code>STRIPE_ENV</code>, <code>STRIPE_SECRET_KEY</code>, <code>STRIPE_WEBHOOK_SECRET</code></td><td><code>/api/pay/stripe/webhook</code> (<code>checkout.session.completed</code>)</td></tr>
+      <tr><td>PayPal</td><td>developer.paypal.com → Apps &amp; Credentials; buat webhook untuk mendapatkan ID</td><td><code>PAYPAL_ENV</code>, <code>PAYPAL_CLIENT_ID</code>, <code>PAYPAL_CLIENT_SECRET</code>, <code>PAYPAL_WEBHOOK_ID</code></td><td><code>/api/pay/paypal/webhook</code> (<code>CHECKOUT.ORDER.APPROVED</code>, <code>PAYMENT.CAPTURE.COMPLETED</code>)</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">URL webhook ditulis lengkap dengan domain, misalnya <code>https://stream.example.com/api/pay/xendit/webhook</code>. Midtrans dan Xendit menagih dalam rupiah. Server memeriksa nominal dan mata uang webhook sebelum membuka akses.</p>
+</section>
+
+<section id="deposit">
+  <span class="eyebrow">Langkah 6</span>
+  <h2>Wallet internal dan deposit</h2>
+  <ol class="steps">
+    <li><div>Admin &gt; Settings &gt; <b>Payment Methods</b>: aktifkan pembayaran wallet dan, jika perlu, transfer antar pengguna.</div></li>
+    <li><div>Isi <code>WALLET_DEPOSIT_INSTRUCTIONS</code> dengan rekening tujuan, misalnya:<br><code>Bank: BCA\nNo. Rekening: 1234567890\na.n. PT Contoh\nCantumkan username di berita transfer.</code></div></li>
+    <li><div>Pengguna mengunggah bukti; admin memeriksa di Admin &gt; Wallet &gt; Deposits sebelum menekan Approve.</div></li>
+  </ol>
+  <div class="callout"><b>Regulasi.</b><span>Saldo yang bisa ditransfer dan ditarik dapat dikategorikan uang elektronik yang memerlukan izin Bank Indonesia. Kaji sebelum mengaktifkan transfer dan penarikan untuk publik.</span></div>
+</section>
+
+<section id="fx">
+  <span class="eyebrow">Langkah 7</span>
+  <h2>Kurs rupiah dan oracle harga token</h2>
+  <p>Job latar mengambil USD/IDR (default dari <code>open.er-api.com</code>, tiap jam) dan harga token native seperti POL (dari CoinGecko, tiap 2 menit, hanya untuk token aktif yang bukan stablecoin). Kurs dipakai untuk tagihan Midtrans/Xendit, harga video dalam rupiah, dan invoice x402 token native.</p>
+  <div class="tw"><table>
+    <thead><tr><th>Env</th><th>Default</th><th>Fungsi</th></tr></thead>
+    <tbody>
+      <tr><td><code>FX_AUTO_REFRESH</code></td><td><code>1</code></td><td><code>0</code> = hanya pakai override admin / env</td></tr>
+      <tr><td><code>FX_USD_IDR_URL</code>, <code>FX_USD_IDR_JSON_POINTER</code></td><td>open.er-api.com, <code>/rates/IDR</code></td><td>Sumber kurs; bisa diganti API lain yang mengembalikan JSON</td></tr>
+      <tr><td><code>FX_USD_IDR_MIN</code> / <code>MAX</code></td><td>5000 / 50000</td><td>Nilai di luar rentang ditolak</td></tr>
+      <tr><td><code>FX_MAX_CHANGE_PCT</code></td><td><code>10</code></td><td>Lonjakan lebih besar dari ini diabaikan (butuh override manual)</td></tr>
+      <tr><td><code>FX_TOKEN_IDS</code></td><td><code>POL=polygon-ecosystem-token,…</code></td><td>Peta simbol token → ID CoinGecko</td></tr>
+      <tr><td><code>X402_ORACLE_MAX_AGE_SECS</code></td><td><code>600</code></td><td>Harga lebih tua dari ini tidak dipakai; token native disembunyikan sementara</td></tr>
+      <tr><td><code>COINGECKO_API_KEY</code></td><td>kosong</td><td>Opsional (demo key gratis) untuk batas request lebih tinggi</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">Override manual: Admin &gt; Settings &gt; <b>Exchange Rates &amp; Token Prices</b>. Setiap perubahan tercatat di <code>fx_rate_history</code>. Container harus bisa mengakses internet keluar (HTTPS) untuk refresh otomatis.</p>
+</section>
+
+<section id="kontrak">
+  <span class="eyebrow">Langkah 8</span>
+  <h2>Setup kontrak x402</h2>
+  <p>Kontrak <code>contracts/contracts/X402Splitter.sol</code> menerima pembayaran, membagi dana ke kreator dan admin dalam satu transaksi, lalu memancarkan event <code>Paid</code>. Server menandatangani setiap invoice dengan kunci admin; kontrak menolak tanda tangan lain, invoice kedaluwarsa, invoice yang dipakai dua kali, dan pembayaran kurang.</p>
+  <div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  participant P as Pembeli (MetaMask)
+  participant S as Server PPV
+  participant K as X402Splitter
+  P->>S: POST /api/pay/x402/start
+  S->>S: hitung jumlah token, tanda tangani (X402_ADMIN_PRIVKEY)
+  S-->>P: invoice + v, r, s + deadline
+  P->>K: payNativeSigned / payERC20Signed
+  K->>K: cek tanda tangan admin, deadline, invoice belum dipakai
+  K-->>P: dana → kreator (90%) dan admin (10%), emit Paid
+  P->>S: POST /api/pay/x402/confirm (tx_hash)
+  S->>S: baca receipt via X402_RPC_HTTP, cocokkan event → buka akses
+</pre></div>
+  <div class="callout"><b>Penting: alamat admin berperan ganda.</b><span>Alamat yang dimasukkan ke konstruktor kontrak (<code>X402_ADMIN_WALLET</code>) adalah <b>penandatangan invoice</b> sekaligus <b>penerima bagian platform</b>. Kuncinya disimpan di server, jadi wallet ini termasuk <i>hot wallet</i>. Pindahkan pendapatan secara rutin ke wallet dingin atau multisig. Alamat admin tidak bisa diubah (<code>immutable</code>), sehingga mengganti kunci berarti men-deploy kontrak baru.</span></div>
+</section>
+
+<section id="nilai">
+  <span class="eyebrow">Langkah 8a</span>
+  <h2>Cara mendapatkan setiap nilai <code>X402_*</code></h2>
+  <div class="tw"><table>
+    <thead><tr><th>Variabel</th><th>Isi</th><th>Cara mendapatkan</th></tr></thead>
+    <tbody>
+      <tr><td><code>X402_ADMIN_WALLET</code></td><td>Alamat <code>0x…</code> wallet admin</td><td>Buat wallet <b>baru khusus</b> untuk aplikasi ini (langkah di bawah). Jangan memakai wallet pribadi.</td></tr>
+      <tr><td><code>X402_ADMIN_PRIVKEY</code></td><td>Kunci privat wallet admin (<code>0x</code> + 64 hex)</td><td>Dihasilkan bersamaan dengan alamat di atas. Simpan hanya di secret Dokploy dan password manager.</td></tr>
+      <tr><td><code>X402_CONTRACT_ADDRESS</code></td><td>Alamat kontrak hasil deploy</td><td>Dicetak oleh <code>npm run deploy:test</code> dan disimpan di <code>contracts/deployed.json</code>.</td></tr>
+      <tr><td><code>X402_RPC_HTTP</code></td><td>URL RPC HTTPS</td><td>Buat app di Alchemy / Infura / QuickNode untuk jaringan Polygon Amoy (testnet) atau Polygon PoS (mainnet). Format Alchemy: <code>https://polygon-amoy.g.alchemy.com/v2/API_KEY</code>. RPC publik ada di chainlist.org (rentan rate-limit).</td></tr>
+      <tr><td><code>X402_RPC_WSS</code></td><td>URL RPC WebSocket</td><td>Dari penyedia yang sama, versi <code>wss://</code>. Contoh Alchemy: <code>wss://polygon-amoy.g.alchemy.com/v2/API_KEY</code>. Hanya dibutuhkan watcher.</td></tr>
+      <tr><td><code>X402_CHAIN_ID</code></td><td><code>80002</code> atau <code>137</code></td><td>80002 = Polygon Amoy testnet; 137 = Polygon PoS mainnet.</td></tr>
+      <tr><td><code>X402_DEADLINE_SECS</code></td><td><code>900</code></td><td>Masa berlaku invoice (detik). 900 = 15 menit; sama dengan batas di tanda tangan.</td></tr>
+      <tr><td><code>WATCHER_ENABLE</code></td><td><code>0</code> / <code>1</code></td><td><code>1</code> menjalankan watcher event <code>Paid</code>. Butuh image yang dibuild dengan <code>ENABLE_WATCHER=1</code> dan <code>X402_RPC_WSS</code> terisi.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Membuat wallet admin baru</h3>
+  <p>Jalankan di komputer yang aman (bukan di server produksi), setelah <code>npm install</code> di folder <code>contracts</code>:</p>
+<pre class="code">cd contracts
+npm install
+node -e "const {Wallet}=require('ethers'); const w=Wallet.createRandom(); console.log('X402_ADMIN_WALLET=' + w.address); console.log('X402_ADMIN_PRIVKEY=' + w.privateKey)"</pre>
+  <p>Alternatif: di MetaMask buat akun baru → <b>Account details → Show private key</b>. Cara ini lebih mudah, tetapi kunci tersimpan juga di browser.</p>
+  <p class="note">Jangan menempelkan kunci privat ke chat, tiket, atau commit Git. Bersihkan riwayat terminal setelah menjalankan perintah di atas.</p>
+
+  <h3>Wallet deployer</h3>
+  <p>Deploy membutuhkan wallet berisi sedikit POL untuk gas. Wallet deployer boleh sama dengan wallet admin, tetapi lebih aman dipisah. Isi saldo testnet dari faucet resmi Polygon (<code>faucet.polygon.technology</code>) atau faucet milik Alchemy/QuickNode.</p>
+</section>
+
+<section id="deploy-kontrak">
+  <span class="eyebrow">Langkah 8b</span>
+  <h2>Deploy kontrak dengan Hardhat</h2>
+  <ol class="steps">
+    <li><div>Buat file <code>contracts/.env</code> (sudah di-ignore, jangan di-commit):
+<pre class="code">PRIVATE_KEY=0xKUNCI_WALLET_DEPLOYER
+ADMIN_WALLET=0xALAMAT_X402_ADMIN_WALLET
+AMOY_RPC_HTTP=https://polygon-amoy.g.alchemy.com/v2/API_KEY
+AMOY_CHAIN_ID=80002
+POLYGONSCAN_API_KEY=            # opsional, untuk verifikasi source
+AUTO_VERIFY=true                # opsional
+CONFIRMATIONS=2</pre></div></li>
+    <li><div>Kompilasi dan perkirakan biaya:
+<pre class="code">npx hardhat compile
+npm run estimate:test</pre></div></li>
+    <li><div>Deploy ke Amoy:
+<pre class="code">npm run deploy:test
+# setara: npx hardhat run --network polygonAmoyTestnet scripts/deploy_x402.js</pre>
+    Output mencetak <code>Address</code> dan link explorer. Alamat yang sama tersimpan di <code>contracts/deployed.json</code>.</div></li>
+    <li><div>Buka alamat di <code>amoy.polygonscan.com</code> dan pastikan fungsi baca <code>admin()</code> mengembalikan <code>X402_ADMIN_WALLET</code>.</div></li>
+    <li><div>Isi env aplikasi: <code>X402_CONTRACT_ADDRESS</code>, <code>X402_ADMIN_WALLET</code>, <code>X402_ADMIN_PRIVKEY</code>, <code>X402_RPC_HTTP</code>, <code>X402_CHAIN_ID=80002</code>. Deploy ulang aplikasi.</div></li>
+    <li><div>Aktifkan x402 di Admin &gt; Settings &gt; Payment Methods.</div></li>
+  </ol>
+  <p class="note">Script <code>deploy:test</code> sebelumnya menunjuk jaringan <code>megaTestnet</code> yang tidak ada di <code>hardhat.config.js</code>; sudah diperbaiki menjadi <code>polygonAmoyTestnet</code>.</p>
+</section>
+
+<section id="token">
+  <span class="eyebrow">Langkah 8c</span>
+  <h2>Token pembayaran</h2>
+  <p>Token yang ditawarkan ke pembeli diambil dari tabel <code>pay_tokens</code>. Migrasi sudah mengisi POL native di Amoy (80002) dan USDC.e di Polygon (137).</p>
+  <div class="tw"><table>
+    <thead><tr><th>Jenis</th><th>Cara dihargai</th><th>Syarat tampil</th></tr></thead>
+    <tbody>
+      <tr><td>Stablecoin (USDC, USDC.e, USDT, DAI, atau <code>token_kind='STABLE'</code>)</td><td>1 token = 1 USD</td><td>Selalu</td></tr>
+      <tr><td>Token native / volatil (POL, ETH)</td><td>Harga oracle CoinGecko, dibulatkan ke atas</td><td>Ada harga segar (≤ 10 menit) atau override admin</td></tr>
+      <tr><td>Token tanpa harga</td><td>1:1 (hanya testnet)</td><td><code>X402_ALLOW_VOLATILE_TOKENS=1</code></td></tr>
+    </tbody>
+  </table></div>
+  <p>Contoh menambahkan USDC uji di Amoy (ambil alamat kontrak USDC Amoy dari dokumentasi Circle, lalu verifikasi di explorer):</p>
+<pre class="code">INSERT INTO pay_tokens (symbol, chain, chain_id, erc20_address, decimals, is_active, token_kind)
+VALUES ('USDC', 'Polygon Amoy Testnet', 80002, '0xALAMAT_USDC_AMOY', 6, TRUE, 'STABLE')
+ON CONFLICT ON CONSTRAINT pay_tokens_chain_symbol_uq DO UPDATE
+SET erc20_address = EXCLUDED.erc20_address, decimals = 6, is_active = TRUE, token_kind = 'STABLE';</pre>
+  <p class="note">Di mainnet, USDC yang di-seed (<code>0x2791…4174</code>) adalah USDC.e hasil bridge. Jika ingin USDC native Circle, tambahkan baris terpisah dengan alamat resminya.</p>
+</section>
+
+<section id="watcher">
+  <span class="eyebrow">Langkah 8d</span>
+  <h2>Watcher (opsional)</h2>
+  <p>Biasanya halaman watch langsung mengonfirmasi pembayaran setelah transaksi masuk blok. Watcher adalah cadangan untuk kasus pembeli menutup browser sebelum konfirmasi.</p>
+  <ol class="steps">
+    <li><div>Build image dengan fitur watcher: set <code>ENABLE_WATCHER=1</code> (build arg) di Dokploy.</div></li>
+    <li><div>Isi <code>X402_RPC_WSS</code> dan <code>X402_CONTRACT_ADDRESS</code>, lalu set <code>WATCHER_ENABLE=1</code> (runtime).</div></li>
+    <li><div>Untuk menjalankannya sebagai service terpisah, tambahkan <code>COMPOSE_PROFILES=watcher</code>.</div></li>
+  </ol>
+</section>
+
+<section id="uji-x402">
+  <span class="eyebrow">Langkah 8e</span>
+  <h2>Menguji pembayaran di testnet</h2>
+  <ol class="steps">
+    <li><div>Di MetaMask, tambahkan jaringan Polygon Amoy (chain ID 80002) lewat chainlist.org, lalu isi POL uji dari faucet.</div></li>
+    <li><div>Login sebagai kreator, isi <b>EVM Wallet</b> di profil, lalu upload video berbayar.</div></li>
+    <li><div>Login sebagai pembeli (akun lain), buka video → tab <b>Blockchain x402</b> → <b>Connect Wallet</b> → <b>Pay with Crypto Wallet</b>.</div></li>
+    <li><div>Setujui di MetaMask. Setelah terkonfirmasi, halaman memuat ulang dan video terbuka.</div></li>
+    <li><div>Periksa transaksi di <code>amoy.polygonscan.com</code>: ada dua transfer (kreator dan admin) dan event <code>Paid</code>.</div></li>
+  </ol>
+</section>
+
+<section id="mainnet">
+  <span class="eyebrow">Langkah 8f</span>
+  <h2>Pindah ke mainnet</h2>
+  <ol class="steps">
+    <li><div>Isi <code>POLYGON_RPC_HTTP</code> dan <code>POLYGON_CHAIN_ID=137</code> di <code>contracts/.env</code>, isi wallet deployer dengan POL asli, lalu jalankan <code>npm run deploy:mainnet</code>.</div></li>
+    <li><div>Ganti env aplikasi: alamat kontrak mainnet, RPC mainnet, <code>X402_CHAIN_ID=137</code>.</div></li>
+    <li><div>Nonaktifkan token testnet: <code>UPDATE pay_tokens SET is_active = FALSE WHERE chain_id = 80002;</code></div></li>
+    <li><div>Pastikan <code>X402_ALLOW_VOLATILE_TOKENS=0</code>.</div></li>
+    <li><div>Lakukan kajian hukum dahulu. Di Indonesia, aset kripto bukan alat pembayaran yang sah.</div></li>
+  </ol>
+</section>
+
+<section id="federation">
+  <span class="eyebrow">Langkah 9</span>
+  <h2>Federation (opsional)</h2>
+  <p>Isi <code>FEDERATION_ENABLED=true</code>, <code>FEDERATION_BASE_URL</code>, <code>FEDERATION_DOMAIN</code>, dan <code>FEDERATION_ADMIN_TOKEN</code>. Penjelasan lengkap, status, dan batasannya ada di <a href="federation.html">federation.html</a>.</p>
+</section>
+
+<section id="cek">
+  <span class="eyebrow">Sebelum dibuka untuk publik</span>
+  <h2>Checklist go-live</h2>
+  <ul>
+    <li>Semua <code>CHANGE_ME</code> sudah diganti; <code>.env</code> tidak ada di Git.</li>
+    <li>HTTPS aktif; <code>SESSION_COOKIE_SECURE=true</code>; <code>ENABLE_STATIC_HLS=0</code>.</li>
+    <li>Token bootstrap admin sudah dihapus dari env.</li>
+    <li>Gateway diuji di sandbox: bayar, webhook diterima, akses terbuka, nominal cocok.</li>
+    <li>x402 diuji di Amoy dengan stablecoin dan token native.</li>
+    <li>Backup database terjadwal dan sudah pernah dipulihkan (restore test).</li>
+    <li>Rencana pemindahan dana rutin dari wallet admin x402 ke wallet dingin.</li>
+    <li>Kebijakan privasi, persetujuan pengguna, dan masa simpan data sudah ada (lihat bagian keamanan).</li>
+  </ul>
+</section>
+
+<section id="masalah">
+  <span class="eyebrow">Bantuan</span>
+  <h2>Masalah umum</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Gejala</th><th>Penyebab</th><th>Solusi</th></tr></thead>
+    <tbody>
+      <tr><td>Build gagal: <i>error communicating with database</i></td><td>Makro sqlx butuh DB</td><td>Jalankan Postgres dan migrasi, atau build lewat Dockerfile</td></tr>
+      <tr><td>Tab x402 tidak muncul</td><td>Admin belum mengaktifkan x402, tidak ada token aktif, atau token native belum punya harga</td><td>Aktifkan di Settings; cek <code>pay_tokens</code>; cek tabel kurs di Settings</td></tr>
+      <tr><td>Error <code>X402_ADMIN_PRIVKEY not set</code> / <code>bad admin privkey</code></td><td>Env kosong atau format salah</td><td>Isi kunci <code>0x</code> + 64 hex</td></tr>
+      <tr><td>MetaMask: <code>bad sig</code></td><td>Kunci server tidak cocok dengan admin di kontrak</td><td>Pastikan alamat dari <code>X402_ADMIN_PRIVKEY</code> = <code>admin()</code> di kontrak</td></tr>
+      <tr><td>MetaMask: <code>expired</code></td><td>Invoice lewat 15 menit, atau jam server tidak sinkron</td><td>Buat ulang invoice; aktifkan NTP di server</td></tr>
+      <tr><td>Konfirmasi gagal: <code>X402_RPC_HTTP not set</code> / <code>rpc</code></td><td>RPC kosong atau rate-limit</td><td>Pakai RPC penyedia berbayar/gratis dengan API key</td></tr>
+      <tr><td>Kurs tidak pernah berubah</td><td>Container tanpa akses internet keluar atau <code>FX_AUTO_REFRESH=0</code></td><td>Buka egress HTTPS atau gunakan override admin</td></tr>
+      <tr><td>Webhook ditolak / akses tidak terbuka</td><td>Secret webhook salah atau nominal tidak cocok</td><td>Cek log <code>amount_mismatch</code>; cocokkan secret di dashboard provider</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="iso">
+  <span class="eyebrow">ISO/IEC 27001:2022 · UU PDP 27/2022</span>
+  <h2>Keamanan dan data pribadi</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Kontrol</th><th>Penerapan di setup ini</th></tr></thead>
+    <tbody>
+      <tr><td>A.5.17 Informasi autentikasi</td><td>Semua secret hanya di env Dokploy; <code>contracts/.env</code> tidak di-commit; tidak ada kunci di dokumen atau chat</td></tr>
+      <tr><td>A.8.24 Kriptografi</td><td>Kunci admin x402 adalah hot key yang menandatangani invoice dan menerima dana. Batasi akses server, pindahkan dana rutin, dan siapkan prosedur rotasi (deploy kontrak baru)</td></tr>
+      <tr><td>A.8.9 Konfigurasi</td><td><code>ENABLE_STATIC_HLS=0</code>, <code>FEDERATION_DEV_HTTP_BYPASS=0</code>, <code>X402_ALLOW_VOLATILE_TOKENS=0</code> di produksi</td></tr>
+      <tr><td>A.8.13 Backup</td><td>Volume <code>pgdata</code> dan <code>appdata</code> dibackup terjadwal dan diuji restore</td></tr>
+      <tr><td>A.8.15 Logging</td><td>Perubahan kurs tercatat di <code>fx_rate_history</code>; tindakan admin tercatat di log aplikasi</td></tr>
+      <tr><td>A.5.34 Data pribadi</td><td>Email, rekening bank, bukti transfer, dan alamat wallet adalah data pribadi; alamat wallet bersifat publik di blockchain</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout"><b>Belum sepenuhnya patuh: perlu tindakan sebelum produksi.</b><span>Belum ada kebijakan privasi, mekanisme persetujuan, fitur hapus/ekspor data pengguna, masa simpan bukti transfer, enkripsi kolom rekening bank, ataupun log akses admin terhadap bukti transfer. Lengkapi hal ini sebelum menerima data pengguna sungguhan.</span></div>
+</section>
+</main>
+</div>
+
+<script>
+// Diagram dirender oleh viewer Artifact. Saat dibuka langsung sebagai file, muat Mermaid sebagai cadangan.
+setTimeout(function(){
+  if (document.querySelector('pre.mermaid svg') || window.mermaid) return;
+  var s=document.createElement('script');
+  s.src='https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js';
+  s.onload=function(){
+    var dark=matchMedia('(prefers-color-scheme: dark)').matches||document.documentElement.dataset.theme==='dark';
+    mermaid.initialize({startOnLoad:false,theme:dark?'dark':'neutral'});
+    mermaid.run({querySelector:'pre.mermaid'});
+  };
+  document.head.appendChild(s);
+},1500);
+</script>
+</body>
+</html>

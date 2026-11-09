@@ -26,6 +26,8 @@ static RATE_LIMIT_STORE: Lazy<Mutex<HashMap<String, VecDeque<Instant>>>> =
 const RATE_LIMIT_WINDOW: Duration = Duration::from_secs(300);
 const RATE_LIMIT_MAX_ATTEMPTS: usize = 20;
 
+// Axum middleware: the error is an early HTTP response, so boxing it adds nothing.
+#[allow(clippy::result_large_err)]
 pub async fn browser_csrf_guard(
     State(cfg): State<Config>,
     req: Request,
@@ -64,6 +66,8 @@ pub async fn browser_csrf_guard(
     Ok(next.run(req).await)
 }
 
+// Axum middleware: the error is an early HTTP response, so boxing it adds nothing.
+#[allow(clippy::result_large_err)]
 pub async fn basic_rate_limit(
     State(cfg): State<Config>,
     req: Request,

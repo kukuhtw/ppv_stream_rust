@@ -188,6 +188,13 @@ pub struct StartPayResp {
     pub creator_wallet: String,
 }
 
+/// A token can be offered for x402 when it can be priced safely: USD
+/// stablecoins (1:1), tokens with a fresh oracle price (`crate::fx`), or any
+/// token when X402_ALLOW_VOLATILE_TOKENS=1 (testnet only, 1:1 fallback).
+fn x402_token_allowed(symbol: &str, token_kind: Option<&str>, decimals: u32) -> bool {
+    crate::fx::x402_token_amount(100, symbol, token_kind, decimals).is_some()
+}
+
 /// Creates a pending x402 invoice and signs the smart contract authorization payload.
 ///
 /// Route: `POST /api/pay/x402/start`
@@ -268,12 +275,41 @@ pub async fn x402_start(
         Err(_) => return Json(json!({"ok": false, "error": "invalid creator wallet"})),
     };
 
+    // A buyer blocked by the creator must not receive a signed invoice: the
+    // contract would forward the funds to the creator without any way for
+    // the platform to grant (or refund) access afterwards.
+    {
+        let owner_id: String = video_metadata
+            .try_get::<String, _>("owner_id")
+            .unwrap_or_default();
+        let blocked: bool = sqlx::query_scalar(
+            r#"SELECT EXISTS(
+                   SELECT 1 FROM creator_blocked_users
+                   WHERE creator_user_id = $1 AND blocked_user_id = $2
+                     AND (expires_at IS NULL OR expires_at > NOW()))"#,
+        )
+        .bind(&owner_id)
+        .bind(&buyer_id)
+        .fetch_one(&st.pool)
+        .await
+        .unwrap_or(false);
+        if blocked {
+            return Json(
+                json!({"ok": false, "error": "you cannot purchase this creator's videos"}),
+            );
+        }
+        if owner_id == buyer_id {
+            return Json(json!({"ok": false, "error": "owners cannot buy their own video"}));
+        }
+    }
+
     // Validate that the requested token configuration is active and matches
     // the selected chain, symbol, and optional token contract address.
     let token_info = sqlx::query(
         r#"
         SELECT decimals,
-               COALESCE(erc20_address, erc20) AS erc20_address
+               COALESCE(erc20_address, erc20) AS erc20_address,
+               token_kind::text AS token_kind
         FROM pay_tokens
         WHERE chain_id=$1 AND symbol=$2
           AND COALESCE(erc20_address, erc20, '') = COALESCE($3, '')
@@ -292,17 +328,32 @@ pub async fn x402_start(
         return Json(json!({"ok": false, "error": "token not supported"}));
     };
 
-    let decimals = token_info.try_get::<i32, _>("decimals").unwrap_or(18) as u32;
+    let token_kind: Option<String> = token_info.try_get("token_kind").ok().flatten();
+    let decimals = token_info
+        .try_get::<i32, _>("decimals")
+        .unwrap_or(18)
+        .max(0) as u32;
     let price_cents: i64 = video_metadata.try_get::<i64, _>("price_cents").unwrap_or(0);
 
-    // Convert price cents into token base units and round upward. For example,
-    // an 18-decimal token uses 10^18 base units per whole token.
-    let token_amount_wei: u128 = if price_cents <= 0 {
-        0
-    } else {
-        let numerator = (price_cents as u128).saturating_mul(10u128.pow(decimals));
-        numerator.saturating_add(99) / 100
+    // Price the token: stablecoins 1:1, volatile/native tokens via the fresh
+    // oracle price in crate::fx (rounded up). Refuse when no safe price exists.
+    let Some((token_amount_wei, _amount_display, pricing)) =
+        crate::fx::x402_token_amount(price_cents, &body.symbol, token_kind.as_deref(), decimals)
+    else {
+        return Json(json!({
+            "ok": false,
+            "error": "this token has no current price; pay with a USD stablecoin (e.g. USDC) or try again shortly"
+        }));
     };
+    if let crate::fx::TokenPricing::Oracle(usd_per_token) = pricing {
+        tracing::info!(
+            symbol = %body.symbol,
+            usd_per_token,
+            price_cents,
+            amount_wei = %token_amount_wei,
+            "x402 invoice priced with oracle"
+        );
+    }
 
     if token_amount_wei == 0 {
         return Json(json!({
@@ -322,9 +373,14 @@ pub async fn x402_start(
     let token_amount_decimal =
         BigDecimal::from_str(&token_amount_wei.to_string()).unwrap_or_else(|_| BigDecimal::from(0));
 
+    // The signature deadline and the stored invoice expiry use the same instant
+    // (previously the invoice expired after 10 minutes while the signature
+    // stayed valid for X402_DEADLINE_SECS).
+    let deadline: u64 = (chrono::Utc::now().timestamp() as u64) + st.cfg.x402_deadline_secs;
+
     // Persist a pending invoice before returning the signing payload. The stored
     // invoice is later matched against the on-chain Paid event.
-    let _ = sqlx::query(
+    let insert_result = sqlx::query(
         r#"
         INSERT INTO x402_invoices
           (invoice_uid, invoice_uid_hash, user_id, video_id, creator_id,
@@ -335,7 +391,7 @@ pub async fn x402_start(
           ($1,$2,$3,$4,$5,
            $6,$7,$8,
            $9,$10,$11,
-           'pending', NOW() + INTERVAL '10 minutes')
+           'pending', to_timestamp($12::double precision))
         "#,
     )
     .bind(&invoice_uid)
@@ -353,8 +409,14 @@ pub async fn x402_start(
     .bind(price_cents)
     .bind(&token_amount_decimal)
     .bind(&token_amount_decimal)
+    .bind(deadline as f64)
     .execute(&st.pool)
     .await;
+
+    if let Err(e) = insert_result {
+        tracing::error!("x402 invoice insert failed: {e}");
+        return Json(json!({"ok": false, "error": "could not create invoice"}));
+    }
 
     // Store affiliate_ref if provided (separate runtime query — new column)
     if let Some(ref_username) = body.ref_code.as_deref().filter(|s| !s.is_empty()) {
@@ -379,7 +441,6 @@ pub async fn x402_start(
 
     let creator_basis_points = st.cfg.creator_split_bp;
     let minimum_amount_wei = U256::from_dec_str(&token_amount_wei.to_string()).unwrap();
-    let deadline: u64 = (chrono::Utc::now().timestamp() as u64) + st.cfg.x402_deadline_secs;
     let video_hash = H256::from_slice(&keccak256(body.video_id.as_bytes()));
 
     // ABI encode values in the exact order expected by the smart contract
@@ -842,8 +903,9 @@ pub async fn x402_confirm(
     }
 
     // Record the purchase idempotently so repeated confirmations do not create
-    // duplicate purchase rows.
-    let _ = sqlx::query!(
+    // duplicate purchase rows. The purchases trigger rejects buyers blocked by
+    // the creator; in that case no allowlist entry is created either.
+    if let Err(e) = sqlx::query!(
         r#"
         INSERT INTO purchases (user_id, video_id, created_at)
         VALUES ($1,$2,NOW())
@@ -853,7 +915,14 @@ pub async fn x402_confirm(
         invoice.video_id
     )
     .execute(&st.pool)
-    .await;
+    .await
+    {
+        tracing::warn!(
+            "x402 confirm: purchase not recorded for invoice {}: {e}",
+            invoice.invoice_uid
+        );
+        return Json(json!({"ok": false, "error": "access could not be granted for this invoice"}));
+    }
 
     // Resolve the buyer username because playback authorization currently uses
     // the `(video_id, username)` allowlist rather than a direct user ID relation.
@@ -1002,7 +1071,8 @@ pub async fn all_options(
     // X402 tokens
     let tokens = sqlx::query(
         r#"SELECT chain, chain_id, symbol, decimals,
-                  COALESCE(erc20_address, erc20) AS erc20_address
+                  COALESCE(erc20_address, erc20) AS erc20_address,
+                  token_kind::text AS token_kind
            FROM pay_tokens WHERE is_active = TRUE ORDER BY chain_id, symbol"#,
     )
     .fetch_all(&st.pool)
@@ -1011,14 +1081,31 @@ pub async fn all_options(
 
     let token_list: Vec<serde_json::Value> = tokens
         .iter()
-        .map(|t| {
-            json!({
+        .filter_map(|t| {
+            let symbol = t.try_get::<String, _>("symbol").unwrap_or_default();
+            let kind = t.try_get::<Option<String>, _>("token_kind").ok().flatten();
+            let decimals = t.try_get::<i32, _>("decimals").unwrap_or(18).max(0) as u32;
+            if !x402_token_allowed(&symbol, kind.as_deref(), decimals) {
+                return None;
+            }
+            // Final amount the buyer will send (plus network gas). For
+            // volatile tokens this is an estimate; the invoice locks it.
+            let (_, amount_display, pricing) =
+                crate::fx::x402_token_amount(price_cents, &symbol, kind.as_deref(), decimals)
+                    .unwrap_or((0, String::new(), crate::fx::TokenPricing::Stable));
+            Some(json!({
                 "chain":     t.try_get::<String, _>("chain").unwrap_or_default(),
                 "chain_id":  t.try_get::<i64,    _>("chain_id").unwrap_or(0),
-                "symbol":    t.try_get::<String, _>("symbol").unwrap_or_default(),
-                "decimals":  t.try_get::<i32,    _>("decimals").unwrap_or(18),
+                "symbol":    symbol,
+                "decimals":  decimals,
                 "erc20":     t.try_get::<Option<String>, _>("erc20_address").unwrap_or(None),
-            })
+                "amount_display": amount_display,
+                "priced_by": match pricing {
+                    crate::fx::TokenPricing::Stable => "stablecoin",
+                    crate::fx::TokenPricing::Oracle(_) => "oracle",
+                    crate::fx::TokenPricing::UnpricedFallback => "testnet_1to1",
+                },
+            }))
         })
         .collect();
 
@@ -1040,6 +1127,35 @@ pub async fn all_options(
     let cents_display =
         |c: i64| -> String { format!("${}.{:02}", c / 100, (c % 100).unsigned_abs()) };
 
+    // Rupiah-priced videos charge their exact rupiah price; others convert
+    // at the current USD/IDR rate (crate::fx).
+    let idr_amount = match crate::fx::video_idr_price(&st.pool, &video_id).await {
+        Some(idr) => idr,
+        None => crate::fx::cents_to_idr(price_cents, st.cfg.dollar_usd_to_rupiah),
+    };
+    let idr_display = {
+        let digits = idr_amount.to_string();
+        let mut out = String::new();
+        for (i, ch) in digits.chars().enumerate() {
+            if i > 0 && (digits.len() - i) % 3 == 0 {
+                out.push('.');
+            }
+            out.push(ch);
+        }
+        format!("Rp {out}")
+    };
+    let fiat_charges: serde_json::Map<String, serde_json::Value> = fiat_providers
+        .iter()
+        .map(|p| {
+            let v = if p == "midtrans" || p == "xendit" {
+                json!({"amount": idr_amount, "currency": "IDR", "display": idr_display})
+            } else {
+                json!({"amount": price_cents, "currency": "USD", "display": cents_display(price_cents)})
+            };
+            (p.clone(), v)
+        })
+        .collect();
+
     Json(json!({
         "ok": true,
         "video_id":        video_id,
@@ -1060,6 +1176,9 @@ pub async fn all_options(
         "fiat": {
             "available": !fiat_providers.is_empty(),
             "providers": fiat_providers,
+            // Final amount charged per provider, using the same conversion as
+            // POST /api/pay/{provider}/start.
+            "charges": fiat_charges,
         }
     }))
 }

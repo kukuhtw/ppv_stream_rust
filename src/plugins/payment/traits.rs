@@ -12,6 +12,8 @@ use super::models::{
     ConfirmPaymentRequest, CreateInvoiceRequest, Invoice, PaymentPluginCapability, PaymentResult,
 };
 
+// async_trait expands to #[must_use] fns returning futures; newer clippy flags that.
+#[allow(clippy::double_must_use)]
 #[async_trait::async_trait]
 pub trait PaymentPlugin: Send + Sync {
     fn provider_key(&self) -> &'static str;

@@ -94,6 +94,7 @@
                 <th>Date</th>
                 <th>User</th>
                 <th>Amount</th>
+                <th>Reference / Proof</th>
                 <th>Note</th>
                 <th>Admin Note</th>
                 <th>Status</th>
@@ -101,7 +102,7 @@
               </tr>
             </thead>
             <tbody id="depBody">
-              <tr><td colspan="7" class="text-body-secondary">Loading...</td></tr>
+              <tr><td colspan="8" class="text-body-secondary">Loading...</td></tr>
             </tbody>
           </table>
         </div>
@@ -167,6 +168,18 @@ function statusBadge(status) {
   return `<span class="badge bg-${map[status] || 'secondary'}">${esc(status)}</span>`;
 }
 
+const walletRows = new Map();
+
+function proofLink(row) {
+  if (!row.has_proof) return '<span class="badge bg-warning-subtle text-warning-emphasis">no proof</span>';
+  return `<a class="btn btn-sm btn-outline-secondary py-0 px-2" href="/admin/wallet/transactions/${Number(row.id)}/proof" target="_blank" rel="noopener noreferrer">View proof</a>`;
+}
+
+function openWalletActionById(id, kind) {
+  const row = walletRows.get(Number(id));
+  if (row) openWalletAction(row, kind);
+}
+
 function openWalletAction(row, kind) {
   document.getElementById('walletActionId').value = row.id;
   document.getElementById('walletActionType').value = kind;
@@ -176,6 +189,11 @@ function openWalletAction(row, kind) {
     <div><strong>Amount:</strong> $${(Math.abs(row.amount_cents || 0) / 100).toFixed(2)}</div>
     <div><strong>Transaction Type:</strong> ${esc(row.txn_type || '-')}</div>
     <div><strong>Note:</strong> ${esc(row.note || '-')}</div>
+    ${kind === 'deposit' ? `
+    <div><strong>Transfer reference:</strong> ${esc(row.transfer_ref || '-')}</div>
+    <div><strong>Sender name:</strong> ${esc(row.sender_name || '-')}</div>
+    <div class="mt-2">${proofLink(row)}</div>
+    <div class="alert alert-warning small mt-2 mb-0">Approve only after the amount, reference and sender name match the bank statement. A proof image alone is not evidence of payment.</div>` : ''}
   `;
   const buttons = document.getElementById('walletActionButtons');
   if (kind === 'deposit') {
@@ -207,6 +225,7 @@ async function loadWithdrawals() {
       tbody.innerHTML = '<tr><td colspan="7" class="text-body-secondary">No withdrawals found.</td></tr>';
       return;
     }
+    items.forEach(row => walletRows.set(Number(row.id), row));
     tbody.innerHTML = items.map(row => `<tr>
       <td class="small text-nowrap">${esc((row.created_at || '').slice(0, 16))}</td>
       <td class="small">${esc(row.username || '-')}</td>
@@ -214,7 +233,7 @@ async function loadWithdrawals() {
       <td class="small text-body-secondary">${esc(row.note || '-')}</td>
       <td class="small text-body-secondary">${esc(row.admin_note || '-')}</td>
       <td class="small">${statusBadge(row.status || '-')}</td>
-      <td class="small">${row.status === 'pending' ? `<button class="btn btn-sm btn-outline-primary py-0 px-2" onclick='openWalletAction(${JSON.stringify(JSON.stringify(row))}, "withdrawal")'>Process</button>` : '<span class="text-body-secondary">-</span>'}</td>
+      <td class="small">${row.status === 'pending' ? `<button class="btn btn-sm btn-outline-primary py-0 px-2" onclick="openWalletActionById(${Number(row.id)}, 'withdrawal')">Process</button>` : '<span class="text-body-secondary">-</span>'}</td>
     </tr>`).join('');
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="7" class="text-danger">${esc(String(err))}</td></tr>`;
@@ -223,7 +242,7 @@ async function loadWithdrawals() {
 
 async function loadDeposits() {
   const tbody = document.getElementById('depBody');
-  tbody.innerHTML = '<tr><td colspan="7" class="text-body-secondary">Loading...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="8" class="text-body-secondary">Loading...</td></tr>';
   try {
     const params = new URLSearchParams({ txn_type: 'deposit' });
     const status = document.getElementById('depFilter').value;
@@ -231,20 +250,22 @@ async function loadDeposits() {
     const j = await fetch('/admin/wallet/transactions?' + params).then(r => r.json());
     const items = Array.isArray(j.items) ? j.items : [];
     if (!j.ok || !items.length) {
-      tbody.innerHTML = '<tr><td colspan="7" class="text-body-secondary">No deposits found.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="text-body-secondary">No deposits found.</td></tr>';
       return;
     }
+    items.forEach(row => walletRows.set(Number(row.id), row));
     tbody.innerHTML = items.map(row => `<tr>
       <td class="small text-nowrap">${esc((row.created_at || '').slice(0, 16))}</td>
       <td class="small">${esc(row.username || '-')}</td>
       <td class="small fw-semibold">$${(Math.abs(row.amount_cents || 0) / 100).toFixed(2)}</td>
+      <td class="small"><div>${esc(row.transfer_ref || '-')}</div><div class="text-body-secondary">${esc(row.sender_name || '')}</div><div class="mt-1">${proofLink(row)}</div></td>
       <td class="small text-body-secondary">${esc(row.note || '-')}</td>
       <td class="small text-body-secondary">${esc(row.admin_note || '-')}</td>
       <td class="small">${statusBadge(row.status || '-')}</td>
-      <td class="small">${row.status === 'pending' ? `<button class="btn btn-sm btn-outline-primary py-0 px-2" onclick='openWalletAction(${JSON.stringify(JSON.stringify(row))}, "deposit")'>Process</button>` : '<span class="text-body-secondary">-</span>'}</td>
+      <td class="small">${row.status === 'pending' ? `<button class="btn btn-sm btn-outline-primary py-0 px-2" onclick="openWalletActionById(${Number(row.id)}, 'deposit')">Process</button>` : '<span class="text-body-secondary">-</span>'}</td>
     </tr>`).join('');
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="7" class="text-danger">${esc(String(err))}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="text-danger">${esc(String(err))}</td></tr>`;
   }
 }
 

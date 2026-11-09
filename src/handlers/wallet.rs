@@ -84,6 +84,8 @@ struct TxnRow {
     note: Option<String>,
     admin_note: Option<String>,
     created_at: String,
+    transfer_ref: Option<String>,
+    has_proof: bool,
 }
 
 pub async fn wallet_transactions(
@@ -102,6 +104,8 @@ pub async fn wallet_transactions(
         r#"SELECT wt.id, wt.txn_type, wt.amount_cents, wt.balance_after,
                   wt.status, wt.note, wt.admin_note,
                   wt.created_at::TEXT AS created_at,
+                  wt.transfer_ref,
+                  (wt.proof_path IS NOT NULL) AS has_proof,
                   u2.username AS ref_username
            FROM wallet_transactions wt
            LEFT JOIN users u2 ON u2.id = wt.ref_user_id
@@ -134,6 +138,11 @@ pub async fn wallet_transactions(
                 .try_get::<Option<String>, _>("created_at")
                 .unwrap_or(None)
                 .unwrap_or_default(),
+            transfer_ref: r.try_get("transfer_ref").unwrap_or(None),
+            has_proof: r
+                .try_get::<Option<bool>, _>("has_proof")
+                .unwrap_or(None)
+                .unwrap_or(false),
         })
         .collect();
 
@@ -146,6 +155,12 @@ pub async fn wallet_transactions(
 pub struct DepositPayload {
     pub amount_cents: i64,
     pub note: Option<String>,
+    /// Bank / e-wallet transfer reference shown on the sender's receipt.
+    #[serde(default)]
+    pub transfer_ref: Option<String>,
+    /// Account holder name used for the transfer.
+    #[serde(default)]
+    pub sender_name: Option<String>,
 }
 
 pub async fn wallet_deposit(
@@ -190,13 +205,225 @@ pub async fn wallet_deposit(
     match res {
         Ok(r) => {
             let id: i64 = r.try_get("id").unwrap_or(0);
+            let transfer_ref = p
+                .transfer_ref
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(|s| s.chars().take(120).collect::<String>());
+            let sender_name = p
+                .sender_name
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(|s| s.chars().take(120).collect::<String>());
+            if transfer_ref.is_some() || sender_name.is_some() {
+                let _ = sqlx::query(
+                    "UPDATE wallet_transactions SET transfer_ref = $2, sender_name = $3 WHERE id = $1",
+                )
+                .bind(id)
+                .bind(transfer_ref)
+                .bind(sender_name)
+                .execute(&st.pool)
+                .await;
+            }
             Json(json!({
                 "ok": true,
                 "txn_id": id,
-                "message": "Deposit request submitted. Awaiting admin approval."
+                "message": "Deposit request submitted. Upload your transfer proof, then wait for admin approval."
             }))
         }
-        Err(e) => Json(json!({"ok": false, "error": format!("db: {e}")})),
+        Err(e) => {
+            tracing::error!("wallet deposit insert failed: {e}");
+            Json(json!({"ok": false, "error": "could not create deposit request"}))
+        }
+    }
+}
+
+// ─── GET /api/wallet/deposit_info ────────────────────────────────────────────
+// Where to send money for a deposit. Configured by the platform through
+// WALLET_DEPOSIT_INSTRUCTIONS (multi-line text: bank, account number, holder,
+// e-wallet, etc.). `\n` in the env value is turned into a line break.
+
+pub async fn wallet_deposit_info(State(st): State<WalletState>) -> impl IntoResponse {
+    let instructions = std::env::var("WALLET_DEPOSIT_INSTRUCTIONS")
+        .unwrap_or_default()
+        .replace("\\n", "\n");
+    Json(json!({
+        "ok": true,
+        "configured": !instructions.trim().is_empty(),
+        "instructions": instructions,
+        "min_deposit_cents": MIN_DEPOSIT_CENTS,
+        "min_deposit_display": cents_to_display(MIN_DEPOSIT_CENTS),
+        "usd_to_idr": crate::fx::usd_to_idr(st.cfg.dollar_usd_to_rupiah),
+        "proof_max_bytes": MAX_PROOF_BYTES,
+        "proof_types": ["image/jpeg", "image/png", "image/webp", "application/pdf"],
+    }))
+}
+
+// ─── POST /api/wallet/deposit_proof (multipart: txn_id, file) ────────────────
+// Attach a transfer proof to the caller's own pending deposit.
+
+pub const MAX_PROOF_BYTES: usize = 5 * 1024 * 1024;
+
+pub async fn wallet_deposit_proof(
+    State(st): State<WalletState>,
+    cookies: Cookies,
+    mut multipart: axum::extract::Multipart,
+) -> impl IntoResponse {
+    let (uid, _) = match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await {
+        Some(v) => v,
+        None => return Json(json!({"ok": false, "error": "not logged in"})),
+    };
+
+    let mut txn_id: Option<i64> = None;
+    let mut file_bytes: Option<Vec<u8>> = None;
+
+    loop {
+        let field = match multipart.next_field().await {
+            Ok(Some(f)) => f,
+            Ok(None) => break,
+            Err(_) => return Json(json!({"ok": false, "error": "invalid upload"})),
+        };
+        match field.name().unwrap_or("") {
+            "txn_id" => {
+                let text = field.text().await.unwrap_or_default();
+                txn_id = text.trim().parse().ok();
+            }
+            "file" => match field.bytes().await {
+                Ok(b) if b.len() <= MAX_PROOF_BYTES => file_bytes = Some(b.to_vec()),
+                Ok(_) => return Json(json!({"ok": false, "error": "file is larger than 5 MB"})),
+                Err(_) => return Json(json!({"ok": false, "error": "file is larger than 5 MB"})),
+            },
+            _ => {}
+        }
+    }
+
+    let Some(txn_id) = txn_id else {
+        return Json(json!({"ok": false, "error": "txn_id required"}));
+    };
+    let Some(bytes) = file_bytes.filter(|b| !b.is_empty()) else {
+        return Json(json!({"ok": false, "error": "file required"}));
+    };
+
+    // Validate by content, not by file name.
+    let (mime, ext) = match infer::get(&bytes).map(|k| k.mime_type()) {
+        Some("image/jpeg") => ("image/jpeg", "jpg"),
+        Some("image/png") => ("image/png", "png"),
+        Some("image/webp") => ("image/webp", "webp"),
+        Some("application/pdf") => ("application/pdf", "pdf"),
+        _ => return Json(json!({"ok": false, "error": "only JPG, PNG, WEBP or PDF are accepted"})),
+    };
+
+    // Only the owner of a still-pending deposit may attach a proof.
+    let owned: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM wallet_transactions
+                       WHERE id = $1 AND user_id = $2
+                         AND txn_type = 'deposit' AND status = 'pending')",
+    )
+    .bind(txn_id)
+    .bind(&uid)
+    .fetch_one(&st.pool)
+    .await
+    .unwrap_or(false);
+    if !owned {
+        return Json(json!({"ok": false, "error": "pending deposit not found"}));
+    }
+
+    let dir = std::path::Path::new(&st.cfg.upload_dir).join("deposit_proofs");
+    if let Err(e) = tokio::fs::create_dir_all(&dir).await {
+        tracing::error!("deposit proof mkdir failed: {e}");
+        return Json(json!({"ok": false, "error": "could not store file"}));
+    }
+    let file_name = format!("{}-{}.{}", txn_id, uuid::Uuid::new_v4(), ext);
+    let path = dir.join(&file_name);
+    if let Err(e) = tokio::fs::write(&path, &bytes).await {
+        tracing::error!("deposit proof write failed: {e}");
+        return Json(json!({"ok": false, "error": "could not store file"}));
+    }
+
+    let res = sqlx::query(
+        "UPDATE wallet_transactions
+            SET proof_path = $2, proof_mime = $3, proof_uploaded_at = NOW(), updated_at = NOW()
+          WHERE id = $1",
+    )
+    .bind(txn_id)
+    .bind(path.to_string_lossy().to_string())
+    .bind(mime)
+    .execute(&st.pool)
+    .await;
+
+    match res {
+        Ok(_) => Json(json!({"ok": true, "txn_id": txn_id, "message": "Transfer proof uploaded."})),
+        Err(e) => {
+            tracing::error!("deposit proof update failed: {e}");
+            let _ = tokio::fs::remove_file(&path).await;
+            Json(json!({"ok": false, "error": "could not save proof"}))
+        }
+    }
+}
+
+// ─── GET /admin/wallet/transactions/:id/proof ────────────────────────────────
+// Admin-only: stream the uploaded proof and its transfer details.
+
+pub async fn admin_wallet_deposit_proof(
+    State(st): State<WalletState>,
+    cookies: Cookies,
+    axum::extract::Path(id): axum::extract::Path<i64>,
+) -> axum::response::Response {
+    use axum::http::{header, StatusCode};
+
+    match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await {
+        Some((_, true)) => {}
+        Some(_) => return (StatusCode::FORBIDDEN, "admin only").into_response(),
+        None => return (StatusCode::UNAUTHORIZED, "not logged in").into_response(),
+    }
+
+    let row = sqlx::query(
+        "SELECT proof_path, proof_mime FROM wallet_transactions WHERE id = $1 AND txn_type = 'deposit'",
+    )
+    .bind(id)
+    .fetch_optional(&st.pool)
+    .await
+    .ok()
+    .flatten();
+
+    let Some(row) = row else {
+        return (StatusCode::NOT_FOUND, "deposit not found").into_response();
+    };
+    let path: Option<String> = row.try_get("proof_path").ok().flatten();
+    let mime: String = row
+        .try_get::<Option<String>, _>("proof_mime")
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| "application/octet-stream".into());
+    let Some(path) = path else {
+        return (StatusCode::NOT_FOUND, "no proof uploaded").into_response();
+    };
+
+    // The stored path must stay inside the proofs directory.
+    let base = std::path::Path::new(&st.cfg.upload_dir).join("deposit_proofs");
+    let (Ok(base), Ok(full)) = (std::fs::canonicalize(&base), std::fs::canonicalize(&path)) else {
+        return (StatusCode::NOT_FOUND, "proof file missing").into_response();
+    };
+    if !full.starts_with(&base) {
+        return (StatusCode::FORBIDDEN, "invalid proof path").into_response();
+    }
+
+    match tokio::fs::read(&full).await {
+        Ok(bytes) => (
+            [
+                (header::CONTENT_TYPE, mime),
+                (header::CACHE_CONTROL, "no-store".to_string()),
+                (
+                    header::CONTENT_DISPOSITION,
+                    format!("inline; filename=\"deposit-{id}-proof\""),
+                ),
+            ],
+            bytes,
+        )
+            .into_response(),
+        Err(_) => (StatusCode::NOT_FOUND, "proof file missing").into_response(),
     }
 }
 

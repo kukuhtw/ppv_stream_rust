@@ -86,6 +86,8 @@ struct MyVideo {
     title: String,
     description: String,
     price_cents: i64,
+    price_currency: String,
+    price_idr: Option<i64>,
     created_at: String,
     allow_count: usize,
     allow_users: Vec<String>,
@@ -100,7 +102,8 @@ pub async fn my_videos(State(st): State<VideoState>, cookies: Cookies) -> impl I
     let vids = match sqlx::query(
         r#"
         SELECT id, title, COALESCE(description,'') AS description,
-               price_cents, created_at::text AS created_at
+               price_cents, created_at::text AS created_at,
+               price_currency, price_idr
         FROM videos
         WHERE owner_id = $1
         ORDER BY created_at DESC
@@ -134,6 +137,10 @@ pub async fn my_videos(State(st): State<VideoState>, cookies: Cookies) -> impl I
             title: v.try_get::<String, _>("title").unwrap_or_default(),
             description: v.try_get::<String, _>("description").unwrap_or_default(),
             price_cents: v.try_get::<i64, _>("price_cents").unwrap_or(0),
+            price_currency: v
+                .try_get::<String, _>("price_currency")
+                .unwrap_or_else(|_| "USD".into()),
+            price_idr: v.try_get::<Option<i64>, _>("price_idr").unwrap_or(None),
             created_at: v.try_get::<String, _>("created_at").unwrap_or_default(),
             allow_count: allow_users.len(),
             allow_users,
@@ -311,6 +318,12 @@ pub struct UpdateVideoForm {
     pub title: String,
     pub description: String,
     pub price_cents: i64,
+    /// `"USD"` (default) or `"IDR"`. With IDR, `price_idr` is the price in
+    /// whole rupiah and `price_cents` is derived from the current rate.
+    #[serde(default)]
+    pub price_currency: Option<String>,
+    #[serde(default)]
+    pub price_idr: Option<i64>,
     /// Optional federation visibility toggle: `"public"` or `"local_only"`.
     /// Omitting the field leaves the current value unchanged.
     #[serde(default)]
@@ -358,20 +371,58 @@ pub async fn update_video(
         String::new()
     };
 
+    // Resolve pricing: rupiah price wins when price_currency=IDR.
+    let currency = f
+        .price_currency
+        .as_deref()
+        .map(|c| c.trim().to_ascii_uppercase())
+        .unwrap_or_else(|| "USD".into());
+    let (price_currency, price_idr, price_cents) = match currency.as_str() {
+        "IDR" => match f.price_idr {
+            Some(idr) if idr >= 0 => (
+                "IDR",
+                Some(idr),
+                crate::fx::idr_to_cents(idr, st.cfg.dollar_usd_to_rupiah),
+            ),
+            _ => {
+                return Json(serde_json::json!({
+                    "ok": false,
+                    "error": "price_idr must be zero or greater when price_currency is IDR"
+                }))
+            }
+        },
+        "USD" | "" => {
+            if f.price_cents < 0 {
+                return Json(
+                    serde_json::json!({"ok": false, "error": "price_cents must be zero or greater"}),
+                );
+            }
+            ("USD", None, f.price_cents)
+        }
+        _ => {
+            return Json(
+                serde_json::json!({"ok": false, "error": "price_currency must be USD or IDR"}),
+            )
+        }
+    };
+
     let res = sqlx::query(
         r#"
         UPDATE videos
         SET title = $2, description = $3, price_cents = $4,
-            federation_visibility = COALESCE($5, federation_visibility)
+            federation_visibility = COALESCE($5, federation_visibility),
+            price_currency = $7, price_idr = $8
         WHERE id = $1 AND owner_id = $6
         "#,
     )
     .bind(&f.id)
     .bind(f.title.trim())
     .bind(f.description.trim())
-    .bind(f.price_cents)
+    .bind(price_cents)
     .bind(new_vis)
     .bind(&uid)
+    .bind(price_currency)
+    .bind(price_idr)
     .execute(&st.pool)
     .await;
 

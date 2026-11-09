@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Federation PPV Stream</title>
+<meta name="description" content="Status, cara kerja, bug yang diperbaiki, dan keterbatasan federation ActivityPub PPV Stream.">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,750&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: left rail of domain links + one reading column; each domain = diagram, then table dictionary */
+:root{
+  --bg:#f5f7f8; --surface:#ffffff; --ink:#132029; --muted:#5a6b75; --line:#d9e1e5;
+  --accent:#0b6e79; --accent-soft:#e1f1f2; --pii:#a3470f; --pii-soft:#fbeadf; --code-bg:#edf2f4;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f171c; --surface:#16222a; --ink:#e3ebef; --muted:#93a5ae; --line:#26363f;
+  --accent:#4fc0c9; --accent-soft:#163a3f; --pii:#f0a06b; --pii-soft:#3a2416; --code-bg:#1c2b33; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f171c; --surface:#16222a; --ink:#e3ebef; --muted:#93a5ae; --line:#26363f;
+  --accent:#4fc0c9; --accent-soft:#163a3f; --pii:#f0a06b; --pii-soft:#3a2416; --code-bg:#1c2b33; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--f-body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1180px;margin:0 auto;padding-block:40px 80px;display:grid;grid-template-columns:220px minmax(0,1fr);gap:48px}
+nav{position:sticky;top:calc(env(safe-area-inset-top,0px) + 24px);align-self:start;display:flex;flex-direction:column;gap:4px;font-size:13.5px}
+nav .lbl{font:600 11px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+nav a{color:var(--muted);text-decoration:none;padding:4px 10px;border-left:2px solid var(--line)}
+nav a:hover,nav a:focus-visible{color:var(--accent);border-left-color:var(--accent);outline:none}
+main{min-width:0;display:flex;flex-direction:column;gap:56px}
+header{display:flex;flex-direction:column;gap:14px}
+.eyebrow{font:500 12px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+h1{font:750 clamp(34px,5vw,52px)/1.05 var(--f-display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h2{font:700 28px/1.15 var(--f-display);margin:0;text-wrap:balance}
+h3{font:600 16px/1.3 var(--f-mono);margin:0}
+p{margin:0;max-width:68ch}
+.lede{font-size:17px;color:var(--muted)}
+.meta{display:flex;flex-wrap:wrap;gap:8px 20px;font:13px var(--f-mono);color:var(--muted)}
+.meta b{color:var(--ink);font-weight:500}
+section{display:flex;flex-direction:column;gap:18px;scroll-margin-top:24px}
+.diagram{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:20px;overflow-x:auto}
+.diagram pre.mermaid{margin:0;background:none;text-align:center}
+.tables{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.tbl{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.tbl p{font-size:14px;color:var(--muted)}
+.cols{font:12.5px/1.7 var(--f-mono);display:flex;flex-wrap:wrap;gap:4px 6px}
+.cols span{background:var(--code-bg);padding:0 6px;border-radius:3px}
+.cols span.pk{background:var(--accent-soft);color:var(--accent);font-weight:500}
+.cols span.pii{background:var(--pii-soft);color:var(--pii)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font:12.5px var(--f-mono);color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:600 11.5px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+tr:last-child td{border-bottom:0}
+code{font:13px var(--f-mono);background:var(--code-bg);padding:1px 5px;border-radius:3px}
+.chip{display:inline-block;font:500 11px var(--f-mono);padding:2px 8px;border-radius:99px;white-space:nowrap}
+.chip.high{background:var(--pii-soft);color:var(--pii)} .chip.med{background:var(--accent-soft);color:var(--accent)}
+ul{margin:0;padding-left:20px;max-width:68ch;display:flex;flex-direction:column;gap:6px}
+@media (max-width:860px){.wrap{grid-template-columns:1fr;gap:24px}nav{position:static;flex-direction:row;flex-wrap:wrap}nav .lbl{width:100%}nav a{border-left:0;border-bottom:2px solid var(--line)}}
+</style>
+</head>
+<body>
+<style>
+.answers{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.ans{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.ans .q{font:600 12px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.ans .a{font:700 22px/1.1 var(--f-display);color:var(--accent)}
+.ans p{font-size:14px;color:var(--muted)}
+.ans a{font-size:14px}
+.chip.ok{background:var(--accent-soft);color:var(--accent)}
+.chip.warn{background:var(--pii-soft);color:var(--pii)}
+.chip.mute{background:var(--code-bg);color:var(--muted)}
+.calc{font:13px/1.8 var(--f-mono);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;overflow-x:auto}
+.calc .row{display:flex;justify-content:space-between;gap:16px;min-width:300px}
+.calc .row span:last-child{font-variant-numeric:tabular-nums}
+.calc .tot{border-top:1px solid var(--line);margin-top:6px;padding-top:6px;font-weight:500}
+.calc .neg{color:var(--pii)} .calc .pos{color:var(--accent)}
+.calcs{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.calcs h4{margin:0 0 8px;font:600 14px var(--f-body)}
+ol.steps{margin:0;padding-left:0;list-style:none;counter-reset:s;display:flex;flex-direction:column;gap:10px;max-width:78ch}
+ol.steps>li{counter-increment:s;display:grid;grid-template-columns:32px minmax(0,1fr);gap:12px;align-items:start}
+ol.steps>li::before{content:counter(s);font:600 13px/28px var(--f-mono);text-align:center;width:28px;height:28px;border-radius:50%;background:var(--accent-soft);color:var(--accent)}
+.callout{border:1px solid var(--pii);background:var(--pii-soft);border-radius:6px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;max-width:82ch}
+.callout b{color:var(--pii)}
+.note{border-left:3px solid var(--accent);padding:4px 0 4px 14px;max-width:78ch;color:var(--muted);font-size:14px}
+h3{margin:8px 0 0;font:650 18px/1.3 var(--f-display)}
+h4{margin:0;font:600 15px var(--f-body)}
+.split{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}
+.split>div{min-width:0;display:flex;flex-direction:column;gap:10px}
+pre.code{margin:0;background:var(--code-bg);border-radius:6px;padding:14px 16px;overflow-x:auto;font:12.5px/1.6 var(--f-mono)}
+.role{display:inline-block;font:600 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
+</style>
+
+<div class="wrap">
+<nav aria-label="Isi">
+  <span class="lbl">Isi</span>
+  <a href="#jawab">Jawaban singkat</a>
+  <a href="#model">Model index-only</a>
+  <a href="#endpoint">Endpoint</a>
+  <a href="#alur">Alur follow &amp; publish</a>
+  <a href="#verifikasi">Verifikasi inbox</a>
+  <a href="#perbaikan">Bug yang diperbaiki</a>
+  <a href="#batas">Keterbatasan</a>
+  <a href="#aktifkan">Cara mengaktifkan</a>
+  <a href="#uji">Cara menguji</a>
+  <a href="#admin">API admin</a>
+  <a href="#iso">Keamanan &amp; data</a>
+</nav>
+
+<main>
+<header>
+  <span class="eyebrow">Federation · ActivityPub · v0.2.0</span>
+  <h1>Federation PPV Stream</h1>
+  <p class="lede">PPV Stream bisa bergabung dengan instance PPV Stream lain lewat ActivityPub. Instance saling bertukar <b>katalog</b> video (judul, harga, link checkout), bukan file video. Pembayaran dan streaming selalu terjadi di server asal video.</p>
+  <div class="meta"><span>Model <b>index-only</b></span><span><b>7</b> jenis activity</span><span>Tanda tangan <b>RSA-SHA256</b></span><span>Default <b>nonaktif</b></span><span>Diperbarui <b>9 Nov 2026</b></span></div>
+</header>
+
+<section id="jawab">
+  <span class="eyebrow">Ringkasan</span>
+  <h2>Apakah federation bekerja sempurna?</h2>
+  <div class="answers">
+    <div class="ans"><span class="q">Sebelum audit</span><span class="a">Tidak</span><p>Ada 11 masalah, termasuk tanda tangan yang bisa dipakai ulang, actor yang bisa menghapus video milik instance lain, endpoint admin tanpa autentikasi, dan follow keluar yang tidak pernah bisa diterima.</p></div>
+    <div class="ans"><span class="q">Sesudah perbaikan</span><span class="a">Layak uji</span><p>Kesebelas masalah sudah diperbaiki di kode dan ditambah unit test. Alur follow, publish, update, dan delete antar instance seharusnya berjalan.</p></div>
+    <div class="ans"><span class="q">Belum sempurna</span><span class="a">6 catatan</span><p>Enkripsi kunci privat belum AEAD, belum mendukung <i>authorized fetch</i>, bagi hasil lintas instance belum tersambung ke pembayaran, dan belum ada UI admin.</p></div>
+    <div class="ans"><span class="q">Sudah diuji?</span><span class="a">Sebagian</span><p>Unit test ditulis. Uji integrasi dua instance (<code>tests/federation_integration.sh</code>) butuh Docker dan belum dijalankan di sesi ini.</p></div>
+  </div>
+</section>
+
+<section id="model">
+  <span class="eyebrow">Konsep</span>
+  <h2>Model index-only</h2>
+  <p>Setiap instance hanya mengumumkan metadata video publik. Instance lain menyimpannya di tabel <code>remote_video_catalog</code> dan menampilkannya di katalog. Saat penonton ingin membeli, mereka diarahkan ke <code>checkout_url</code> di server asal.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  subgraph A[Instance A · asal video]
+    VA[(videos)] --> OA[Outbox / delivery queue]
+    PAY[Checkout + HLS]
+  end
+  subgraph B[Instance B · follower]
+    IB[Inbox] --> CB[(remote_video_catalog)]
+    CB --> UI[Katalog federasi]
+  end
+  OA -- Create / Update / Delete<br/>ditandatangani RSA --> IB
+  UI -- penonton klik beli --> PAY
+</pre></div>
+  <div class="tw"><table>
+    <thead><tr><th>Yang dikirim antar instance</th><th>Yang tidak pernah dikirim</th></tr></thead>
+    <tbody>
+      <tr><td>Judul, deskripsi, harga, durasi, URL kanonik, URL checkout, username kreator (actor)</td><td>File video, playlist HLS, email, saldo wallet, data pembeli, riwayat pembelian</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="endpoint">
+  <span class="eyebrow">Referensi</span>
+  <h2>Endpoint publik</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Endpoint</th><th>Fungsi</th></tr></thead>
+    <tbody>
+      <tr><td><code>GET /.well-known/webfinger?resource=acct:user@domain</code></td><td>Menemukan URL actor dari handle</td></tr>
+      <tr><td><code>GET /.well-known/nodeinfo</code>, <code>/nodeinfo/2.1</code></td><td>Info software dan versi instance</td></tr>
+      <tr><td><code>GET /users/:username</code></td><td>Dokumen actor (Person) beserta <code>publicKey</code> RSA 2048</td></tr>
+      <tr><td><code>GET /users/:username/{followers,following,outbox}</code></td><td>Koleksi ActivityPub</td></tr>
+      <tr><td><code>POST /users/:username/inbox</code>, <code>POST /inbox</code></td><td>Inbox per pengguna dan shared inbox; wajib HTTP Signature</td></tr>
+      <tr><td><code>GET /videos/:id</code></td><td>Objek Video ActivityPub</td></tr>
+      <tr><td><code>GET /api/federation/catalog</code></td><td>Katalog video remote untuk UI</td></tr>
+    </tbody>
+  </table></div>
+  <p>Activity masuk yang diproses: <code>Follow</code>, <code>Accept</code>, <code>Reject</code>, <code>Undo</code>, <code>Create</code>, <code>Update</code>, <code>Delete</code>. Jenis lain dicatat lalu diabaikan.</p>
+</section>
+
+<section id="alur">
+  <span class="eyebrow">Alur</span>
+  <h2>Follow dan publish video</h2>
+  <div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  participant AdmB as Admin B
+  participant B as Instance B
+  participant A as Instance A
+  AdmB->>B: POST /api/federation/admin/follow (token)
+  B->>B: simpan federation_follows (pending)
+  B->>A: Follow (ditandatangani)
+  A->>A: verifikasi tanda tangan, simpan follower
+  A->>B: Accept(Follow)
+  B->>B: cocokkan activity_uri + pengirim → accepted
+  Note over A: kreator set federation_visibility = public
+  A->>B: Create(Video) ke semua follower
+  B->>B: verifikasi + upsert remote_video_catalog
+  Note over A: kreator ubah harga / judul
+  A->>B: Update(Video)
+  Note over A: kreator set local_only / hapus
+  A->>B: Delete(Video)
+  B->>B: hapus hanya jika pengirim = pemilik
+</pre></div>
+  <p class="note">Pengiriman keluar memakai antrean <code>federation_delivery_jobs</code>. Gagal kirim dicoba lagi dengan jeda 2<sup>n</sup> detik (maksimal 1 jam), hingga 10 kali.</p>
+</section>
+
+<section id="verifikasi">
+  <span class="eyebrow">Keamanan inbox</span>
+  <h2>Pemeriksaan setiap activity masuk</h2>
+  <ol class="steps">
+    <li><div>Domain pengirim dicek terhadap aturan moderasi (<code>federation_domain_rules</code>); domain yang diblokir ditolak.</div></li>
+    <li><div>Header <code>Digest</code> wajib ada dan harus cocok dengan SHA-256 body.</div></li>
+    <li><div>Header <code>Signature</code> wajib menandatangani <code>(request-target) host date digest</code>. Header <code>Date</code> harus berada dalam 300 detik dari waktu server.</div></li>
+    <li><div>Dokumen actor diambil lewat HTTPS dengan proteksi SSRF (tanpa IP privat, maksimal 128 KB, timeout 10 detik).</div></li>
+    <li><div><code>keyId</code> tanda tangan harus milik actor tersebut, dan <code>id</code> activity harus satu origin dengan actor.</div></li>
+    <li><div>Tanda tangan RSA-SHA256 diverifikasi. <code>activity_uri</code> unik di database sehingga activity yang sama tidak diproses dua kali.</div></li>
+    <li><div>Untuk video: <code>id</code>, URL kanonik, dan URL checkout harus satu origin dengan actor. Delete hanya menghapus entri milik actor pengirim.</div></li>
+  </ol>
+</section>
+
+<section id="perbaikan">
+  <span class="eyebrow">Hasil audit</span>
+  <h2>Bug yang ditemukan dan diperbaiki</h2>
+  <div class="tw"><table>
+    <thead><tr><th>#</th><th>Masalah</th><th>Dampak</th><th>Perbaikan</th><th>File</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Header yang ditandatangani tidak diwajibkan; <code>Date</code> opsional; batas umur longgar</td><td>Tanda tangan lama bisa diputar ulang, body bisa diganti</td><td>Wajib <code>(request-target) host date digest</code>, umur ≤ 300 detik</td><td><code>signatures.rs</code></td></tr>
+      <tr><td>2</td><td><code>Digest</code> tidak wajib di inbox</td><td>Body bisa diubah tanpa merusak tanda tangan</td><td>Digest wajib dan diverifikasi</td><td><code>collections.rs</code></td></tr>
+      <tr><td>3</td><td><code>keyId</code> tidak dicocokkan dengan actor</td><td>Actor X bisa menandatangani activity atas nama actor Y</td><td><code>key_id_matches_actor</code></td><td><code>resolver.rs</code></td></tr>
+      <tr><td>4</td><td>ID activity boleh beda origin dengan actor</td><td>Pemalsuan activity milik domain lain</td><td><code>same_origin</code> wajib</td><td><code>collections.rs</code></td></tr>
+      <tr><td>5</td><td>Delete tanpa cek kepemilikan</td><td>Instance mana pun bisa menghapus katalog instance lain</td><td>Cek <code>origin_actor_uri</code>; Delete actor menghapus semua entrinya</td><td><code>video_index.rs</code></td></tr>
+      <tr><td>6</td><td>Upsert video menerima URL checkout dari domain mana pun dan bisa mengambil alih entri milik actor lain</td><td>Link checkout phishing; pembajakan entri katalog</td><td>URL wajib satu origin; <code>ON CONFLICT</code> hanya untuk pemilik yang sama</td><td><code>video_index.rs</code></td></tr>
+      <tr><td>7</td><td><code>POST /api/federation/follows/:id/reject</code> tanpa autentikasi</td><td>Siapa pun bisa memutus follower</td><td>Wajib token admin</td><td><code>mod.rs</code></td></tr>
+      <tr><td>8</td><td>Token admin dibandingkan dengan <code>==</code></td><td>Kebocoran lewat timing</td><td><code>constant_time_eq</code></td><td><code>moderation.rs</code></td></tr>
+      <tr><td>9</td><td>Follow keluar tidak disimpan sebagai pending</td><td>Accept dari remote tidak pernah cocok; follow tidak pernah aktif</td><td>Simpan baris <code>pending</code> saat mengirim Follow</td><td><code>mod.rs</code></td></tr>
+      <tr><td>10</td><td>Accept/Reject mencocokkan baris yang salah</td><td>Status follow keliru, bisa mengubah follow milik orang lain</td><td>Cocokkan follower lokal, target = pengirim, dan <code>activity_uri</code></td><td><code>activities.rs</code></td></tr>
+      <tr><td>11</td><td>Properti PPV hanya dibaca dengan satu prefix; harga dalam <code>priceCents</code> diabaikan</td><td>Video dari instance lain tampil tanpa harga</td><td>Terima prefix kosong, <code>ppv:</code>, dan <code>PPVStream:</code></td><td><code>video_index.rs</code></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="batas">
+  <span class="eyebrow">Jujur soal status</span>
+  <h2>Keterbatasan yang belum diperbaiki</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Keterbatasan</th><th>Risiko</th><th>Rekomendasi</th></tr></thead>
+    <tbody>
+      <tr><td>Kunci privat actor dienkripsi dengan stream cipher buatan sendiri berbasis HMAC, tanpa autentikasi</td><td>Tidak memenuhi praktik kriptografi standar (ISO/IEC 27001 A.8.24)</td><td>Ganti ke AES-256-GCM atau XChaCha20-Poly1305 dengan secret terpisah (<code>FEDERATION_KEY_SECRET</code>), lalu migrasi kunci</td></tr>
+      <tr><td>Kunci enkripsi diturunkan dari <code>HMAC_SECRET</code></td><td>Rotasi <code>HMAC_SECRET</code> membuat semua kunci actor tidak bisa dibuka</td><td>Jangan rotasi <code>HMAC_SECRET</code> sebelum poin di atas selesai</td></tr>
+      <tr><td>Pengambilan dokumen actor tidak ditandatangani</td><td>Server dengan <i>authorized fetch</i> / secure mode menolak, sehingga activity mereka tidak bisa diverifikasi</td><td>Tandatangani GET dengan kunci instance actor</td></tr>
+      <tr><td>Kunci actor tidak di-cache; diambil ulang setiap activity masuk</td><td>Beban dan latensi; bisa dipakai untuk membanjiri server lain</td><td>Cache kunci dengan TTL dan refetch saat verifikasi gagal</td></tr>
+      <tr><td>Bagi hasil lintas instance (<code>revenue.rs</code>) belum dipanggil dari alur pembayaran; <code>provider_wallet</code> di <code>/api/federation/referral/resolve</code> masih <code>null</code></td><td>Laporan bagi hasil selalu kosong</td><td>Panggil <code>process_revenue_share</code> setelah pembelian lunas dan tambah kolom wallet di <code>federation_instances</code></td></tr>
+      <tr><td>Tidak ada UI admin federation; kreator belum punya tombol untuk mempublikasikan video</td><td>Semua lewat API dengan token</td><td>Tambah halaman admin dan toggle "Publikasikan ke federasi" di dashboard</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">Video baru selalu <code>local_only</code>. Video baru dikirim ke follower setelah kreator mengubah <code>federation_visibility</code> menjadi <code>public</code> lewat <code>POST /api/video_update</code>.</p>
+</section>
+
+<section id="aktifkan">
+  <span class="eyebrow">Konfigurasi</span>
+  <h2>Cara mengaktifkan</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Env</th><th>Contoh</th><th>Catatan</th></tr></thead>
+    <tbody>
+      <tr><td><code>FEDERATION_ENABLED</code></td><td><code>true</code></td><td>Mengaktifkan router dan worker pengiriman</td></tr>
+      <tr><td><code>FEDERATION_BASE_URL</code></td><td><code>https://stream.example.com</code></td><td>Wajib HTTPS (kecuali localhost). Jangan diubah setelah ada follower; URL actor ikut berubah.</td></tr>
+      <tr><td><code>FEDERATION_DOMAIN</code></td><td><code>stream.example.com</code></td><td>Hanya host, tanpa skema atau path</td></tr>
+      <tr><td><code>FEDERATION_ADMIN_TOKEN</code></td><td><code>openssl rand -hex 32</code></td><td>Dikirim di header <code>X-Federation-Admin-Token</code></td></tr>
+      <tr><td><code>FEDERATION_DEV_HTTP_BYPASS</code></td><td><code>0</code></td><td>Hanya untuk uji Docker lokal. <b>Jangan pernah aktif di produksi</b>: mematikan proteksi SSRF dan validasi TLS.</td></tr>
+    </tbody>
+  </table></div>
+  <ol class="steps">
+    <li><div>Isi env di atas lalu deploy ulang.</div></li>
+    <li><div>Buat actor untuk pengguna: <code>POST /api/federation/admin/actors/init</code> dengan token admin.</div></li>
+    <li><div>Cek <code>https://domain/.well-known/webfinger?resource=acct:username@domain</code> mengembalikan URL actor.</div></li>
+    <li><div>Ikuti instance lain: <code>POST /api/federation/admin/follow</code>.</div></li>
+    <li><div>Kreator mempublikasikan video dengan <code>federation_visibility=public</code>.</div></li>
+  </ol>
+</section>
+
+<section id="uji">
+  <span class="eyebrow">Pengujian</span>
+  <h2>Cara menguji</h2>
+<pre class="code"># Unit test (signatures, resolver, activities, video_index, delivery)
+cargo test federation
+
+# Uji integrasi dua instance (A di :18082, B di :18083)
+docker compose -f docker-compose.federation-test.yml up --build -d
+bash tests/federation_integration.sh
+docker compose -f docker-compose.federation-test.yml down -v</pre>
+  <p class="note"><code>cargo test</code> perlu <code>DATABASE_URL</code> yang aktif karena makro sqlx. Compose uji memakai <code>FEDERATION_DEV_HTTP_BYPASS=1</code> agar dua container dengan IP privat bisa saling memanggil.</p>
+</section>
+
+<section id="admin">
+  <span class="eyebrow">Referensi</span>
+  <h2>API admin (header <code>X-Federation-Admin-Token</code>)</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Endpoint</th><th>Fungsi</th></tr></thead>
+    <tbody>
+      <tr><td><code>POST /api/federation/admin/actors/init</code></td><td>Membuat actor dan kunci RSA untuk pengguna</td></tr>
+      <tr><td><code>POST /api/federation/admin/follow</code></td><td>Mengikuti actor remote</td></tr>
+      <tr><td><code>POST /api/federation/follows/:id/reject</code></td><td>Menolak atau memutus follower</td></tr>
+      <tr><td><code>GET|POST /api/federation/admin/domain-rules</code>, <code>DELETE …/:domain</code></td><td>Blokir atau izinkan domain</td></tr>
+      <tr><td><code>GET /api/federation/admin/overview</code>, <code>/instances</code>, <code>/activities</code></td><td>Ringkasan, instance yang dikenal, log activity</td></tr>
+      <tr><td><code>GET /api/federation/admin/delivery</code>, <code>POST …/delivery/:id/retry</code></td><td>Antrean pengiriman dan kirim ulang</td></tr>
+      <tr><td><code>…/admin/remote-videos/:domain</code></td><td>Menghapus seluruh katalog dari satu domain</td></tr>
+      <tr><td><code>…/admin/revenue/policies</code>, <code>/provider-report</code>, <code>/affiliate-report</code></td><td>Kebijakan dan laporan bagi hasil (belum terisi, lihat keterbatasan)</td></tr>
+      <tr><td><code>POST /api/federation/admin/inject-inbound</code></td><td>Hanya aktif saat <code>FEDERATION_DEV_HTTP_BYPASS=1</code>, untuk uji</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="iso">
+  <span class="eyebrow">ISO/IEC 27001:2022 · UU PDP</span>
+  <h2>Keamanan dan data pribadi</h2>
+  <ul>
+    <li><b>Data yang dipublikasikan:</b> username kreator dan metadata video publik dikirim ke server lain dan tidak bisa ditarik sepenuhnya (server remote bisa menyimpan salinan). Beri tahu kreator sebelum mengaktifkan federation, dan minta persetujuan per video (UU PDP: dasar pemrosesan dan transfer data).</li>
+    <li><b>Penghapusan:</b> Delete dikirim saat video dijadikan <code>local_only</code>, tetapi kepatuhan server lain tidak bisa dijamin.</li>
+    <li><b>Kunci kriptografi:</b> lihat keterbatasan enkripsi kunci (A.8.24). Simpan <code>HMAC_SECRET</code> dan <code>FEDERATION_ADMIN_TOKEN</code> hanya di secret Dokploy (A.5.17).</li>
+    <li><b>Log:</b> <code>federation_activities</code> menyimpan payload activity masuk dan keluar. Tetapkan masa simpan (A.8.10) dan batasi akses admin (A.8.15).</li>
+    <li><b>Moderasi:</b> gunakan domain rules untuk memblokir instance bermasalah (A.5.14 transfer informasi).</li>
+  </ul>
+  <div class="callout"><b>Belum sepenuhnya patuh.</b><span>Enkripsi kunci privat belum memakai algoritma terautentikasi, belum ada mekanisme persetujuan kreator per video, dan belum ada kebijakan retensi log federation. Selesaikan sebelum federation diaktifkan di produksi.</span></div>
+</section>
+</main>
+</div>
+
+<script>
+// Diagram dirender oleh viewer Artifact. Saat dibuka langsung sebagai file, muat Mermaid sebagai cadangan.
+setTimeout(function(){
+  if (document.querySelector('pre.mermaid svg') || window.mermaid) return;
+  var s=document.createElement('script');
+  s.src='https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js';
+  s.onload=function(){
+    var dark=matchMedia('(prefers-color-scheme: dark)').matches||document.documentElement.dataset.theme==='dark';
+    mermaid.initialize({startOnLoad:false,theme:dark?'dark':'neutral'});
+    mermaid.run({querySelector:'pre.mermaid'});
+  };
+  document.head.appendChild(s);
+},1500);
+</script>
+</body>
+</html>

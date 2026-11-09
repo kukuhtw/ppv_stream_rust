@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cara Kerja PPV Stream</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,750&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: left rail of domain links + one reading column; each domain = diagram, then table dictionary */
+:root{
+  --bg:#f5f7f8; --surface:#ffffff; --ink:#132029; --muted:#5a6b75; --line:#d9e1e5;
+  --accent:#0b6e79; --accent-soft:#e1f1f2; --pii:#a3470f; --pii-soft:#fbeadf; --code-bg:#edf2f4;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f171c; --surface:#16222a; --ink:#e3ebef; --muted:#93a5ae; --line:#26363f;
+  --accent:#4fc0c9; --accent-soft:#163a3f; --pii:#f0a06b; --pii-soft:#3a2416; --code-bg:#1c2b33; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f171c; --surface:#16222a; --ink:#e3ebef; --muted:#93a5ae; --line:#26363f;
+  --accent:#4fc0c9; --accent-soft:#163a3f; --pii:#f0a06b; --pii-soft:#3a2416; --code-bg:#1c2b33; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--f-body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1180px;margin:0 auto;padding-block:40px 80px;display:grid;grid-template-columns:220px minmax(0,1fr);gap:48px}
+nav{position:sticky;top:calc(env(safe-area-inset-top,0px) + 24px);align-self:start;display:flex;flex-direction:column;gap:4px;font-size:13.5px}
+nav .lbl{font:600 11px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+nav a{color:var(--muted);text-decoration:none;padding:4px 10px;border-left:2px solid var(--line)}
+nav a:hover,nav a:focus-visible{color:var(--accent);border-left-color:var(--accent);outline:none}
+main{min-width:0;display:flex;flex-direction:column;gap:56px}
+header{display:flex;flex-direction:column;gap:14px}
+.eyebrow{font:500 12px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+h1{font:750 clamp(34px,5vw,52px)/1.05 var(--f-display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h2{font:700 28px/1.15 var(--f-display);margin:0;text-wrap:balance}
+h3{font:600 16px/1.3 var(--f-mono);margin:0}
+p{margin:0;max-width:68ch}
+.lede{font-size:17px;color:var(--muted)}
+.meta{display:flex;flex-wrap:wrap;gap:8px 20px;font:13px var(--f-mono);color:var(--muted)}
+.meta b{color:var(--ink);font-weight:500}
+section{display:flex;flex-direction:column;gap:18px;scroll-margin-top:24px}
+.diagram{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:20px;overflow-x:auto}
+.diagram pre.mermaid{margin:0;background:none;text-align:center}
+.tables{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.tbl{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.tbl p{font-size:14px;color:var(--muted)}
+.cols{font:12.5px/1.7 var(--f-mono);display:flex;flex-wrap:wrap;gap:4px 6px}
+.cols span{background:var(--code-bg);padding:0 6px;border-radius:3px}
+.cols span.pk{background:var(--accent-soft);color:var(--accent);font-weight:500}
+.cols span.pii{background:var(--pii-soft);color:var(--pii)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font:12.5px var(--f-mono);color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:600 11.5px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+tr:last-child td{border-bottom:0}
+code{font:13px var(--f-mono);background:var(--code-bg);padding:1px 5px;border-radius:3px}
+.chip{display:inline-block;font:500 11px var(--f-mono);padding:2px 8px;border-radius:99px;white-space:nowrap}
+.chip.high{background:var(--pii-soft);color:var(--pii)} .chip.med{background:var(--accent-soft);color:var(--accent)}
+ul{margin:0;padding-left:20px;max-width:68ch;display:flex;flex-direction:column;gap:6px}
+@media (max-width:860px){.wrap{grid-template-columns:1fr;gap:24px}nav{position:static;flex-direction:row;flex-wrap:wrap}nav .lbl{width:100%}nav a{border-left:0;border-bottom:2px solid var(--line)}}
+</style>
+</head>
+<body>
+<style>
+.roles{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.role{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.role h3{font-family:var(--f-display);font-size:18px;font-weight:700}
+.role p{font-size:14px;color:var(--muted)}
+ol.steps{margin:0;padding-left:0;list-style:none;counter-reset:s;display:flex;flex-direction:column;gap:10px;max-width:76ch}
+ol.steps>li{counter-increment:s;display:grid;grid-template-columns:32px minmax(0,1fr);gap:12px;align-items:start}
+ol.steps>li::before{content:counter(s);font:600 13px/28px var(--f-mono);text-align:center;width:28px;height:28px;border-radius:50%;background:var(--accent-soft);color:var(--accent)}
+.page{font:12.5px var(--f-mono);color:var(--accent)}
+.callout{border:1px solid var(--pii);background:var(--pii-soft);border-radius:6px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;max-width:80ch}
+.callout b{color:var(--pii)}
+.split{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}
+.split>div{min-width:0;display:flex;flex-direction:column;gap:10px}
+h4{margin:0;font:600 15px var(--f-body)}
+</style>
+
+<div class="wrap">
+<nav aria-label="Isi">
+  <span class="lbl">Isi</span>
+  <a href="#peran">Peran pengguna</a>
+  <a href="#viewer">Journey penonton</a>
+  <a href="#creator">Journey kreator</a>
+  <a href="#affiliate">Journey affiliate</a>
+  <a href="#admin">Journey admin</a>
+  <a href="#arsitektur">Arsitektur</a>
+  <a href="#upload">Upload &amp; transcode</a>
+  <a href="#akses">Aturan akses</a>
+  <a href="#bayar">Alur pembayaran</a>
+  <a href="#play">Playback &amp; watermark</a>
+  <a href="#wallet">Wallet &amp; komisi</a>
+  <a href="#fed">Federation</a>
+  <a href="#keamanan">Keamanan</a>
+  <a href="#catatan">Catatan terbuka</a>
+</nav>
+
+<main>
+<header>
+  <span class="eyebrow">Panduan produk · v0.2.0</span>
+  <h1>Cara Kerja PPV Stream</h1>
+  <p class="lede">Platform video pay-per-view: kreator mengunggah dan menetapkan harga, penonton membayar per video lewat gateway, kripto, atau saldo wallet, lalu menonton stream HLS yang diberi watermark nama mereka.</p>
+  <div class="meta"><span><b>5</b> peran</span><span><b>3</b> metode bayar</span><span>Backend <b>Rust · Axum</b></span><span>Diperbarui <b>9 Nov 2026</b></span></div>
+</header>
+
+<section id="peran">
+  <span class="eyebrow">Siapa memakai apa</span>
+  <h2>Peran pengguna</h2>
+  <p>Hanya ada satu jenis akun. Peran muncul dari apa yang dilakukan akun tersebut, kecuali admin yang ditandai <code>is_admin</code>.</p>
+  <div class="roles">
+    <div class="role"><h3>Pengunjung</h3><p>Belum login. Bisa melihat katalog dan harga dalam USD dan IDR. Harus login untuk menonton, termasuk video gratis.</p></div>
+    <div class="role"><h3>Penonton</h3><p>Membeli dan menonton video, mengelola wallet, chat, dan mengubah profil.</p></div>
+    <div class="role"><h3>Kreator</h3><p>Setiap akun yang mengunggah video. Menetapkan harga, memberi akses gratis, mengatur komisi affiliate, dan memblokir pembeli.</p></div>
+    <div class="role"><h3>Affiliate</h3><p>Setiap akun yang membagikan link video dengan <code>?ref=username</code>. Komisi masuk ke saldo wallet.</p></div>
+    <div class="role"><h3>Admin</h3><p>Menyetujui deposit dan penarikan, mencairkan dana kreator, mengatur metode bayar, storage, SMTP, dan menjawab chat support.</p></div>
+  </div>
+</section>
+
+<section id="viewer">
+  <span class="eyebrow">User journey 1</span>
+  <h2>Penonton: dari daftar sampai menonton</h2>
+  <div class="diagram"><pre class="mermaid">
+journey
+  title Penonton membeli dan menonton video
+  section Masuk
+    Daftar akun: 4: Penonton
+    Login: 5: Penonton
+  section Memilih
+    Lihat katalog: 5: Penonton
+    Buka halaman video: 5: Penonton
+  section Membayar
+    Pilih metode bayar: 3: Penonton
+    Bayar di wallet / gateway / kripto: 3: Penonton, Sistem
+    Akses diberikan: 5: Sistem
+  section Menonton
+    Klik putar: 5: Penonton
+    Stream dengan watermark: 4: Penonton, Sistem
+  </pre></div>
+  <ol class="steps">
+    <li><div><b>Daftar</b> di <span class="page">auth/register.html</span>. Sistem memeriksa format email, kekuatan password, dan email unik.</div></li>
+    <li><div><b>Login</b> di <span class="page">auth/login.html</span>. Password dicek dengan Argon2, lalu cookie sesi <code>ppv_session</code> dipasang dan pengguna diarahkan ke <span class="page">dashboard.html</span>.</div></li>
+    <li><div><b>Jelajahi katalog</b> di <span class="page">browse.html</span>. Harga tampil dalam USD dan rupiah sesuai kurs <code>DOLLAR_USD_TO_RUPIAH</code>.</div></li>
+    <li><div><b>Buka video</b> di <span class="page">watch.html?video_id=…</span>. Halaman menampilkan semua metode bayar yang aktif dan apakah saldo wallet cukup.</div></li>
+    <li><div><b>Bayar</b> dengan salah satu cara: saldo wallet (langsung), gateway fiat PayPal, Xendit, Stripe, atau Midtrans (diarahkan ke halaman provider), atau token kripto x402 dari dompet EVM sendiri.</div></li>
+    <li><div><b>Tonton.</b> Setelah pembayaran terkonfirmasi, tombol putar membuat sesi stream pribadi berlaku 1 jam dengan watermark <code>@username</code> dan jam.</div></li>
+    <li><div><b>Kelola akun</b>: <span class="page">wallet.html</span> untuk deposit, tarik dana, transfer, dan riwayat; profil dan ganti password dari dashboard.</div></li>
+  </ol>
+</section>
+
+<section id="creator">
+  <span class="eyebrow">User journey 2</span>
+  <h2>Kreator: unggah, jual, kelola</h2>
+  <ol class="steps">
+    <li><div><b>Unggah video</b> dari <span class="page">dashboard.html</span>: judul, harga dalam $ USD atau Rp IDR, dan file <code>mp4</code>, <code>mkv</code>, <code>mov</code>, atau <code>webm</code> hingga batas <code>MAX_UPLOAD_BYTES</code> (default 1 GB).</div></li>
+    <li><div><b>Tunggu proses</b>. Status berubah dari <code>queued</code> ke <code>processing</code> lalu <code>ready</code>. Jika gagal, pesan error tampil di daftar video.</div></li>
+    <li><div><b>Atur video</b>: ubah judul, deskripsi, harga, dan visibilitas federation (<code>local_only</code> secara default).</div></li>
+    <li><div><b>Beri akses gratis</b> ke pengguna tertentu dengan mencari username atau email lalu menambahkannya ke allowlist.</div></li>
+    <li><div><b>Aktifkan affiliate</b> di <span class="page">affiliate.html</span> dengan persentase komisi per video (maksimal 90%).</div></li>
+    <li><div><b>Terima pendapatan</b>. Kreator mendapat bagian <code>CREATOR_SPLIT_BP</code> (default 9000 bp = 90%). Pembayaran wallet langsung masuk saldo; Xendit dicairkan otomatis; provider lain dicairkan manual oleh admin.</div></li>
+    <li><div><b>Blokir pembeli</b> bermasalah (soft atau hard, bisa dengan masa berlaku). Pembelian baru dari akun itu ditolak oleh database.</div></li>
+  </ol>
+</section>
+
+<section id="affiliate">
+  <span class="eyebrow">User journey 3</span>
+  <h2>Affiliate: bagikan link, terima komisi</h2>
+  <div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  actor Af as Affiliate
+  actor B as Pembeli
+  participant App as PPV Stream
+  participant W as Wallet
+  Af->>App: Lihat program (affiliate.html)
+  App-->>Af: Link watch.html?video_id=X&ref=affiliate
+  Af->>B: Bagikan link
+  B->>App: Beli video lewat link
+  App->>App: Catat pembelian + affiliate_ref
+  App->>W: Potong komisi dari saldo kreator
+  App->>W: Kreditkan komisi ke affiliate
+  Af->>App: Lihat earnings, tarik dana
+  </pre></div>
+  <p>Komisi tidak diberikan jika affiliate adalah pembeli atau pemilik video, atau jika saldo kreator tidak cukup. Kegagalan komisi tidak membatalkan pembelian.</p>
+</section>
+
+<section id="admin">
+  <span class="eyebrow">User journey 4</span>
+  <h2>Admin: operasional harian</h2>
+  <ol class="steps">
+    <li><div><b>Admin pertama</b> dibuat sekali lewat <code>/setup_admin?token=…</code> memakai <code>ADMIN_BOOTSTRAP_TOKEN</code>. Setelah ada admin, jalur ini tertutup permanen.</div></li>
+    <li><div><b>Login</b> di <span class="page">admin/login.html</span>. Akun tanpa <code>is_admin</code> ditolak.</div></li>
+    <li><div><b>Pembayaran</b> di <span class="page">admin/payments.html</span>: lihat invoice dan catat pencairan ke kreator.</div></li>
+    <li><div><b>Wallet</b> di <span class="page">admin/wallet.html</span>: setujui deposit setelah dana masuk; selesaikan atau tolak penarikan (penolakan mengembalikan saldo).</div></li>
+    <li><div><b>Pengaturan</b> di <span class="page">admin/settings.html</span>: metode bayar aktif, storage lokal atau S3 beserta migrasinya, dan SMTP.</div></li>
+    <li><div><b>Support</b>: balas percakapan support dari pengguna di dashboard admin.</div></li>
+  </ol>
+</section>
+
+<section id="arsitektur">
+  <span class="eyebrow">App journey</span>
+  <h2>Arsitektur</h2>
+  <p>Satu binary Rust melayani halaman statis, REST API, webhook, stream HLS, dan endpoint federation. FFmpeg dipanggil sebagai proses terpisah. Semua state ada di PostgreSQL dan volume <code>/data</code>.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  U[Browser] -->|HTTPS| T[Traefik / Dokploy]
+  T --> A[ppv_stream<br/>Axum :8080]
+  A --> DB[(PostgreSQL 16)]
+  A --> FS[/data<br/>storage · media · hls/]
+  A -->|proses| FF[FFmpeg<br/>transcode + watermark]
+  FF --> FS
+  A -.->|opsional| S3[(S3 / R2 / MinIO)]
+  PG[PayPal · Xendit<br/>Stripe · Midtrans] -->|webhook| A
+  A -->|buat invoice| PG
+  CH[Blockchain RPC] -->|event Paid| WT[x402 watcher]
+  WT --> DB
+  FED[Instance lain] <-->|ActivityPub| A
+  </pre></div>
+</section>
+
+<section id="upload">
+  <span class="eyebrow">App journey</span>
+  <h2>Upload &amp; transcode</h2>
+  <div class="diagram"><pre class="mermaid">
+flowchart TD
+  U[POST /api/upload] --> V{Valid?<br/>ekstensi · ukuran<br/>isi video/* · harga ≥ 0}
+  V -- tidak --> E[400 ditolak]
+  V -- ya --> S[Simpan .part → file]
+  S --> DB[(videos<br/>processing_state = queued)]
+  DB --> Q[Antrian worker<br/>2 worker]
+  S -.->|storage S3| O[(uploads/)]
+  Q --> P[processing]
+  P --> F[FFmpeg: faststart MP4<br/>HLS 240p · 360p · 480p]
+  F -->|sukses| R[hls_ready = true<br/>state = ready]
+  F -->|gagal| X[state = error<br/>last_error]
+  </pre></div>
+</section>
+
+<section id="akses">
+  <span class="eyebrow">App journey</span>
+  <h2>Aturan akses video</h2>
+  <p>Setiap permintaan putar dicek dengan aturan yang sama. Akses diberikan bila salah satu terpenuhi:</p>
+  <ul>
+    <li>harga video 0;</li>
+    <li>pengguna adalah pemilik video atau admin;</li>
+    <li>username ada di allowlist video;</li>
+    <li>ada baris di <code>purchases</code>;</li>
+    <li>ada <code>fiat_invoices</code> berstatus <code>paid</code> untuk pengguna dan video tersebut.</li>
+  </ul>
+</section>
+
+<section id="bayar">
+  <span class="eyebrow">App journey</span>
+  <h2>Alur pembayaran</h2>
+  <p>Harga dan pembeli selalu diambil server dari database dan sesi, tidak pernah dari input browser. Ketiga jalur berakhir dengan baris <code>purchases</code> dan <code>allowlist</code>, lalu perhitungan komisi affiliate.</p>
+  <div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  actor B as Pembeli
+  participant App as PPV Stream
+  participant GW as Gateway fiat
+  participant DB as PostgreSQL
+  B->>App: POST /api/pay/{provider}/start
+  App->>DB: INSERT fiat_invoices (pending)
+  App->>GW: Buat tagihan
+  GW-->>App: payment_url
+  App-->>B: Redirect ke payment_url
+  B->>GW: Bayar
+  GW->>App: POST /api/pay/{provider}/webhook
+  App->>App: Verifikasi signature
+  App->>DB: invoice = paid, INSERT purchases + allowlist
+  App->>DB: Komisi affiliate
+  opt Xendit
+    App->>GW: Disburse bagian kreator
+  end
+  </pre></div>
+  <div class="split">
+    <div><h4>Gateway fiat</h4><p>Verifikasi webhook per provider: Stripe <code>Stripe-Signature</code> (HMAC-SHA256), Midtrans <code>signature_key</code> (SHA-512), Xendit <code>x-callback-token</code>, PayPal verifikasi <code>paypal-transmission-*</code>. Webhook berulang aman (idempoten).</p></div>
+    <div><h4>Kripto x402</h4><p>Server membuat invoice, menandatangani parameter pembayaran (pembagian kreator/admin, batas waktu 15 menit) dengan kunci admin. Pembeli membayar ke smart contract; watcher atau endpoint konfirmasi membaca event <code>Paid</code> dan menandai invoice lunas atau kurang bayar.</p></div>
+    <div><h4>Wallet internal</h4><p>Saldo dalam sen USD dipotong dalam satu transaksi database bersama pembuatan <code>purchases</code>. Kreator langsung menerima 90%, platform 10%.</p></div>
+  </div>
+</section>
+
+<section id="play">
+  <span class="eyebrow">App journey</span>
+  <h2>Playback &amp; watermark</h2>
+  <div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  actor P as Penonton
+  participant App as PPV Stream
+  participant FF as FFmpeg
+  P->>App: GET /api/request_play?video_id=X
+  App->>App: Cek login + aturan akses
+  App->>App: Buat sesi UUID, TTL 1 jam
+  App->>FF: Encode ulang + watermark @username · waktu
+  FF-->>App: master.m3u8 + segmen
+  App-->>P: /hls/{session}/master.m3u8
+  loop setiap segmen
+    P->>App: GET /hls/{session}/{file}
+    App->>App: Sesi milik user? belum kedaluwarsa? path aman?
+    App-->>P: segmen .ts
+  end
+  </pre></div>
+  <p>Watermark berpindah posisi secara acak sehingga sulit dipotong. Sesi kedaluwarsa menghasilkan <code>410 Gone</code> dan direktorinya dihapus oleh cleanup task.</p>
+</section>
+
+<section id="wallet">
+  <span class="eyebrow">App journey</span>
+  <h2>Wallet &amp; komisi</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Transaksi</th><th>Minimum</th><th>Proses</th></tr></thead>
+    <tbody>
+      <tr><td>Deposit</td><td>$10</td><td>Status <code>pending</code>; saldo bertambah setelah admin menyetujui.</td></tr>
+      <tr><td>Penarikan</td><td>$50</td><td>Saldo langsung ditahan; admin menyelesaikan atau menolak (dana kembali).</td></tr>
+      <tr><td>Transfer</td><td>$1</td><td>Instan dan atomik; tercatat sebagai <code>transfer_out</code> dan <code>transfer_in</code>.</td></tr>
+      <tr><td>Bayar video</td><td>harga video</td><td>Dapat dimatikan admin. Kreator menerima <code>price × CREATOR_SPLIT_BP / 10000</code>.</td></tr>
+      <tr><td>Komisi affiliate</td><td>—</td><td><code>price × commission_pct / 100</code>, dipotong dari saldo kreator.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="fed">
+  <span class="eyebrow">App journey</span>
+  <h2>Federation (index-only)</h2>
+  <p>Instance PPV Stream lain hanya bertukar metadata katalog lewat ActivityPub: judul, harga, thumbnail, dan link ke instance asal. File video, HLS, dan token tidak pernah dikirim. Penonton dari instance lain diarahkan ke instance asal untuk login, bayar, dan menonton; instance perujuk mendapat bagi hasil (default 5%). Pesan ditandatangani dengan HTTP Signatures. Fitur ini aktif bila <code>FEDERATION_ENABLED=true</code>.</p>
+</section>
+
+<section id="keamanan">
+  <span class="eyebrow">Kontrol</span>
+  <h2>Keamanan</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Kontrol</th><th>Implementasi</th></tr></thead>
+    <tbody>
+      <tr><td>Sesi</td><td>Cookie <code>ppv_session</code> ditandatangani HMAC-SHA256, HttpOnly, SameSite=Lax, Secure di HTTPS; dicek ke tabel <code>sessions</code> setiap request.</td></tr>
+      <tr><td>Password</td><td>Argon2.</td></tr>
+      <tr><td>CSRF</td><td>Request yang mengubah data dengan cookie sesi wajib punya Origin/Referer sama dengan <code>BASE_URL</code>. Webhook <code>/api/pay/*</code> dikecualikan.</td></tr>
+      <tr><td>Rate limit</td><td>20 request per 5 menit untuk login, daftar, lupa password, dan ganti password (in-memory).</td></tr>
+      <tr><td>Header</td><td>X-Frame-Options DENY, nosniff, Referrer-Policy, Permissions-Policy, COOP, CORP, <code>no-store</code> pada route dinamis.</td></tr>
+      <tr><td>Media</td><td>Stream hanya lewat sesi pribadi bertanda waktu. Route <code>/static_hls</code> kini nonaktif secara default (<code>ENABLE_STATIC_HLS</code>).</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="catatan">
+  <span class="eyebrow">Untuk tim pengembang</span>
+  <h2>Catatan terbuka</h2>
+  <div class="callout">
+    <p><b>Privasi.</b> Watermark menampilkan <code>@username</code> dan waktu di video. Sebutkan hal ini di kebijakan privasi sesuai UU PDP 27/2022.</p>
+  </div>
+  <ul>
+    <li><b>Reset password belum berfungsi:</b> form mengirim ke <code>POST /auth/forgot</code> dan <code>POST /auth/reset</code>, tetapi route tersebut belum didaftarkan walau handler-nya ada.</li>
+    <li><b>Blokir kreator dan admin federation</b> hanya tersedia lewat API; belum ada halaman.</li>
+    <li><b>Konfirmasi x402</b> di <span class="page">watch.html</span> tidak memanggil endpoint konfirmasi, sehingga bergantung pada watcher.</li>
+    <li><b>Pembeli yang diblokir</b> mungkin tetap dapat akses lewat invoice fiat berstatus <code>paid</code>, karena status invoice diperbarui sebelum insert <code>purchases</code> yang ditolak trigger. Perlu diverifikasi.</li>
+    <li><b>Rate limit <code>/setup_admin</code></b> terdaftar untuk POST, padahal route-nya GET.</li>
+  </ul>
+</section>
+</main>
+</div>
+<script>
+// Diagram dirender oleh viewer Artifact. Saat dibuka langsung sebagai file, muat Mermaid sebagai cadangan.
+setTimeout(function(){
+  if (document.querySelector('pre.mermaid svg') || window.mermaid) return;
+  var s=document.createElement('script');
+  s.src='https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js';
+  s.onload=function(){
+    var dark=matchMedia('(prefers-color-scheme: dark)').matches||document.documentElement.dataset.theme==='dark';
+    mermaid.initialize({startOnLoad:false,theme:dark?'dark':'neutral'});
+    mermaid.run({querySelector:'pre.mermaid'});
+  };
+  document.head.appendChild(s);
+},1500);
+</script>
+</body>
+</html>

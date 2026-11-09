@@ -48,8 +48,19 @@ fn check_admin_token(headers: &HeaderMap) -> bool {
     headers
         .get("x-federation-admin-token")
         .and_then(|v| v.to_str().ok())
-        .map(|t| t == expected.trim())
+        .map(|t| constant_time_eq(t.as_bytes(), expected.trim().as_bytes()))
         .unwrap_or(false)
+}
+
+/// Compare two byte strings without short-circuiting on the first mismatch.
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    let mut diff = a.len() ^ b.len();
+    for i in 0..a.len().max(b.len()) {
+        let x = a.get(i).copied().unwrap_or(0);
+        let y = b.get(i).copied().unwrap_or(0);
+        diff |= (x ^ y) as usize;
+    }
+    diff == 0
 }
 
 macro_rules! require_admin {

@@ -227,14 +227,26 @@ async fn process_inbox(
         }
     }
 
-    // 4. Verify Digest header if present
-    if let Some(digest_header) = headers.get("digest") {
-        if let Ok(digest_str) = digest_header.to_str() {
+    // 4. Verify Digest header (mandatory: it binds the body to the signature,
+    //    and the signature verifier requires `digest` to be a signed header).
+    match headers.get("digest").and_then(|v| v.to_str().ok()) {
+        Some(digest_str) => {
             if let Err(e) = crate::federation::signatures::verify_digest(&body, digest_str) {
                 tracing::warn!("digest mismatch from {}: {}", actor_uri_in_activity, e);
                 return api_error(StatusCode::BAD_REQUEST, "Digest header mismatch");
             }
         }
+        None => return api_error(StatusCode::BAD_REQUEST, "missing Digest header"),
+    }
+
+    // The activity id (when present) must live on the actor's own origin.
+    if !activity_uri.is_empty()
+        && !crate::federation::resolver::same_origin(&activity_uri, &actor_uri_in_activity)
+    {
+        return api_error(
+            StatusCode::BAD_REQUEST,
+            "activity id and actor are on different origins",
+        );
     }
 
     // 5. Verify HTTP Signature
@@ -290,17 +302,36 @@ async fn process_inbox(
         },
     );
 
-    if let Err(e) = verify_result {
-        tracing::warn!(
-            "HTTP Signature verification failed for {} (key {}): {}",
-            actor_uri_in_activity,
-            key_id,
-            e
-        );
-        return api_error(
-            StatusCode::UNAUTHORIZED,
-            "HTTP Signature verification failed",
-        );
+    match verify_result {
+        Ok(sig_key_id) => {
+            if !crate::federation::resolver::key_id_matches_actor(
+                &sig_key_id,
+                &key_id,
+                &actor_uri_in_activity,
+            ) {
+                tracing::warn!(
+                    "Signature keyId {} does not belong to actor {}",
+                    sig_key_id,
+                    actor_uri_in_activity
+                );
+                return api_error(
+                    StatusCode::UNAUTHORIZED,
+                    "signature keyId does not belong to activity actor",
+                );
+            }
+        }
+        Err(e) => {
+            tracing::warn!(
+                "HTTP Signature verification failed for {} (key {}): {}",
+                actor_uri_in_activity,
+                key_id,
+                e
+            );
+            return api_error(
+                StatusCode::UNAUTHORIZED,
+                "HTTP Signature verification failed",
+            );
+        }
     }
 
     // 6. Deduplication: reject already-processed activity URIs

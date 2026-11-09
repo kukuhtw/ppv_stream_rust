@@ -199,7 +199,7 @@ function renderLocked(priceUsd, priceIdr) {
       <div class="card-body">
         <div id="payAlert" class="d-none mb-3"></div>
         <div id="lockedSummary" class="small text-body-secondary mb-3"></div>
-        <ul class="nav nav-tabs mb-3" id="payTabs"></ul>
+        <ul class="nav nav-tabs flex-nowrap overflow-auto text-nowrap mb-3" id="payTabs"></ul>
         <div id="payPanels"></div>
       </div>
     </div>`;
@@ -223,8 +223,9 @@ async function bindLockedState() {
     panels.push(`
       <div id="pay-wallet">
         <p class="small text-body-secondary">Instant purchase using your platform wallet balance.</p>
-        <div class="mb-2 small">Balance: <strong>${esc(paymentOptions.wallet.balance_display || '-') }</strong></div>
-        <button class="btn btn-primary" onclick="payWallet()">Pay with Wallet</button>
+        <div class="mb-2 small">Price: <strong>${esc(paymentOptions.price_display || '-')}</strong> · Balance: <strong>${esc(paymentOptions.wallet.balance_display || '-') }</strong></div>
+        ${paymentOptions.wallet.can_afford === false ? `<div class="alert alert-warning small py-2">Your balance is not enough for this video. <a href="/public/wallet.html">Top up your wallet</a> first.</div>` : ''}
+        <button class="btn btn-primary col-12 col-sm-auto" onclick="payWallet()" ${paymentOptions.wallet.can_afford === false ? 'disabled' : ''}>Pay with Wallet</button>
       </div>
     `);
   }
@@ -234,20 +235,26 @@ async function bindLockedState() {
     const tokens = Array.isArray(paymentOptions.x402.tokens) ? paymentOptions.x402.tokens : [];
     panels.push(`
       <div id="pay-x402" class="${tabs[0].includes('wallet') ? 'd-none' : ''}">
-        <p class="small text-body-secondary">Create an x402 invoice, then complete the onchain payment using your EVM wallet.</p>
+        <p class="small text-body-secondary">Pay onchain from a browser wallet (MetaMask or compatible). The contract splits the payment between the creator and the platform automatically.</p>
         <div class="row g-3">
           <div class="col-md-6">
             <label for="x402Token" class="form-label">Token</label>
-            <select id="x402Token" class="form-select">
-              ${tokens.map((token, index) => `<option value="${index}">${esc(token.chain)} | ${esc(token.symbol)} | chain ${esc(token.chain_id)}</option>`).join('')}
+            <select id="x402Token" class="form-select" onchange="updateX402Amount()">
+              ${tokens.map((token, index) => `<option value="${index}">${esc(token.symbol)} on ${esc(token.chain)} (chain ${esc(token.chain_id)})</option>`).join('')}
             </select>
           </div>
           <div class="col-md-6">
             <label for="x402Payer" class="form-label">Your Wallet Address</label>
-            <input id="x402Payer" class="form-control font-monospace" placeholder="0x...">
+            <div class="input-group">
+              <input id="x402Payer" class="form-control font-monospace" placeholder="0x..." readonly>
+              <button class="btn btn-outline-secondary" type="button" onclick="connectWallet()">Connect Wallet</button>
+            </div>
           </div>
           <div class="col-12">
-            <button class="btn btn-primary" onclick="payX402()">Create x402 Invoice</button>
+            <div class="small">You will pay: <strong id="x402Amount">-</strong> <span class="text-body-secondary">+ network gas</span></div>
+          </div>
+          <div class="col-12">
+            <button id="x402PayBtn" class="btn btn-primary col-12 col-sm-auto" onclick="payX402()">Pay with Crypto Wallet</button>
           </div>
         </div>
         <div id="x402Instructions" class="mt-3 d-none p-3 rounded border bg-body-tertiary small"></div>
@@ -260,9 +267,12 @@ async function bindLockedState() {
     const providers = Array.isArray(paymentOptions.fiat.providers) ? paymentOptions.fiat.providers : [];
     panels.push(`
       <div id="pay-fiat" class="${tabs.length > 1 ? 'd-none' : ''}">
-        <p class="small text-body-secondary">Create a hosted invoice using one of the enabled providers.</p>
-        <div class="d-flex flex-wrap gap-2">
-          ${providers.map(provider => `<button class="btn btn-outline-primary" onclick="startProviderPayment('${esc(provider)}')">${esc(provider)}</button>`).join('')}
+        <p class="small text-body-secondary">Create a hosted invoice using one of the enabled providers. The amount shown is exactly what the provider will charge.</p>
+        <div class="d-grid d-sm-flex flex-wrap gap-2">
+          ${providers.map(provider => {
+            const charge = paymentOptions.fiat.charges?.[provider];
+            return `<button class="btn btn-outline-primary" data-provider="${esc(provider)}" onclick="startProviderPayment(this.dataset.provider)">${esc(provider)}${charge?.display ? ` <span class="badge text-bg-secondary ms-1">${esc(charge.display)}</span>` : ''}</button>`;
+          }).join('')}
         </div>
         <div id="fiatInfo" class="small text-body-secondary mt-3"></div>
       </div>
@@ -275,6 +285,8 @@ async function bindLockedState() {
   } else {
     document.getElementById('payTabs').innerHTML = tabs.join('');
     document.getElementById('payPanels').innerHTML = panels.join('');
+    updateX402Amount();
+    resumePendingX402();
   }
 
   try {
@@ -319,22 +331,116 @@ async function payWallet() {
   }
 }
 
-async function payX402() {
-  const payer = document.getElementById('x402Payer').value.trim();
-  if (!/^0x[a-fA-F0-9]{40}$/.test(payer)) {
-    showPayAlert('danger', 'Enter a valid EVM wallet address.');
-    return;
-  }
-  const tokenIndex = parseInt(document.getElementById('x402Token').value, 10);
-  const token = paymentOptions?.x402?.tokens?.[tokenIndex];
-  if (!token) {
-    showPayAlert('danger', 'Token configuration not found.');
-    return;
+// ---------------------------------------------------------------------------
+// x402 onchain payment (MetaMask / EIP-1193 wallet + X402Splitter contract)
+// ---------------------------------------------------------------------------
+const ETHERS_URL = 'https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js';
+const X402_ABI = [
+  'function payNativeSigned(bytes32 invoiceUid, address creator, uint16 creatorBp, string videoId, uint256 minAmountWei, uint256 deadline, uint8 v, bytes32 r, bytes32 s) payable',
+  'function payERC20Signed(bytes32 invoiceUid, address token, uint256 amountWei, address creator, uint16 creatorBp, string videoId, uint256 minAmountWei, uint256 deadline, uint8 v, bytes32 r, bytes32 s)'
+];
+const ERC20_ABI = [
+  'function allowance(address owner, address spender) view returns (uint256)',
+  'function approve(address spender, uint256 amount) returns (bool)',
+  'function balanceOf(address account) view returns (uint256)'
+];
+const X402_PENDING_KEY = 'x402_pending_' + VIDEO_ID;
+let ethersLoading = null;
+let x402Busy = false;
+// Last onchain payment awaiting server confirmation (never inlined into HTML).
+let lastX402 = null;
+
+function loadEthers() {
+  if (window.ethers) return Promise.resolve(window.ethers);
+  if (ethersLoading) return ethersLoading;
+  ethersLoading = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = ETHERS_URL;
+    s.crossOrigin = 'anonymous';
+    s.onload = () => window.ethers ? resolve(window.ethers) : reject(new Error('ethers failed to load'));
+    s.onerror = () => { ethersLoading = null; reject(new Error('could not load ethers library')); };
+    document.head.appendChild(s);
+  });
+  return ethersLoading;
+}
+
+function selectedX402Token() {
+  const sel = document.getElementById('x402Token');
+  if (!sel) return null;
+  return paymentOptions?.x402?.tokens?.[parseInt(sel.value, 10)] || null;
+}
+
+function updateX402Amount() {
+  const el = document.getElementById('x402Amount');
+  if (!el) return;
+  const token = selectedX402Token();
+  el.textContent = token ? (token.amount_display || `${paymentOptions.price_display || ''} in ${token.symbol}`) : '-';
+}
+
+function x402Status(html) {
+  const box = document.getElementById('x402Instructions');
+  if (!box) return;
+  box.classList.remove('d-none');
+  box.innerHTML = html;
+}
+
+function walletErrorMessage(err) {
+  if (err?.code === 4001 || err?.code === 'ACTION_REJECTED' || err?.info?.error?.code === 4001) return 'You rejected the request in your wallet.';
+  return err?.shortMessage || err?.reason || err?.message || String(err);
+}
+
+async function connectWallet() {
+  if (!window.ethereum) {
+    showPayAlert('warning', 'No browser wallet detected. Install MetaMask (or a compatible EVM wallet) and reload this page.');
+    return null;
   }
   try {
-    const j = await fetch('/api/pay/x402/start', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
+    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    const account = accounts?.[0];
+    if (!account) throw new Error('no account selected');
+    document.getElementById('x402Payer').value = account;
+    return account;
+  } catch (err) {
+    showPayAlert('danger', 'Wallet connection failed: ' + walletErrorMessage(err));
+    return null;
+  }
+}
+
+async function ensureChain(chainId) {
+  const hex = '0x' + Number(chainId).toString(16);
+  const current = await window.ethereum.request({ method: 'eth_chainId' });
+  if (String(current).toLowerCase() === hex) return;
+  try {
+    await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hex }] });
+  } catch (err) {
+    if (err?.code === 4902) {
+      throw new Error(`Network ${chainId} is not added in your wallet. Add it first, then try again.`);
+    }
+    throw err;
+  }
+}
+
+async function payX402() {
+  if (x402Busy) return;
+  const token = selectedX402Token();
+  if (!token) { showPayAlert('danger', 'Token configuration not found.'); return; }
+  if (!window.ethereum) { showPayAlert('warning', 'No browser wallet detected. Install MetaMask (or a compatible EVM wallet) and reload this page.'); return; }
+
+  const btn = document.getElementById('x402PayBtn');
+  x402Busy = true;
+  if (btn) btn.disabled = true;
+  try {
+    const ethers = await loadEthers();
+    const payer = await connectWallet();
+    if (!payer) return;
+
+    x402Status('Switching wallet network...');
+    await ensureChain(token.chain_id);
+
+    x402Status('Creating signed invoice...');
+    const inv = await fetch('/api/pay/x402/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         video_id: VIDEO_ID,
         chain_id: token.chain_id,
@@ -344,24 +450,131 @@ async function payX402() {
         ref_code: REF || null
       })
     }).then(r => r.json());
-    if (!j.ok) {
-      showPayAlert('danger', 'Failed: ' + (j.error || 'unknown'));
-      return;
+    if (!inv.ok) throw new Error(inv.error || 'could not create invoice');
+
+    const deadlineMs = Number(inv.deadline) * 1000;
+    const isNative = !inv.token_address;
+    x402Status(`
+      <div><strong>Invoice:</strong> <code>${esc(inv.invoice_uid)}</code></div>
+      <div><strong>Contract:</strong> <code>${esc(inv.x402_contract)}</code></div>
+      <div><strong>Creator wallet:</strong> <code>${esc(inv.creator_wallet)}</code></div>
+      <div><strong>Amount:</strong> ${esc(token.amount_display || inv.amount_wei + ' base units')} (${esc(inv.symbol)}, chain ${esc(inv.chain_id)})</div>
+      <div><strong>Split:</strong> creator ${(Number(inv.split_creator_bp) / 100).toFixed(2)}% / platform ${(Number(inv.split_admin_bp) / 100).toFixed(2)}%</div>
+      <div><strong>Valid until:</strong> ${esc(new Date(deadlineMs).toLocaleString())}</div>
+      <div class="mt-2 text-body-secondary">Check that the contract address above matches the one published by the platform before confirming in your wallet.</div>
+    `);
+
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+    if ((await signer.getAddress()).toLowerCase() !== payer.toLowerCase()) {
+      throw new Error('The active wallet account changed. Please try again.');
     }
-    const box = document.getElementById('x402Instructions');
-    box.classList.remove('d-none');
-    box.innerHTML = `
-      <div><strong>Invoice UID:</strong> <code>${esc(j.invoice_uid)}</code></div>
-      <div><strong>Contract:</strong> <code>${esc(j.x402_contract)}</code></div>
-      <div><strong>Creator Wallet:</strong> <code>${esc(j.creator_wallet)}</code></div>
-      <div><strong>Token:</strong> ${esc(j.symbol)} on chain ${esc(j.chain_id)}</div>
-      <div><strong>Amount (wei/base units):</strong> <code>${esc(j.amount_wei)}</code></div>
-      <div class="mt-2 text-body-secondary">Use these values in your EVM payment flow, then confirm the transaction from your wallet tooling.</div>
-    `;
-    showPayAlert('info', 'x402 invoice created. Complete the onchain payment using the returned contract parameters.');
+    const contract = new ethers.Contract(inv.x402_contract, X402_ABI, signer);
+    const amount = BigInt(inv.amount_wei);
+
+    let tx;
+    let approved = false;
+    if (isNative) {
+      const bal = await provider.getBalance(payer);
+      if (bal < amount) throw new Error(`Insufficient ${inv.symbol} balance for this payment (plus gas).`);
+      showPayAlert('info', 'Confirm the payment in your wallet...');
+      tx = await contract.payNativeSigned(
+        inv.invoice_uid_bytes32, inv.creator_wallet, inv.split_creator_bp, inv.video_id,
+        inv.min_amount_wei, inv.deadline, inv.v, inv.r, inv.s,
+        { value: amount }
+      );
+    } else {
+      const erc20 = new ethers.Contract(inv.token_address, ERC20_ABI, signer);
+      const bal = await erc20.balanceOf(payer);
+      if (bal < amount) throw new Error(`Insufficient ${inv.symbol} balance for this payment.`);
+      const allowance = await erc20.allowance(payer, inv.x402_contract);
+      if (allowance < amount) {
+        // Approve exactly the invoice amount (never an unlimited allowance).
+        showPayAlert('info', `Step 1 of 2: approve ${inv.symbol} spending in your wallet...`);
+        const approveTx = await erc20.approve(inv.x402_contract, amount);
+        await approveTx.wait(1);
+        approved = true;
+      }
+      if (Date.now() > deadlineMs - 15000) throw new Error('Invoice is about to expire. Please start again.');
+      showPayAlert('info', approved ? 'Step 2 of 2: confirm the payment in your wallet...' : 'Confirm the payment in your wallet...');
+      tx = await contract.payERC20Signed(
+        inv.invoice_uid_bytes32, inv.token_address, inv.amount_wei, inv.creator_wallet,
+        inv.split_creator_bp, inv.video_id, inv.min_amount_wei, inv.deadline, inv.v, inv.r, inv.s
+      );
+    }
+
+    // Remember the pending payment so it can still be confirmed after a reload.
+    try { sessionStorage.setItem(X402_PENDING_KEY, JSON.stringify({ invoice_uid: inv.invoice_uid, tx_hash: tx.hash })); } catch {}
+    showPayAlert('info', 'Transaction sent. Waiting for confirmation onchain...');
+    const receipt = await tx.wait(1);
+    if (!receipt || receipt.status !== 1) throw new Error('Transaction reverted onchain.');
+
+    await confirmX402(inv.invoice_uid, tx.hash);
   } catch (err) {
-    showPayAlert('danger', 'Error: ' + err.message);
+    showPayAlert('danger', 'Payment failed: ' + walletErrorMessage(err));
+  } finally {
+    x402Busy = false;
+    if (btn) btn.disabled = false;
   }
+}
+
+function retryLastX402() {
+  if (lastX402) confirmX402(lastX402.invoice_uid, lastX402.tx_hash);
+}
+
+async function confirmX402(invoiceUid, txHash, attempts = 4) {
+  lastX402 = { invoice_uid: invoiceUid, tx_hash: txHash };
+  for (let i = 0; i < attempts; i++) {
+    let j;
+    try {
+      j = await fetch('/api/pay/x402/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoice_uid: invoiceUid, tx_hash: txHash })
+      }).then(r => r.json());
+    } catch (err) {
+      j = { ok: false, error: err.message };
+    }
+    if (j.ok) {
+      try { sessionStorage.removeItem(X402_PENDING_KEY); } catch {}
+      showPayAlert('success', 'Payment confirmed. Unlocking video...');
+      setTimeout(() => location.reload(), 1200);
+      return true;
+    }
+    if (j.underpaid) {
+      showPayAlert('danger', (j.message || 'Payment below required amount.') + ' Missing: ' + j.missing_wei + ' base units. Contact support with your transaction hash.');
+      return false;
+    }
+    // The server's RPC node may lag behind the wallet's node; retry a few times.
+    if (i < attempts - 1) {
+      await new Promise(r => setTimeout(r, 4000));
+    } else {
+      x402Status(`
+        <div>Your transaction was sent but the server could not confirm it yet.</div>
+        <div><strong>Tx hash:</strong> <code>${esc(txHash)}</code></div>
+        <div class="text-danger">${esc(j.error || 'unknown error')}</div>
+        <button class="btn btn-sm btn-outline-primary mt-2" onclick="retryLastX402()">Try confirmation again</button>
+      `);
+      showPayAlert('warning', 'Confirmation pending. Keep your transaction hash; you can retry confirmation below or contact support.');
+    }
+  }
+  return false;
+}
+
+function resumePendingX402() {
+  let pending = null;
+  try { pending = JSON.parse(sessionStorage.getItem(X402_PENDING_KEY) || 'null'); } catch {}
+  if (!pending || !/^[A-Za-z0-9_-]{1,80}$/.test(pending.invoice_uid || '') || !/^0x[0-9a-fA-F]{64}$/.test(pending.tx_hash || '')) return;
+  if (paymentOptions?.already_purchased) {
+    try { sessionStorage.removeItem(X402_PENDING_KEY); } catch {}
+    return;
+  }
+  lastX402 = { invoice_uid: pending.invoice_uid, tx_hash: pending.tx_hash };
+  x402Status(`
+    <div>A crypto payment from this browser is waiting for confirmation.</div>
+    <div><strong>Tx hash:</strong> <code>${esc(pending.tx_hash)}</code></div>
+    <button class="btn btn-sm btn-outline-primary mt-2" onclick="retryLastX402()">Confirm payment</button>
+  `);
 }
 
 async function startProviderPayment(provider) {

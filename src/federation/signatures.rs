@@ -6,8 +6,14 @@ use sha2::{Digest, Sha256};
 use signature::{RandomizedSigner, SignatureEncoding, Verifier};
 use std::collections::HashMap;
 
-/// Maximum allowed age of a signed request (clock skew tolerance).
-const MAX_AGE_SECS: i64 = 30;
+/// Maximum allowed age of a signed request (clock skew + delivery delay
+/// tolerance). 30 s was too strict for real servers (queued deliveries and
+/// clock drift caused valid requests to be rejected); replays inside this
+/// window are still blocked by activity-id deduplication in the inbox.
+const MAX_AGE_SECS: i64 = 300;
+
+/// Headers that every inbound signed POST must cover.
+const REQUIRED_SIGNED_HEADERS: [&str; 4] = ["(request-target)", "host", "date", "digest"];
 
 // ── Digest header ──────────────────────────────────────────────────────────
 
@@ -98,17 +104,37 @@ pub fn verify_signature(input: &IncomingSignature<'_>) -> anyhow::Result<String>
         .get("keyId")
         .ok_or_else(|| anyhow::anyhow!("Signature header missing keyId"))?
         .clone();
-    let header_names_str = params.get("headers").map(|s| s.as_str()).unwrap_or("date");
+    // Do not fall back to the draft default ("date" only): that would leave the
+    // request target and body unsigned.
+    let header_names_str = params
+        .get("headers")
+        .map(|s| s.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Signature header missing headers list"))?;
     let sig_b64 = params
         .get("signature")
         .ok_or_else(|| anyhow::anyhow!("Signature header missing signature value"))?;
 
-    // Enforce max request age
-    if let Some(date_val) = input.request_headers.get("date") {
-        enforce_max_age(date_val).context("request age check failed")?;
+    let names: Vec<&str> = header_names_str.split_whitespace().collect();
+    let names_lower: Vec<String> = names.iter().map(|n| n.to_ascii_lowercase()).collect();
+    for required in REQUIRED_SIGNED_HEADERS {
+        if !names_lower.iter().any(|n| n == required) {
+            anyhow::bail!("signature must cover the `{required}` header");
+        }
+    }
+    for name in &names_lower {
+        if !name.starts_with('(') && !input.request_headers.contains_key(name.as_str()) {
+            anyhow::bail!("signed header `{name}` is missing from the request");
+        }
     }
 
-    let names: Vec<&str> = header_names_str.split_whitespace().collect();
+    // Enforce max request age (Date is mandatory and signed).
+    let date_val = input
+        .request_headers
+        .get("date")
+        .ok_or_else(|| anyhow::anyhow!("Date header is required"))?;
+    enforce_max_age(date_val).context("request age check failed")?;
+
+    let names: Vec<&str> = names_lower.iter().map(|s| s.as_str()).collect();
     let header_map: HashMap<&str, &str> = input
         .request_headers
         .iter()
@@ -257,5 +283,74 @@ mod tests {
             verified.unwrap(),
             "https://example.com/users/alice#main-key"
         );
+    }
+
+    fn signed_request(digest: Option<&str>) -> (String, HashMap<String, String>, String) {
+        let keys = crate::federation::keys::generate_actor_keys().expect("keygen");
+        let date = chrono::Utc::now()
+            .format("%a, %d %b %Y %H:%M:%S GMT")
+            .to_string();
+        let sig = create_signature(&SignatureInput {
+            key_id: "https://example.com/users/alice#main-key",
+            private_key_pem: &keys.private_key_pem,
+            method: "POST",
+            path_and_query: "/inbox",
+            host: "example.com",
+            date: &date,
+            digest,
+        })
+        .expect("sign");
+        let mut h = HashMap::new();
+        h.insert("host".to_string(), "example.com".to_string());
+        h.insert("date".to_string(), date);
+        if let Some(d) = digest {
+            h.insert("digest".to_string(), d.to_string());
+        }
+        (sig, h, keys.public_key_pem)
+    }
+
+    #[test]
+    fn signature_without_digest_is_rejected() {
+        let (sig, headers, pem) = signed_request(None);
+        let res = verify_signature(&IncomingSignature {
+            method: "POST",
+            path_and_query: "/inbox",
+            signature_header: &sig,
+            request_headers: &headers,
+            public_key_pem: &pem,
+        });
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn signature_without_headers_param_is_rejected() {
+        let (sig, headers, pem) = signed_request(Some(&build_digest(b"{}")));
+        let stripped: String = sig
+            .split(',')
+            .filter(|p| !p.trim_start().starts_with("headers="))
+            .collect::<Vec<_>>()
+            .join(",");
+        let res = verify_signature(&IncomingSignature {
+            method: "POST",
+            path_and_query: "/inbox",
+            signature_header: &stripped,
+            request_headers: &headers,
+            public_key_pem: &pem,
+        });
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn signature_without_date_header_is_rejected() {
+        let (sig, mut headers, pem) = signed_request(Some(&build_digest(b"{}")));
+        headers.remove("date");
+        let res = verify_signature(&IncomingSignature {
+            method: "POST",
+            path_and_query: "/inbox",
+            signature_header: &sig,
+            request_headers: &headers,
+            public_key_pem: &pem,
+        });
+        assert!(res.is_err());
     }
 }

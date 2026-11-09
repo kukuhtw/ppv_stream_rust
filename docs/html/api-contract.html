@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PPV Stream API Contract</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,750&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: left rail of domain links + one reading column; each domain = diagram, then table dictionary */
+:root{
+  --bg:#f5f7f8; --surface:#ffffff; --ink:#132029; --muted:#5a6b75; --line:#d9e1e5;
+  --accent:#0b6e79; --accent-soft:#e1f1f2; --pii:#a3470f; --pii-soft:#fbeadf; --code-bg:#edf2f4;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f171c; --surface:#16222a; --ink:#e3ebef; --muted:#93a5ae; --line:#26363f;
+  --accent:#4fc0c9; --accent-soft:#163a3f; --pii:#f0a06b; --pii-soft:#3a2416; --code-bg:#1c2b33; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f171c; --surface:#16222a; --ink:#e3ebef; --muted:#93a5ae; --line:#26363f;
+  --accent:#4fc0c9; --accent-soft:#163a3f; --pii:#f0a06b; --pii-soft:#3a2416; --code-bg:#1c2b33; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--f-body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1180px;margin:0 auto;padding-block:40px 80px;display:grid;grid-template-columns:220px minmax(0,1fr);gap:48px}
+nav{position:sticky;top:calc(env(safe-area-inset-top,0px) + 24px);align-self:start;display:flex;flex-direction:column;gap:4px;font-size:13.5px}
+nav .lbl{font:600 11px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+nav a{color:var(--muted);text-decoration:none;padding:4px 10px;border-left:2px solid var(--line)}
+nav a:hover,nav a:focus-visible{color:var(--accent);border-left-color:var(--accent);outline:none}
+main{min-width:0;display:flex;flex-direction:column;gap:56px}
+header{display:flex;flex-direction:column;gap:14px}
+.eyebrow{font:500 12px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+h1{font:750 clamp(34px,5vw,52px)/1.05 var(--f-display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h2{font:700 28px/1.15 var(--f-display);margin:0;text-wrap:balance}
+h3{font:600 16px/1.3 var(--f-mono);margin:0}
+p{margin:0;max-width:68ch}
+.lede{font-size:17px;color:var(--muted)}
+.meta{display:flex;flex-wrap:wrap;gap:8px 20px;font:13px var(--f-mono);color:var(--muted)}
+.meta b{color:var(--ink);font-weight:500}
+section{display:flex;flex-direction:column;gap:18px;scroll-margin-top:24px}
+.diagram{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:20px;overflow-x:auto}
+.diagram pre.mermaid{margin:0;background:none;text-align:center}
+.tables{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.tbl{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.tbl p{font-size:14px;color:var(--muted)}
+.cols{font:12.5px/1.7 var(--f-mono);display:flex;flex-wrap:wrap;gap:4px 6px}
+.cols span{background:var(--code-bg);padding:0 6px;border-radius:3px}
+.cols span.pk{background:var(--accent-soft);color:var(--accent);font-weight:500}
+.cols span.pii{background:var(--pii-soft);color:var(--pii)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font:12.5px var(--f-mono);color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:600 11.5px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+tr:last-child td{border-bottom:0}
+code{font:13px var(--f-mono);background:var(--code-bg);padding:1px 5px;border-radius:3px}
+.chip{display:inline-block;font:500 11px var(--f-mono);padding:2px 8px;border-radius:99px;white-space:nowrap}
+.chip.high{background:var(--pii-soft);color:var(--pii)} .chip.med{background:var(--accent-soft);color:var(--accent)}
+ul{margin:0;padding-left:20px;max-width:68ch;display:flex;flex-direction:column;gap:6px}
+@media (max-width:860px){.wrap{grid-template-columns:1fr;gap:24px}nav{position:static;flex-direction:row;flex-wrap:wrap}nav .lbl{width:100%}nav a{border-left:0;border-bottom:2px solid var(--line)}}
+</style>
+</head>
+<body>
+<style>
+.m{display:inline-block;font:600 11px/1 var(--f-mono);padding:4px 7px;border-radius:3px;min-width:52px;text-align:center}
+.m.get{background:var(--accent-soft);color:var(--accent)}
+.m.post{background:var(--pii-soft);color:var(--pii)}
+.m.del{background:var(--code-bg);color:var(--ink);border:1px solid var(--line)}
+td.path{font:13px var(--f-mono);white-space:nowrap}
+td small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
+.auth{font:500 11.5px var(--f-mono);white-space:nowrap;color:var(--muted)}
+.auth.open{color:var(--pii)}
+td code{font-size:12px;word-break:break-word}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.kv>div{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.kv h3{font-family:var(--f-display);font-size:16px;font-weight:700}
+.kv p{font-size:14px;color:var(--muted)}
+pre.code{margin:0;background:var(--code-bg);border-radius:6px;padding:14px 16px;overflow-x:auto;font:12.5px/1.6 var(--f-mono)}
+ol.find{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:8px;max-width:80ch}
+</style>
+
+<div class="wrap">
+<nav aria-label="Isi">
+  <span class="lbl">Isi</span>
+  <a href="#konvensi">Konvensi</a>
+  <a href="#mw">Middleware</a>
+  <a href="#public">Publik &amp; health</a>
+  <a href="#auth">Auth</a>
+  <a href="#video">Upload &amp; video</a>
+  <a href="#profile">Profil</a>
+  <a href="#stream">Streaming</a>
+  <a href="#pay">Pembayaran</a>
+  <a href="#webhook">Webhook</a>
+  <a href="#wallet">Wallet</a>
+  <a href="#affiliate">Affiliate</a>
+  <a href="#block">Blokir kreator</a>
+  <a href="#chat">Chat</a>
+  <a href="#admin">Admin</a>
+  <a href="#fed">Federation</a>
+  <a href="#temuan">Temuan keamanan</a>
+</nav>
+
+<main>
+<header>
+  <span class="eyebrow">Kontrak API · HTTP/JSON</span>
+  <h1>PPV Stream API Contract</h1>
+  <p class="lede">Seluruh endpoint yang didaftarkan di <code>src/main.rs</code> dan <code>src/federation</code>, lengkap dengan autentikasi, bentuk request, dan bentuk respons. Disusun dari kode sumber, bukan dari spesifikasi terpisah.</p>
+  <div class="meta"><span>Base URL <b>${BASE_URL}</b></span><span>Uang dalam <b>sen USD (i64)</b></span><span>Versi <b>0.2.0</b></span><span>Diperbarui <b>9 Nov 2026</b></span></div>
+</header>
+
+<section id="konvensi">
+  <span class="eyebrow">Dasar</span>
+  <h2>Konvensi</h2>
+  <div class="kv">
+    <div><h3>Autentikasi</h3><p>Cookie <code>ppv_session</code> = <code>b64url(sid).b64url(HMAC-SHA256)</code>. HttpOnly, SameSite=Lax, Secure di HTTPS. Login user membuat sesi non-admin; sesi admin hanya dari <code>POST /admin/login</code>.</p></div>
+    <div><h3>Format error</h3><p>Sebagian besar handler membalas <b>HTTP 200</b> dengan <code>{ok:false, error}</code>, kadang plus <code>where</code>. Status 4xx/5xx asli hanya pada upload, streaming, dan federation. Klien wajib memeriksa <code>ok</code>.</p></div>
+    <div><h3>Body</h3><p>JSON kecuali disebut lain. Form login/daftar memakai <code>application/x-www-form-urlencoded</code> dan membalas redirect. Upload memakai <code>multipart/form-data</code>.</p></div>
+    <div><h3>Label auth</h3><p><span class="auth">publik</span> tanpa login · <span class="auth">user</span> sesi valid · <span class="auth">owner</span> pemilik video · <span class="auth">admin</span> sesi admin · <span class="auth">fed-admin</span> header token · <span class="auth">signature</span> tanda tangan provider/HTTP.</p></div>
+  </div>
+  <pre class="code">// Respons sukses
+{ "ok": true, ... }
+// Respons gagal (HTTP 200)
+{ "ok": false, "error": "not logged in" }
+// Upload / validasi
+{ "ok": false, "where": "validation", "error": "price_cents must be >= 0" }</pre>
+</section>
+
+<section id="mw">
+  <span class="eyebrow">Berlaku global</span>
+  <h2>Middleware</h2>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  R[Request] --> C[CookieManager]
+  C --> X{CSRF guard<br/>POST/PUT/PATCH/DELETE<br/>+ cookie sesi<br/>bukan /api/pay/*}
+  X -- Origin/Referer ≠ BASE_URL --> F[403]
+  X -- lolos --> L{Rate limit<br/>20 / 5 menit<br/>login · daftar · ganti password}
+  L -- lewat batas --> T[429]
+  L -- lolos --> H[Security headers]
+  H --> Hd[Handler]
+  </pre></div>
+  <div class="tw"><table>
+    <thead><tr><th>Header respons</th><th>Nilai</th></tr></thead>
+    <tbody>
+      <tr><td><code>x-frame-options</code></td><td>DENY</td></tr>
+      <tr><td><code>x-content-type-options</code></td><td>nosniff</td></tr>
+      <tr><td><code>referrer-policy</code></td><td>strict-origin-when-cross-origin</td></tr>
+      <tr><td><code>permissions-policy</code></td><td>camera=(), microphone=(), geolocation=()</td></tr>
+      <tr><td><code>cross-origin-opener-policy</code> / <code>-resource-policy</code></td><td>same-origin</td></tr>
+      <tr><td><code>cache-control</code></td><td>no-store, kecuali <code>/public/*</code>, <code>/</code>, <code>/browse</code>, <code>/dashboard</code>, <code>/health</code></td></tr>
+    </tbody>
+  </table></div>
+  <p>Kunci rate limit: IP dari <code>X-Forwarded-For</code>/<code>X-Real-IP</code> bila <code>TRUST_PROXY_HEADERS=true</code>, selain itu User-Agent. Penyimpanan in-memory per proses.</p>
+</section>
+
+<section id="public">
+  <span class="eyebrow">Grup</span>
+  <h2>Publik &amp; health</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Method</th><th>Path</th><th>Auth</th><th>Request</th><th>Respons</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m get">GET</span></td><td class="path">/health</td><td class="auth">publik</td><td>—</td><td><code>200 text "ok"</code></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/ · /browse · /dashboard</td><td class="auth">publik</td><td>—</td><td>Redirect ke <code>/public/…</code></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/public/*</td><td class="auth">publik</td><td>—</td><td>File statis HTML/CSS/JS</td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/static_hls/*</td><td class="auth open">publik</td><td>—</td><td>Nonaktif secara default; aktif hanya jika <code>ENABLE_STATIC_HLS=1</code><small>Menyajikan HLS tanpa watermark, jangan aktifkan di produksi</small></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/api/kurs</td><td class="auth">publik</td><td>—</td><td><code>{ok, usd_to_idr: f64}</code></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/api/me</td><td class="auth">user</td><td>—</td><td><code>{ok, user:{id, username, email}}</code></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="auth">
+  <span class="eyebrow">Grup</span>
+  <h2>Auth</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Method</th><th>Path</th><th>Auth</th><th>Request</th><th>Respons</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m post">POST</span></td><td class="path">/auth/register</td><td class="auth">publik</td><td>form <code>username, email, password</code></td><td>Redirect <code>login.html?status=ok</code><small>Gagal: <code>register.html?status=fail&amp;reason=missing_field | invalid_email | weak_password | email_taken | server_error</code></small></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/auth/login</td><td class="auth">publik</td><td>form <code>email, password</code></td><td>Set cookie, redirect <code>dashboard.html?status=ok</code><small>Gagal: <code>reason=missing_field | invalid_email | bad_credentials | server_error</code></small></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/auth/logout</td><td class="auth">user</td><td>—</td><td>Hapus sesi, redirect ke login</td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/api/change_password</td><td class="auth">user</td><td><code>{current_password, new_password}</code> (min 8)</td><td><code>{ok}</code>; email notifikasi dikirim di background</td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/admin/login</td><td class="auth">publik</td><td>form <code>email, password</code></td><td>Sesi admin, redirect <code>admin/dashboard.html</code><small>Gagal: <code>missing_field | bad_credentials | not_admin | server_error</code></small></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/admin/logout</td><td class="auth">admin</td><td>—</td><td>Redirect ke login admin</td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/admin/change_password</td><td class="auth">admin</td><td><code>{current_password, new_password}</code></td><td><code>{ok}</code></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/setup_admin?token=</td><td class="auth">bootstrap token</td><td>query <code>token</code></td><td>HTML: Unavailable · Unauthorized · Forbidden (admin sudah ada) · OK</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="video">
+  <span class="eyebrow">Grup</span>
+  <h2>Upload &amp; video</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Method</th><th>Path</th><th>Auth</th><th>Request</th><th>Respons</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m post">POST</span></td><td class="path">/api/upload</td><td class="auth">user</td><td>multipart: <code>title?</code> (≤200, default "Untitled"), <code>price_cents?</code> (≥0), <code>file</code> (1 file, ekstensi <code>ALLOW_EXTS</code>, isi <code>video/*</code>)</td><td><code>201 {ok, video_id, owner_id, filename, status:"queued", message}</code><small>401 / 400 / 413 / 500 <code>{ok:false, where, error}</code></small></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/api/videos</td><td class="auth">publik</td><td>—</td><td><code>{ok, videos:[{id, owner_id, owner_name, owner_profile_desc, title, description, price_cents, filename, created_at}]}</code></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/api/my_videos</td><td class="auth">user</td><td>—</td><td><code>{ok, videos:[{id, title, description, price_cents, created_at, allow_count, allow_users:[String]}]}</code></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/api/video_update</td><td class="auth">owner</td><td>form <code>id, title, description, price_cents, federation_visibility?</code></td><td><code>{ok}</code>; publish ActivityPub bila federation aktif</td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/api/user_lookup</td><td class="auth">user</td><td>query <code>username</code> atau <code>q</code></td><td><code>{ok, user:{id,username}|null}</code> atau <code>{ok, users:[…]}</code> (maks 20). Lookup email dinonaktifkan.</td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/api/allow</td><td class="auth">owner</td><td>form <code>video_id</code> + salah satu <code>username | email | user_id | username_or_email</code></td><td><code>{ok, video_id, username, rows_affected}</code></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="profile">
+  <span class="eyebrow">Grup</span>
+  <h2>Profil</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Method</th><th>Path</th><th>Auth</th><th>Request</th><th>Respons</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m get">GET</span></td><td class="path">/api/profile</td><td class="auth">user</td><td>—</td><td><code>{ok, profile:{id, username, email, bank_account, wallet_account, wallet_chain_id, whatsapp, profile_desc}}</code></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/api/profile_update</td><td class="auth">user</td><td>form <code>bank_account, wallet_account</code> (alamat EVM atau kosong), <code>wallet_chain_id?, whatsapp, profile_desc</code></td><td><code>{ok}</code> | <code>{ok:false, where, error}</code></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/api/user_profile</td><td class="auth">publik</td><td>query <code>user_id</code> atau <code>username</code></td><td><code>{ok, profile:{id, username, profile_desc}}</code></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="stream">
+  <span class="eyebrow">Grup</span>
+  <h2>Streaming</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Method</th><th>Path</th><th>Auth</th><th>Request</th><th>Respons</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m get">GET</span></td><td class="path">/api/request_play</td><td class="auth">user + akses</td><td>query <code>video_id</code></td><td><code>200 {ok, session, playlist:"/hls/&lt;session&gt;/master.m3u8", video_id, title, price_cents, segment_seconds, expires_in_seconds:3600}</code><small>401 · 403 tanpa akses · 404 · 422 video remote <code>{watch_url}</code> · 504 playlist belum siap 30 dtk · 500</small></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/hls/:session/:file</td><td class="auth">user, pemilik sesi</td><td><code>session</code> = <code>[A-Za-z0-9_-]+</code>; <code>file</code> berakhiran <code>.m3u8 .ts .m4s .mp4</code></td><td>Stream biner, <code>no-store</code><small>400 path · 401 · 403 · 404 · 410 sesi kedaluwarsa</small></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="pay">
+  <span class="eyebrow">Grup</span>
+  <h2>Pembayaran</h2>
+  <p>Harga dan pembeli selalu ditentukan server. Field <code>user_id</code> dan <code>amount_cents</code> di payload invoice wajib ada tetapi diabaikan.</p>
+  <div class="tw"><table>
+    <thead><tr><th>Method</th><th>Path</th><th>Auth</th><th>Request</th><th>Respons</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m get">GET</span></td><td class="path">/api/pay/all_options</td><td class="auth">publik / user</td><td>query <code>video_id</code></td><td><code>{ok, video_id, price_cents, price_display, is_owner, already_purchased, wallet:{available, balance_cents, can_afford}, x402:{available, tokens}, fiat:{available, providers}}</code></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/api/pay/providers</td><td class="auth">publik</td><td>—</td><td><code>{ok, default_provider, providers:[{provider, display_name, configured, environment, supported_currencies, missing_env, enabled, …}]}</code></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/api/pay/start<br>/api/pay/:provider/start</td><td class="auth">user</td><td><code>{user_id, video_id, amount_cents, currency, buyer_email?, buyer_name?, success_url?, cancel_url?, affiliate_ref?, metadata?}</code></td><td><code>{ok, provider, invoice:{provider, invoice_id, payment_url?, amount_cents, currency, status:"pending", raw}}</code></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/api/pay/:provider/confirm</td><td class="auth">signature</td><td><code>{invoice_id, transaction_id?, provider_payload?, signature_headers?}</code></td><td><code>{ok, provider, payment:{status, paid_amount_cents, currency, …}}</code><small>Hanya verifikasi; tidak memberi akses</small></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/api/pay/options</td><td class="auth">publik</td><td>query <code>video_id</code></td><td><code>{ok, video_id, price_cents, creator_id, creator_wallet, creator_chain_id, tokens:[{chain, chain_id, symbol, decimals, erc20}]}</code></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/api/pay/x402/start</td><td class="auth">user</td><td><code>{video_id, chain_id, symbol, token_address?, payer_address, ref_code?}</code></td><td><code>{ok, invoice_uid, invoice_uid_bytes32, amount_wei, min_amount_wei, deadline, v, r, s, split_creator_bp, split_admin_bp, x402_contract, creator_wallet}</code><small>Invoice berlaku 10 menit, ditandatangani EIP-191</small></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/api/pay/x402/confirm</td><td class="auth">publik</td><td><code>{invoice_uid, tx_hash}</code></td><td><code>{ok, status:"paid", replayed?}</code> | <code>{ok:false, underpaid:true, missing_wei}</code><small>Membaca receipt on-chain dan event <code>Paid</code></small></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/api/crypto_price</td><td class="auth">publik</td><td>query <code>ids, vs?</code> (default idr)</td><td><code>{ok, data}</code>, proxy CoinGecko dengan cache 60 dtk</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="webhook">
+  <span class="eyebrow">Grup</span>
+  <h2>Webhook provider</h2>
+  <p><span class="m post">POST</span> <code>/api/pay/:provider/webhook</code>. Body mentah. Saat status lunas: invoice menjadi <code>paid</code>, insert <code>purchases</code> + <code>allowlist</code>, hitung komisi, dan untuk Xendit cairkan bagian kreator sekali. Respons <code>{ok, status:"paid", invoice_id, video_id, replayed?}</code>. Error tetap HTTP 200.</p>
+  <div class="tw"><table>
+    <thead><tr><th>Provider</th><th>Verifikasi</th><th>Dianggap lunas</th><th>ID invoice dari</th></tr></thead>
+    <tbody>
+      <tr><td>Stripe</td><td><code>Stripe-Signature</code> HMAC-SHA256(<code>t.body</code>)</td><td><code>checkout.session.completed</code> (paid), <code>payment_intent.succeeded</code></td><td><code>data.object.metadata.invoice_uid</code></td></tr>
+      <tr><td>PayPal</td><td>API <code>verify-webhook-signature</code> dengan header <code>paypal-transmission-*</code></td><td><code>CHECKOUT.ORDER.APPROVED</code>, <code>PAYMENT.CAPTURE.COMPLETED</code></td><td><code>purchase_units[0].custom_id</code></td></tr>
+      <tr><td>Xendit</td><td>Header <code>x-callback-token</code></td><td><code>PAID</code>, <code>SETTLED</code></td><td><code>external_id</code></td></tr>
+      <tr><td>Midtrans</td><td><code>signature_key</code> = SHA-512(order_id + status_code + gross_amount + server_key)</td><td><code>capture</code> (accept/challenge), <code>settlement</code></td><td><code>order_id</code></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="wallet">
+  <span class="eyebrow">Grup</span>
+  <h2>Wallet</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Method</th><th>Path</th><th>Auth</th><th>Request</th><th>Respons</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m get">GET</span></td><td class="path">/api/wallet/balance</td><td class="auth">user</td><td>—</td><td><code>{ok, balance_cents, balance_display}</code></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/api/wallet/transactions</td><td class="auth">user</td><td>query <code>limit?</code> (50, maks 200)</td><td><code>{ok, items:[{id, txn_type, amount_cents, balance_after, status, ref_username?, note?, admin_note?, created_at}]}</code></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/api/wallet/deposit</td><td class="auth">user</td><td><code>{amount_cents ≥ 1000, note?}</code></td><td><code>{ok, txn_id, message}</code> status pending</td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/api/wallet/withdraw</td><td class="auth">user</td><td><code>{amount_cents ≥ 5000, note?}</code></td><td><code>{ok, txn_id, balance_cents, balance_display, message}</code></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/api/wallet/transfer</td><td class="auth">user</td><td><code>{to_username, amount_cents ≥ 100, note?}</code></td><td><code>{ok, balance_cents, balance_display, transferred_to, amount_display}</code></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/api/wallet/pay</td><td class="auth">user</td><td><code>{video_id, ref_code?}</code></td><td><code>{ok, balance_cents, balance_display, creator_received_display, paid_display, message}</code></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="affiliate">
+  <span class="eyebrow">Grup</span>
+  <h2>Affiliate</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Method</th><th>Path</th><th>Auth</th><th>Request</th><th>Respons</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m get">GET</span></td><td class="path">/api/affiliate/settings</td><td class="auth">owner</td><td>query <code>video_id</code></td><td><code>{ok, video_id, commission_pct, is_enabled}</code></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/api/affiliate/settings</td><td class="auth">owner</td><td><code>{video_id, commission_pct 0–90, is_enabled}</code></td><td><code>{ok, message}</code></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/api/affiliate/summary</td><td class="auth">user</td><td>—</td><td><code>{ok, total_earnings_cents, month_earnings_cents, total_referrals}</code></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/api/affiliate/link</td><td class="auth">user</td><td>query <code>video_id</code></td><td><code>{ok, link, username, video_id, is_enabled}</code></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/api/affiliate/earnings</td><td class="auth">user</td><td>query <code>limit?</code></td><td><code>{ok, total_commission_cents, total_display, items:[{id, video_id, video_title, buyer_username, commission_cents, purchase_price_cents, payment_method, created_at}]}</code></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/api/affiliate/program</td><td class="auth">publik</td><td>query <code>video_id</code></td><td><code>{ok, has_affiliate, commission_pct}</code></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="block">
+  <span class="eyebrow">Grup</span>
+  <h2>Blokir kreator</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Method</th><th>Path</th><th>Auth</th><th>Request</th><th>Respons</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m get">GET</span></td><td class="path">/api/creator/blocked_users</td><td class="auth">user</td><td>—</td><td><code>{ok, items:[{blocked_user_id, username, email, ban_type, reason?, expires_at?, created_at}]}</code></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/api/creator/block_user</td><td class="auth">user</td><td><code>{user_id, ban_type?: "soft"|"hard", reason?}</code></td><td><code>{ok, blocked_user_id, ban_type}</code></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/api/creator/unblock_user</td><td class="auth">user</td><td><code>{user_id}</code></td><td><code>{ok, removed}</code></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="chat">
+  <span class="eyebrow">Grup</span>
+  <h2>Chat</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Method</th><th>Path</th><th>Auth</th><th>Request</th><th>Respons</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m get">GET</span></td><td class="path">/api/chat/users</td><td class="auth">user</td><td>query <code>q?</code></td><td><code>{ok, users:[{id, username, can_start_direct}]}</code> (maks 20, non-admin)</td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/api/chat/conversations</td><td class="auth">user</td><td>—</td><td><code>{ok, conversations:[{id, conversation_type, title, counterpart?, last_message, last_message_at, last_sender_name, created_at}]}</code></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/api/chat/conversations/support</td><td class="auth">user non-admin</td><td>—</td><td><code>{ok, conversation_id}</code></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/api/chat/conversations/direct</td><td class="auth">user non-admin</td><td><code>{target_user_id}</code></td><td><code>{ok, conversation_id}</code></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/api/chat/conversations/:id/messages</td><td class="auth">peserta / admin</td><td>—</td><td><code>{ok, messages:[{id, sender_user_id, sender_username, sender_is_admin, body, created_at, is_self}]}</code></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/api/chat/conversations/:id/messages</td><td class="auth">peserta</td><td><code>{body}</code> 1–4000 karakter</td><td><code>{ok, message:{…}}</code></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="admin">
+  <span class="eyebrow">Grup</span>
+  <h2>Admin</h2>
+  <p>Semua memerlukan sesi admin. Tanpa itu: <code>{ok:false, error:"admin only" | "not logged in"}</code>.</p>
+  <div class="tw"><table>
+    <thead><tr><th>Method</th><th>Path</th><th>Request</th><th>Respons</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m get">GET</span></td><td class="path">/admin/data</td><td>query <code>limit?</code> (50, maks 500)</td><td>HTML tabel users, sessions, videos, allowlist, purchases</td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/admin/payments</td><td>query <code>provider?, status?, limit?</code></td><td><code>{ok, totals:{all, paid, pending, failed}, items:[{invoice_uid, provider, status, amount, currency, paid_at, disbursed_at, buyer_username, video_title, creator_username, creator_bank}]}</code></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/admin/payments/:uid/disburse</td><td>—</td><td><code>{ok, disburse_ref, method:"xendit_api"}</code> atau <code>{ok, method:"manual"}</code></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/admin/wallet/transactions</td><td>query <code>txn_type?, status?, limit?</code></td><td><code>{ok, totals:{all, pending}, items:[…]}</code></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/admin/wallet/transactions/:id/approve</td><td><code>{admin_note?}</code></td><td>Deposit pending saja · <code>{ok, new_balance_cents}</code></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/admin/wallet/transactions/:id/complete</td><td><code>{admin_note?}</code></td><td>Penarikan pending saja · <code>{ok}</code></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/admin/wallet/transactions/:id/reject</td><td><code>{admin_note?}</code></td><td><code>{ok, refunded}</code></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/admin/payment_settings</td><td>—</td><td><code>{ok, settings:{wallet_payment_enabled, wallet_transfer_enabled, paypal_enabled, stripe_enabled, xendit_enabled, midtrans_enabled, x402_enabled, default_provider}, providers:[…]}</code></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/admin/payment_settings</td><td>Semua flag boolean di atas + <code>default_provider?</code></td><td><code>{ok, message}</code>; provider harus terkonfigurasi</td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/admin/storage_settings</td><td>—</td><td><code>{ok, active, desired:{…, secret_key:"", has_secret_key}, restart_required, running_job, jobs}</code></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/admin/storage_settings<br>/admin/storage_settings/test</td><td><code>{backend, bucket, region, access_key, secret_key, endpoint, public_url, path_style}</code></td><td><code>{ok, message, restart_required}</code>; secret kosong = tidak diubah</td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/admin/storage_migrations</td><td>—</td><td><code>{ok, running_job, jobs:[{id, status, total_files, copied_files, failed_files, …}]}</code></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/admin/storage_migrations</td><td><code>{include_uploads, include_media, resume_from_job_id?}</code></td><td><code>{ok, job_id, resumed_from_job_id, message}</code></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/admin/storage_migrations/:id/cancel</td><td>—</td><td><code>{ok, message}</code></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/admin/storage_migrations/:id/items</td><td>—</td><td><code>{ok, job_id, items:[{id, scope, source_path, object_key, status, retry_attempts, error_message}]}</code></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/admin/smtp</td><td>—</td><td><code>{ok, smtp:{host, port, username, password:"", has_password, from_email, from_name, use_tls, enabled}}</code></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/admin/smtp</td><td><code>{host, port, username, password, from_email, from_name, use_tls, enabled, test_email?}</code></td><td><code>{ok, saved, test_sent?, test_error?}</code></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/admin/affiliate/commissions</td><td>query <code>limit?</code></td><td><code>{ok, total_commission_cents, count, items:[…]}</code></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="fed">
+  <span class="eyebrow">Grup</span>
+  <h2>Federation</h2>
+  <p>Endpoint ActivityPub. Admin federation memakai header <code>X-Federation-Admin-Token</code>; inbox memakai HTTP Signatures (RSA-SHA256), body maks 64 KB.</p>
+  <div class="tw"><table>
+    <thead><tr><th>Method</th><th>Path</th><th>Auth</th><th>Respons</th></tr></thead>
+    <tbody>
+      <tr><td><span class="m get">GET</span></td><td class="path">/.well-known/webfinger?resource=acct:</td><td class="auth">publik</td><td><code>{subject, aliases, links:[{rel:"self", type, href}]}</code></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/.well-known/nodeinfo · /nodeinfo/2.1</td><td class="auth">publik</td><td>NodeInfo 2.1, <code>federationMode:"index-only"</code></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/users/:username[/followers|/following|/outbox]</td><td class="auth">publik</td><td>AP Person / OrderedCollection</td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/users/:username/inbox · /inbox</td><td class="auth">signature</td><td><code>202 {status:"accepted"}</code><small>401 tanda tangan salah · 403 domain diblokir · 400 digest salah</small></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/videos/:id</td><td class="auth">publik</td><td>AP Video (wajib <code>Accept: application/activity+json</code>, selain itu 406)</td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/api/federation/catalog</td><td class="auth">publik</td><td><code>{items:[{id, title, price_cents?, hosting_type, origin_domain, watch_url, checkout_url?, thumbnail_url?}], count}</code></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/api/federation/referral/resolve</td><td class="auth">publik</td><td><code>{ok, referring_domain, split_enabled, share_basis_points}</code></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/api/federation/follows/:id/reject</td><td class="auth open">tanpa auth</td><td><code>{ok}</code></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/api/federation/admin/actors/init</td><td class="auth">fed-admin</td><td><code>{username}</code> → <code>{ok, actor_url, public_key_pem}</code></td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/api/federation/admin/follow</td><td class="auth">fed-admin</td><td><code>{local_username, remote_actor_url}</code> → <code>{ok, follow_activity_uri, remote_inbox}</code></td></tr>
+      <tr><td><span class="m get">GET</span> <span class="m post">POST</span></td><td class="path">/api/federation/admin/domain-rules</td><td class="auth">fed-admin</td><td><code>{domain, action: allow|silence|reject_media|suspend|block, reason?}</code></td></tr>
+      <tr><td><span class="m del">DELETE</span></td><td class="path">/api/federation/admin/domain-rules/:domain</td><td class="auth">fed-admin</td><td><code>{ok}</code> | 404</td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/api/federation/admin/overview · instances · activities · delivery</td><td class="auth">fed-admin</td><td>Statistik, daftar instance, log aktivitas, antrian pengiriman</td></tr>
+      <tr><td><span class="m post">POST</span></td><td class="path">/api/federation/admin/delivery/:id/retry</td><td class="auth">fed-admin</td><td><code>{ok}</code></td></tr>
+      <tr><td><span class="m del">DELETE</span></td><td class="path">/api/federation/admin/remote-videos/:domain</td><td class="auth">fed-admin</td><td><code>{ok, removed}</code></td></tr>
+      <tr><td><span class="m get">GET</span> <span class="m post">POST</span></td><td class="path">/api/federation/admin/revenue/policies</td><td class="auth">fed-admin</td><td><code>{domain, share_basis_points}</code></td></tr>
+      <tr><td><span class="m get">GET</span></td><td class="path">/api/federation/admin/revenue/provider-report · affiliate-report</td><td class="auth">fed-admin</td><td><code>{ok, rows:[…]}</code></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="temuan">
+  <span class="eyebrow">ISO/IEC 27001:2022 · UU PDP</span>
+  <h2>Temuan keamanan dari review kontrak</h2>
+  <p>Ditemukan saat menyusun dokumen ini. Nomor 1 sudah diperbaiki; sisanya belum diubah dan perlu diputuskan tim.</p>
+  <ol class="find">
+    <li><b>Diperbaiki:</b> <code>/static_hls/*</code> menyajikan HLS berbayar tanpa login. Kini nonaktif kecuali <code>ENABLE_STATIC_HLS=1</code>.</li>
+    <li><code>POST /api/federation/follows/:id/reject</code> tanpa autentikasi; siapa pun dapat membatalkan follow.</li>
+    <li>Webhook tidak membandingkan jumlah yang dibayar dengan nilai invoice. Stripe tanpa toleransi timestamp (replay). PayPal <code>ORDER.APPROVED</code> dianggap lunas sebelum capture.</li>
+    <li>Perbandingan secret tidak constant-time: token Xendit, signature Midtrans, Stripe, token federation admin, token bootstrap.</li>
+    <li>Data pribadi: <code>/api/creator/blocked_users</code> menampilkan email; <code>/api/allow</code> memungkinkan cek email terdaftar; login admin membedakan <code>not_admin</code>; error Xendit memuat nomor rekening penuh; <code>test_email</code> masuk log.</li>
+    <li><code>/api/pay/*</code> dikecualikan dari CSRF guard padahal memakai cookie sesi; hanya bergantung pada SameSite=Lax. <code>success_url</code>/<code>cancel_url</code> tanpa allowlist.</li>
+    <li>Error berisi pesan database mentah dan path server; <code>/api/pay/providers</code> publik menampilkan nama env yang belum diisi.</li>
+    <li>Rate limit <code>/auth/forgot</code> dan <code>/setup_admin</code> tidak pernah berlaku. Token bootstrap dikirim di query string (masuk log).</li>
+    <li>Reset password tidak di-route; <code>/api/affiliate/link</code> menghasilkan <code>ref=false</code> (variabel salah di <code>affiliate.rs:202</code>).</li>
+    <li>Inbox federation tidak mewajibkan header <code>Date</code> dan <code>Digest</code> ikut ditandatangani.</li>
+  </ol>
+</section>
+</main>
+</div>
+<script>
+// Diagram dirender oleh viewer Artifact. Saat dibuka langsung sebagai file, muat Mermaid sebagai cadangan.
+setTimeout(function(){
+  if (document.querySelector('pre.mermaid svg') || window.mermaid) return;
+  var s=document.createElement('script');
+  s.src='https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js';
+  s.onload=function(){
+    var dark=matchMedia('(prefers-color-scheme: dark)').matches||document.documentElement.dataset.theme==='dark';
+    mermaid.initialize({startOnLoad:false,theme:dark?'dark':'neutral'});
+    mermaid.run({querySelector:'pre.mermaid'});
+  };
+  document.head.appendChild(s);
+},1500);
+</script>
+</body>
+</html>

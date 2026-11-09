@@ -199,7 +199,9 @@ pub async fn affiliate_link(
     cookies: Cookies,
     Query(q): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
-    let (_, username) = match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await {
+    // current_user_id returns (user_id, is_admin); the username must be read
+    // from the users table (previously the bool was used, producing ref=false).
+    let (user_id, _) = match sessions::current_user_id(&st.pool, &st.cfg, &cookies).await {
         Some(v) => v,
         None => return Json(json!({"ok": false, "error": "not logged in"})),
     };
@@ -208,6 +210,38 @@ pub async fn affiliate_link(
     if video_id.is_empty() {
         return Json(json!({"ok": false, "error": "video_id required"}));
     }
+
+    let username: String =
+        match sqlx::query_scalar::<_, String>("SELECT username FROM users WHERE id = $1")
+            .bind(&user_id)
+            .fetch_optional(&st.pool)
+            .await
+        {
+            Ok(Some(u)) if !u.is_empty() => u,
+            Ok(_) => return Json(json!({"ok": false, "error": "user has no username"})),
+            Err(e) => {
+                tracing::error!("affiliate_link username lookup: {e}");
+                return Json(json!({"ok": false, "error": "server error"}));
+            }
+        };
+    let username_q: String = username
+        .bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
+            _ => format!("%{b:02X}"),
+        })
+        .collect();
+    let video_id_q: String = video_id
+        .bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
+            _ => format!("%{b:02X}"),
+        })
+        .collect();
 
     let enabled: bool =
         sqlx::query_scalar("SELECT is_enabled FROM affiliate_settings WHERE video_id = $1")
@@ -218,7 +252,7 @@ pub async fn affiliate_link(
             .flatten()
             .unwrap_or(false);
 
-    let link = format!("/public/watch.html?video_id={video_id}&ref={username}");
+    let link = format!("/public/watch.html?video_id={video_id_q}&ref={username_q}");
 
     Json(json!({
         "ok":         true,

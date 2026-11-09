@@ -81,6 +81,9 @@ pub async fn upload_video(
 
     let mut title = String::from("Untitled");
     let mut price_cents: i64 = 0;
+    // Optional rupiah pricing: price_currency=IDR + price_idr (whole rupiah).
+    let mut price_currency = String::from("USD");
+    let mut price_idr: Option<i64> = None;
     let mut file_count: u32 = 0;
     let video_id = Uuid::new_v4().to_string();
     let mut saved_path: Option<PathBuf> = None;
@@ -124,6 +127,21 @@ pub async fn upload_video(
                     .parse()
                     .unwrap_or(0);
             }
+            "price_currency" => {
+                price_currency = field
+                    .text()
+                    .await
+                    .unwrap_or_default()
+                    .trim()
+                    .to_ascii_uppercase();
+            }
+            "price_idr" => {
+                price_idr = field
+                    .text()
+                    .await
+                    .ok()
+                    .and_then(|v| v.trim().replace(['.', ','], "").parse().ok());
+            }
             "file" => {
                 file_count += 1;
                 if file_count > 1 {
@@ -161,7 +179,7 @@ pub async fn upload_video(
                         .into_response();
                 }
 
-                let filename = format!("{}.{}", &video_id, extension);
+                let filename = format!("{}.{}", video_id, extension);
                 let full_path = Path::new(&upload_dir).join(&filename);
                 let temporary_path = full_path.with_extension(format!("{}.part", extension));
                 let temporary_dir = temporary_path
@@ -322,6 +340,31 @@ pub async fn upload_video(
             .into_response();
     }
 
+    // Rupiah-priced upload: derive the canonical USD cents from the current rate.
+    let idr_price: Option<i64> = match price_currency.as_str() {
+        "IDR" => match price_idr {
+            Some(v) if v >= 0 => {
+                price_cents = crate::fx::idr_to_cents(v, st.cfg.dollar_usd_to_rupiah);
+                Some(v)
+            }
+            _ => {
+                if let Some(path) = saved_path.as_ref() {
+                    let _ = fs::remove_file(path).await;
+                }
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({
+                        "ok": false,
+                        "where": "validation",
+                        "error": "price_idr must be zero or greater when price_currency is IDR"
+                    })),
+                )
+                    .into_response();
+            }
+        },
+        _ => None,
+    };
+
     if price_cents < 0 {
         if let Some(path) = saved_path.as_ref() {
             let _ = fs::remove_file(path).await;
@@ -376,6 +419,18 @@ pub async fn upload_video(
             Json(json!({"ok": false, "where": "db_insert_videos", "error": e.to_string()})),
         )
             .into_response();
+    }
+
+    if let Some(idr) = idr_price {
+        if let Err(e) =
+            sqlx::query("UPDATE videos SET price_currency = 'IDR', price_idr = $2 WHERE id = $1")
+                .bind(&video_id)
+                .bind(idr)
+                .execute(&st.pool)
+                .await
+        {
+            tracing::warn!(%video_id, "could not store rupiah price: {e}");
+        }
     }
 
     let output_dir = st.cfg.video_hls_dir(&video_id);

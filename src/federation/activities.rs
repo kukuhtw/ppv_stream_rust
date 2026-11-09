@@ -23,7 +23,7 @@ pub async fn handle_inbound_activity(
         "Undo" => handle_undo(pool, actor_uri, activity, activity_db_id).await,
         "Create" => handle_create_or_update(pool, actor_uri, activity, activity_db_id).await,
         "Update" => handle_create_or_update(pool, actor_uri, activity, activity_db_id).await,
-        "Delete" => handle_delete(pool, activity, activity_db_id).await,
+        "Delete" => handle_delete(pool, actor_uri, activity, activity_db_id).await,
         _ => mark_activity(pool, activity_db_id, "ignored").await,
     };
 
@@ -118,7 +118,7 @@ async fn handle_follow(
 /// need to be updated here.
 async fn handle_accept(
     pool: &PgPool,
-    _actor_uri: &str,
+    actor_uri: &str,
     activity: &Value,
     activity_db_id: Uuid,
 ) -> anyhow::Result<()> {
@@ -128,12 +128,15 @@ async fn handle_accept(
     if !follow_uri.is_empty() {
         sqlx::query(
             "UPDATE federation_follows ff SET status = 'accepted', updated_at = NOW()
-             FROM federation_actors fa
-             WHERE fa.id = ff.following_actor_id
-               AND fa.is_local = TRUE
+             FROM federation_actors follower, federation_actors target
+             WHERE follower.id = ff.follower_actor_id
+               AND follower.is_local = TRUE
+               AND target.id = ff.following_actor_id
+               AND target.actor_uri = $2
                AND ff.activity_uri = $1",
         )
         .bind(follow_uri)
+        .bind(actor_uri)
         .execute(pool)
         .await
         .context("Accept{Follow} status update failed")?;
@@ -148,7 +151,7 @@ async fn handle_accept(
 /// Follow that this instance sent.  Marks the follow record as `rejected`.
 async fn handle_reject(
     pool: &PgPool,
-    _actor_uri: &str,
+    actor_uri: &str,
     activity: &Value,
     activity_db_id: Uuid,
 ) -> anyhow::Result<()> {
@@ -157,12 +160,15 @@ async fn handle_reject(
     if !follow_uri.is_empty() {
         sqlx::query(
             "UPDATE federation_follows ff SET status = 'rejected', updated_at = NOW()
-             FROM federation_actors fa
-             WHERE fa.id = ff.following_actor_id
-               AND fa.is_local = TRUE
+             FROM federation_actors follower, federation_actors target
+             WHERE follower.id = ff.follower_actor_id
+               AND follower.is_local = TRUE
+               AND target.id = ff.following_actor_id
+               AND target.actor_uri = $2
                AND ff.activity_uri = $1",
         )
         .bind(follow_uri)
+        .bind(actor_uri)
         .execute(pool)
         .await
         .context("Reject{Follow} status update failed")?;
@@ -322,6 +328,7 @@ async fn handle_create_or_update(
 
 async fn handle_delete(
     pool: &PgPool,
+    actor_uri: &str,
     activity: &Value,
     activity_db_id: Uuid,
 ) -> anyhow::Result<()> {
@@ -334,7 +341,7 @@ async fn handle_delete(
     });
 
     if let Some(uri) = object_uri {
-        crate::federation::video_index::process_remote_delete(pool, uri)
+        crate::federation::video_index::process_remote_delete(pool, actor_uri, uri)
             .await
             .context("remote video delete failed")?;
     }

@@ -91,6 +91,7 @@
               <option value="">(Select chain)</option>
               <option value="6342">Mega Testnet (6342)</option>
               <option value="137">Polygon Mainnet (137)</option>
+              <option value="80002">Polygon Amoy Testnet (80002)</option>
               <option value="1">Ethereum Mainnet (1)</option>
             </select>
           </div>
@@ -161,8 +162,15 @@
             <input id="upTitle" name="title" class="form-control" value="Untitled" required maxlength="160">
           </div>
           <div class="col-md-4">
-            <label for="upPrice" class="form-label">Price (cents) <span class="text-body-secondary small">0 = free</span></label>
-            <input id="upPrice" name="price_cents" type="number" min="0" value="0" class="form-control" required>
+            <label for="upPrice" class="form-label">Price <span class="text-body-secondary small">0 = free</span></label>
+            <div class="input-group">
+              <select id="upCur" class="form-select flex-grow-0 w-auto" aria-label="Currency" onchange="priceHint('upCur','upPrice','upPriceHint')">
+                <option value="USD">$ USD</option>
+                <option value="IDR">Rp IDR</option>
+              </select>
+              <input id="upPrice" type="number" min="0" step="0.01" value="0" inputmode="decimal" class="form-control" required oninput="priceHint('upCur','upPrice','upPriceHint')">
+            </div>
+            <div id="upPriceHint" class="form-text">Free</div>
           </div>
           <div class="col-12">
             <label for="upDesc" class="form-label">Description <span class="text-body-secondary small">(optional)</span></label>
@@ -172,9 +180,9 @@
             <label for="upFile" class="form-label">MP4 File</label>
             <input id="upFile" name="file" type="file" accept="video/mp4" class="form-control" required>
           </div>
-          <div class="col-12">
+          <div class="col-12 d-flex flex-column flex-sm-row align-items-sm-center gap-2">
             <button class="btn btn-primary" type="submit">Upload</button>
-            <span class="text-body-secondary small ms-3">MP4 only. Transcoding to HLS happens automatically.</span>
+            <span class="text-body-secondary small">MP4 only. Transcoding to HLS happens automatically.</span>
           </div>
         </div>
       </form>
@@ -350,7 +358,11 @@ async function loadDashboardWallet() {
 document.getElementById('uploadForm').onsubmit = async e => {
   e.preventDefault();
   try {
-    const j = await fetch('/api/upload', { method:'POST', body: new FormData(e.target) }).then(r=>r.json());
+    const fd = new FormData(e.target);
+    const price = priceFields(document.getElementById('upCur').value, document.getElementById('upPrice').value);
+    if (!price) { alert('Enter a valid price (0 or more).'); return; }
+    Object.entries(price).forEach(([k, val]) => fd.set(k, val));
+    const j = await fetch('/api/upload', { method:'POST', body: fd }).then(r=>r.json());
     if (j.ok === false) return alert('Upload failed: ' + (j.error || 'unknown'));
     alert('Upload successful! Video ID: ' + j.video_id);
     e.target.reset();
@@ -365,7 +377,7 @@ function syncVideoIdEcho() {
   const vid = videoSelect.value || '';
   document.getElementById('videoIdHidden').value = vid;
   const echo = document.getElementById('videoIdEcho');
-  if (vid) echo.innerHTML = `video_id: ${esc(vid)} <button class="btn btn-sm btn-outline-secondary py-0 px-1" type="button" onclick="navigator.clipboard.writeText('${esc(vid)}')">Copy</button>`;
+  if (vid) echo.innerHTML = `video_id: ${esc(vid)} <button class="btn btn-sm btn-outline-secondary py-0 px-1" type="button" data-copy="${esc(vid)}" onclick="navigator.clipboard.writeText(this.dataset.copy)">Copy</button>`;
   else echo.textContent = '';
 }
 
@@ -407,6 +419,44 @@ document.getElementById('allow').onsubmit = async e => {
   } catch(e2) { alert('Error: ' + e2); }
 };
 
+// ── pricing helpers ──
+// Creators enter whole units: dollars (USD) or rupiah (IDR). The server keeps
+// price_cents (USD) as the canonical price; rupiah prices are stored as-is and
+// charged exactly by Midtrans/Xendit, while price_cents follows the live rate.
+let KURS = 0;
+fetch('/api/kurs').then(r => r.json()).then(j => { if (j.ok && j.usd_to_idr > 0) KURS = j.usd_to_idr; }).catch(() => {});
+const fmtRp = n => 'Rp ' + new Intl.NumberFormat('id-ID').format(Math.round(n));
+const fmtUsd = c => '$' + (c / 100).toFixed(2);
+
+function priceFields(currency, raw) {
+  const amount = Number(String(raw).replace(',', '.'));
+  if (!Number.isFinite(amount) || amount < 0) return null;
+  if (currency === 'IDR') {
+    const idr = Math.round(amount);
+    const cents = KURS > 0 && idr > 0 ? Math.max(1, Math.ceil(idr * 100 / KURS)) : 0;
+    return { price_currency: 'IDR', price_idr: String(idr), price_cents: String(cents) };
+  }
+  return { price_currency: 'USD', price_cents: String(Math.round(amount * 100)) };
+}
+
+function priceLabel(v) {
+  if (v.price_currency === 'IDR') {
+    return Number(v.price_idr || 0) === 0 ? 'Free' : `${fmtRp(v.price_idr)} (≈ ${fmtUsd(v.price_cents || 0)})`;
+  }
+  return (v.price_cents || 0) === 0 ? 'Free' : fmtUsd(v.price_cents);
+}
+
+function priceHint(curId, amountId, hintId) {
+  const p = priceFields(document.getElementById(curId).value, document.getElementById(amountId).value);
+  const hint = document.getElementById(hintId);
+  document.getElementById(amountId).step = document.getElementById(curId).value === 'IDR' ? '500' : '0.01';
+  if (!p) { hint.textContent = 'Enter 0 or more'; return; }
+  if (Number(p.price_cents) === 0 && !Number(p.price_idr)) { hint.textContent = 'Free'; return; }
+  hint.textContent = p.price_currency === 'IDR'
+    ? (KURS > 0 ? `≈ ${fmtUsd(Number(p.price_cents))} at today's rate` : 'Charged in rupiah')
+    : (KURS > 0 ? `≈ ${fmtRp(Number(p.price_cents) * KURS / 100)}` : '');
+}
+
 // ── render my videos ──
 async function renderMyVideos() {
   const box = document.getElementById('mine');
@@ -422,14 +472,21 @@ async function renderMyVideos() {
           <h6 class="card-title fw-bold mb-0">${esc(v.title)}</h6>
           <span class="badge ${v.hls_ready ? 'bg-success-subtle text-success-emphasis border border-success-subtle' : 'bg-warning-subtle text-warning-emphasis border border-warning-subtle'}" style="font-size:.65rem">${v.hls_ready ? '▶ Ready' : '⏳ Processing'}</span>
         </div>
-        <p class="text-body-secondary small mb-2">ID: <code>${esc(v.id)}</code> &nbsp;•&nbsp; Created: ${esc(v.created_at)} &nbsp;•&nbsp; Price: <strong>$${((v.price_cents||0)/100).toFixed(2)}</strong></p>
+        <p class="text-body-secondary small mb-2">ID: <code>${esc(v.id)}</code> &nbsp;•&nbsp; Created: ${esc(v.created_at)} &nbsp;•&nbsp; Price: <strong>${esc(priceLabel(v))}</strong></p>
         <details class="mb-2">
           <summary class="text-primary small" style="cursor:pointer">Edit title, description &amp; price</summary>
           <form class="edit-form mt-3" data-video-id="${esc(v.id)}">
             <input type="hidden" name="id" value="${esc(v.id)}">
             <div class="row g-2">
               <div class="col-md-8"><label class="form-label small">Title</label><input name="title" class="form-control form-control-sm" required maxlength="160" value="${esc(v.title)}"></div>
-              <div class="col-md-4"><label class="form-label small">Price (cents)</label><input name="price_cents" type="number" min="0" class="form-control form-control-sm" required value="${v.price_cents}"></div>
+              <div class="col-md-4"><label class="form-label small" for="cur-${esc(v.id)}">Price</label>
+                <div class="input-group input-group-sm">
+                  <select id="cur-${esc(v.id)}" class="form-select flex-grow-0 w-auto edit-cur" aria-label="Currency">
+                    <option value="USD" ${v.price_currency === 'IDR' ? '' : 'selected'}>$ USD</option>
+                    <option value="IDR" ${v.price_currency === 'IDR' ? 'selected' : ''}>Rp IDR</option>
+                  </select>
+                  <input type="number" min="0" step="0.01" inputmode="decimal" class="form-control edit-amount" required value="${v.price_currency === 'IDR' ? Number(v.price_idr || 0) : ((v.price_cents || 0) / 100).toFixed(2)}">
+                </div></div>
               <div class="col-12"><label class="form-label small">Description</label><textarea name="description" rows="2" class="form-control form-control-sm">${esc(v.description||'')}</textarea></div>
               <div class="col-12"><button class="btn btn-primary btn-sm" type="submit">Save Changes</button></div>
             </div>
@@ -448,7 +505,10 @@ document.getElementById('mine').addEventListener('submit', async e => {
   const form = e.target.closest('form.edit-form');
   if (!form) return;
   e.preventDefault();
+  const price = priceFields(form.querySelector('.edit-cur').value, form.querySelector('.edit-amount').value);
+  if (!price) { alert('Enter a valid price (0 or more).'); return; }
   const body = new URLSearchParams(new FormData(form));
+  Object.entries(price).forEach(([k, val]) => body.set(k, val));
   try {
     const j = await fetch('/api/video_update', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body }).then(r=>r.json());
     if (j.ok === false) alert('Update failed: ' + (j.error||'unknown'));
