@@ -7,6 +7,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::path::Path;
 
+// async_trait expands to #[must_use] fns returning futures; newer clippy flags that.
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait StoragePlugin: Send + Sync {
     /// Short identifier, e.g. "local", "s3", "minio".
