@@ -332,10 +332,33 @@
   </div>
 
   <div class="card shadow-sm mb-4">
-    <div class="card-header fw-semibold">USD to IDR Exchange Rate</div>
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+      <span>Exchange Rates &amp; Token Prices</span>
+      <button class="btn btn-sm btn-outline-secondary" type="button" onclick="loadFx()">Refresh</button>
+    </div>
     <div class="card-body">
-      <p class="text-body-secondary small mb-3">This build only exposes a read endpoint for the current rate. If you need to change it, update the server-side source that feeds <code>/api/kurs</code>.</p>
-      <div id="kursValue" class="fw-semibold">Loading...</div>
+      <p class="text-body-secondary small mb-3">Rates refresh automatically (USD/IDR hourly, token prices every 2 minutes). Pin a value with an override if a source is wrong; token overrides expire after 24 hours.</p>
+      <div id="fxAlert" class="d-none mb-3"></div>
+      <div class="table-responsive mb-3">
+        <table class="table table-sm align-middle mb-0">
+          <thead><tr><th>Pair</th><th class="text-end">Rate</th><th class="d-none d-sm-table-cell">Source</th><th class="d-none d-md-table-cell">Updated</th><th></th></tr></thead>
+          <tbody id="fxRows"><tr><td colspan="5" class="text-body-secondary">Loading...</td></tr></tbody>
+        </table>
+      </div>
+      <form id="fxForm" class="row g-2 align-items-end">
+        <div class="col-6 col-md-3">
+          <label for="fxPair" class="form-label small mb-1">Pair</label>
+          <input id="fxPair" class="form-control form-control-sm text-uppercase" value="USD/IDR" list="fxPairs" required pattern="[A-Za-z][A-Za-z0-9.]{1,11}/(USD|IDR|usd|idr)">
+          <datalist id="fxPairs"><option value="USD/IDR"><option value="POL/USD"><option value="ETH/USD"></datalist>
+        </div>
+        <div class="col-6 col-md-3">
+          <label for="fxRate" class="form-label small mb-1">Rate</label>
+          <input id="fxRate" type="number" step="any" min="0" inputmode="decimal" class="form-control form-control-sm" required placeholder="16250">
+        </div>
+        <div class="col-12 col-md-auto">
+          <button class="btn btn-sm btn-primary w-100" type="submit">Set Override</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -857,14 +880,72 @@ document.getElementById('closeStorageMigrationItemsBtn').addEventListener('click
   currentStorageMigrationItems = [];
 });
 
-(async function loadKurs() {
+function fxAge(secs) {
+  if (secs < 90) return 'just now';
+  if (secs < 5400) return Math.round(secs / 60) + ' min ago';
+  if (secs < 172800) return Math.round(secs / 3600) + ' h ago';
+  return Math.round(secs / 86400) + ' d ago';
+}
+
+function fxShowAlert(type, msg) {
+  const el = document.getElementById('fxAlert');
+  el.className = `alert alert-${type} py-2 small`;
+  el.textContent = msg;
+}
+
+async function loadFx() {
+  const tbody = document.getElementById('fxRows');
   try {
-    const j = await fetch('/api/kurs').then(r => r.json());
-    document.getElementById('kursValue').textContent = j.usd_to_idr ? `1 USD = ${j.usd_to_idr} IDR` : 'Rate unavailable';
-  } catch {
-    document.getElementById('kursValue').textContent = 'Rate unavailable';
+    const j = await fetch('/admin/fx').then(r => r.json());
+    if (!j.ok) throw new Error(j.error || 'failed');
+    if (j.usd_idr_stale) fxShowAlert('warning', 'USD/IDR has not been refreshed for over 48 hours. Check outbound internet access or set an override.');
+    const rows = Array.isArray(j.rates) ? j.rates : [];
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-body-secondary">No rates yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(r => {
+      const rate = r.pair === 'USD/IDR'
+        ? new Intl.NumberFormat('id-ID', { maximumFractionDigits: 2 }).format(r.rate)
+        : '$' + new Intl.NumberFormat('en-US', { maximumSignificantDigits: 6 }).format(r.rate);
+      const badge = r.is_override ? '<span class="badge text-bg-warning ms-1">override</span>' : '';
+      const age = r.source === 'env' && r.age_secs > 1e8 ? 'default' : fxAge(r.age_secs);
+      return `<tr>
+        <td class="fw-semibold text-nowrap">${esc(r.pair)}${badge}</td>
+        <td class="text-end font-monospace">${esc(rate)}</td>
+        <td class="d-none d-sm-table-cell small text-body-secondary">${esc(r.source)}</td>
+        <td class="d-none d-md-table-cell small text-body-secondary">${esc(age)}</td>
+        <td class="text-end">${r.is_override ? `<button class="btn btn-sm btn-link p-0" type="button" data-pair="${esc(r.pair)}" onclick="clearFx(this.dataset.pair)">Clear</button>` : ''}</td>
+      </tr>`;
+    }).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="5" class="text-danger small">${esc(err.message)}</td></tr>`;
   }
-})();
+}
+
+async function clearFx(pair) {
+  if (!confirm(`Remove the override for ${pair}? The next automatic refresh will replace it.`)) return;
+  const j = await fetch('/admin/fx/clear', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pair })
+  }).then(r => r.json()).catch(e => ({ ok: false, error: e.message }));
+  fxShowAlert(j.ok ? 'success' : 'danger', j.ok ? `Override for ${pair} removed.` : 'Failed: ' + (j.error || 'unknown'));
+  loadFx();
+}
+
+document.getElementById('fxForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const pair = document.getElementById('fxPair').value.trim().toUpperCase();
+  const rate = Number(document.getElementById('fxRate').value);
+  if (!confirm(`Pin ${pair} at ${rate}? This changes prices charged to buyers.`)) return;
+  const j = await fetch('/admin/fx/override', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pair, rate })
+  }).then(r => r.json()).catch(err => ({ ok: false, error: err.message }));
+  fxShowAlert(j.ok ? 'success' : 'danger', j.ok ? `${pair} pinned at ${rate}.` : 'Failed: ' + (j.error || 'unknown'));
+  if (j.ok) document.getElementById('fxRate').value = '';
+  loadFx();
+});
+
+loadFx();
 
 document.getElementById('adminPwForm').addEventListener('submit', async e => {
   e.preventDefault();

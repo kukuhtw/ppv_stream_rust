@@ -1892,6 +1892,9 @@ pub async fn admin_wallet_transactions(
     let mut qb: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
         r#"SELECT wt.id, wt.txn_type, wt.amount_cents, wt.balance_after, wt.status,
                   wt.note, wt.admin_note, wt.created_at::TEXT AS created_at,
+                  wt.transfer_ref, wt.sender_name, wt.proof_mime,
+                  (wt.proof_path IS NOT NULL) AS has_proof,
+                  wt.proof_uploaded_at::TEXT AS proof_uploaded_at,
                   u.username,
                   u2.username AS ref_username
            FROM wallet_transactions wt
@@ -1934,6 +1937,11 @@ pub async fn admin_wallet_transactions(
                 "created_at":    r.try_get::<Option<String>, _>("created_at").unwrap_or(None),
                 "username":      r.try_get::<String,         _>("username").unwrap_or_default(),
                 "ref_username":  r.try_get::<Option<String>, _>("ref_username").unwrap_or(None),
+                "transfer_ref":  r.try_get::<Option<String>, _>("transfer_ref").unwrap_or(None),
+                "sender_name":   r.try_get::<Option<String>, _>("sender_name").unwrap_or(None),
+                "has_proof":     r.try_get::<Option<bool>,   _>("has_proof").unwrap_or(None).unwrap_or(false),
+                "proof_mime":    r.try_get::<Option<String>, _>("proof_mime").unwrap_or(None),
+                "proof_uploaded_at": r.try_get::<Option<String>, _>("proof_uploaded_at").unwrap_or(None),
             })
         })
         .collect();
@@ -2184,5 +2192,84 @@ pub async fn admin_wallet_reject(
             Json(json!({"ok": true, "refunded": is_withdrawal}))
         }
         Err(e) => Json(json!({"ok": false, "error": format!("commit: {e}")})),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// FX rates — GET /admin/fx, POST /admin/fx/override, POST /admin/fx/clear
+// ---------------------------------------------------------------------------
+
+pub async fn admin_fx_list(State(st): State<AdminState>, cookies: Cookies) -> impl IntoResponse {
+    if let Err(resp) = ensure_admin_session(&st, &cookies).await {
+        return resp;
+    }
+    let rates: Vec<serde_json::Value> = crate::fx::list()
+        .into_iter()
+        .map(|r| {
+            let age = r.age_secs();
+            json!({
+                "pair": r.pair,
+                "rate": r.rate,
+                "source": r.source,
+                "fetched_at": r.fetched_at.to_rfc3339(),
+                "age_secs": age,
+                "is_override": r.is_override,
+            })
+        })
+        .collect();
+    Json(json!({
+        "ok": true,
+        "rates": rates,
+        "usd_idr_stale": crate::fx::usd_to_idr_is_stale(),
+        "env_usd_idr": st.cfg.dollar_usd_to_rupiah,
+    }))
+}
+
+#[derive(Deserialize)]
+pub struct FxOverridePayload {
+    pub pair: String,
+    pub rate: Option<f64>,
+}
+
+pub async fn admin_fx_override(
+    State(st): State<AdminState>,
+    cookies: Cookies,
+    Json(p): Json<FxOverridePayload>,
+) -> impl IntoResponse {
+    let admin_user_id = match ensure_admin_session(&st, &cookies).await {
+        Ok(id) => id,
+        Err(resp) => return resp,
+    };
+    let pair = p.pair.trim().to_ascii_uppercase();
+    let Some(rate) = p.rate else {
+        return Json(json!({"ok": false, "error": "rate required"}));
+    };
+    match crate::fx::set_override(
+        &st.pool,
+        &pair,
+        rate,
+        &admin_user_id,
+        st.cfg.dollar_usd_to_rupiah,
+    )
+    .await
+    {
+        Ok(r) => Json(json!({"ok": true, "pair": r.pair, "rate": r.rate})),
+        Err(e) => Json(json!({"ok": false, "error": e})),
+    }
+}
+
+pub async fn admin_fx_clear(
+    State(st): State<AdminState>,
+    cookies: Cookies,
+    Json(p): Json<FxOverridePayload>,
+) -> impl IntoResponse {
+    let admin_user_id = match ensure_admin_session(&st, &cookies).await {
+        Ok(id) => id,
+        Err(resp) => return resp,
+    };
+    let pair = p.pair.trim().to_ascii_uppercase();
+    match crate::fx::clear_override(&st.pool, &pair, &admin_user_id).await {
+        Ok(()) => Json(json!({"ok": true})),
+        Err(e) => Json(json!({"ok": false, "error": e})),
     }
 }

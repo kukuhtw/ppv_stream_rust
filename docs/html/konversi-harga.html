@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Konversi Harga Rupiah ke Polygon</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,750&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: left rail of domain links + one reading column; each domain = diagram, then table dictionary */
+:root{
+  --bg:#f5f7f8; --surface:#ffffff; --ink:#132029; --muted:#5a6b75; --line:#d9e1e5;
+  --accent:#0b6e79; --accent-soft:#e1f1f2; --pii:#a3470f; --pii-soft:#fbeadf; --code-bg:#edf2f4;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f171c; --surface:#16222a; --ink:#e3ebef; --muted:#93a5ae; --line:#26363f;
+  --accent:#4fc0c9; --accent-soft:#163a3f; --pii:#f0a06b; --pii-soft:#3a2416; --code-bg:#1c2b33; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f171c; --surface:#16222a; --ink:#e3ebef; --muted:#93a5ae; --line:#26363f;
+  --accent:#4fc0c9; --accent-soft:#163a3f; --pii:#f0a06b; --pii-soft:#3a2416; --code-bg:#1c2b33; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--f-body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1180px;margin:0 auto;padding-block:40px 80px;display:grid;grid-template-columns:220px minmax(0,1fr);gap:48px}
+nav{position:sticky;top:calc(env(safe-area-inset-top,0px) + 24px);align-self:start;display:flex;flex-direction:column;gap:4px;font-size:13.5px}
+nav .lbl{font:600 11px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+nav a{color:var(--muted);text-decoration:none;padding:4px 10px;border-left:2px solid var(--line)}
+nav a:hover,nav a:focus-visible{color:var(--accent);border-left-color:var(--accent);outline:none}
+main{min-width:0;display:flex;flex-direction:column;gap:56px}
+header{display:flex;flex-direction:column;gap:14px}
+.eyebrow{font:500 12px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+h1{font:750 clamp(34px,5vw,52px)/1.05 var(--f-display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h2{font:700 28px/1.15 var(--f-display);margin:0;text-wrap:balance}
+h3{font:600 16px/1.3 var(--f-mono);margin:0}
+p{margin:0;max-width:68ch}
+.lede{font-size:17px;color:var(--muted)}
+.meta{display:flex;flex-wrap:wrap;gap:8px 20px;font:13px var(--f-mono);color:var(--muted)}
+.meta b{color:var(--ink);font-weight:500}
+section{display:flex;flex-direction:column;gap:18px;scroll-margin-top:24px}
+.diagram{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:20px;overflow-x:auto}
+.diagram pre.mermaid{margin:0;background:none;text-align:center}
+.tables{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.tbl{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.tbl p{font-size:14px;color:var(--muted)}
+.cols{font:12.5px/1.7 var(--f-mono);display:flex;flex-wrap:wrap;gap:4px 6px}
+.cols span{background:var(--code-bg);padding:0 6px;border-radius:3px}
+.cols span.pk{background:var(--accent-soft);color:var(--accent);font-weight:500}
+.cols span.pii{background:var(--pii-soft);color:var(--pii)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font:12.5px var(--f-mono);color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:600 11.5px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+tr:last-child td{border-bottom:0}
+code{font:13px var(--f-mono);background:var(--code-bg);padding:1px 5px;border-radius:3px}
+.chip{display:inline-block;font:500 11px var(--f-mono);padding:2px 8px;border-radius:99px;white-space:nowrap}
+.chip.high{background:var(--pii-soft);color:var(--pii)} .chip.med{background:var(--accent-soft);color:var(--accent)}
+ul{margin:0;padding-left:20px;max-width:68ch;display:flex;flex-direction:column;gap:6px}
+@media (max-width:860px){.wrap{grid-template-columns:1fr;gap:24px}nav{position:static;flex-direction:row;flex-wrap:wrap}nav .lbl{width:100%}nav a{border-left:0;border-bottom:2px solid var(--line)}}
+</style>
+</head>
+<body>
+<style>
+.answers{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.ans{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.ans .q{font:600 12px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.ans .a{font:700 22px/1.1 var(--f-display)}
+.ans .a.no{color:var(--pii)} .ans .a.yes{color:var(--accent)}
+.ans p{font-size:14px;color:var(--muted)}
+.chip.ok{background:var(--accent-soft);color:var(--accent)}
+.chip.bad{background:var(--pii-soft);color:var(--pii)}
+.chip.mute{background:var(--code-bg);color:var(--muted)}
+pre.code{margin:0;background:var(--code-bg);border-radius:6px;padding:14px 16px;overflow-x:auto;font:12.5px/1.65 var(--f-mono)}
+.callout{border:1px solid var(--pii);background:var(--pii-soft);border-radius:6px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;max-width:82ch}
+.callout b{color:var(--pii)}
+.note{border-left:3px solid var(--accent);padding:4px 0 4px 14px;max-width:78ch;color:var(--muted);font-size:14px}
+td.num{font:13px var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+ol.steps{margin:0;padding-left:0;list-style:none;counter-reset:s;display:flex;flex-direction:column;gap:10px;max-width:80ch}
+ol.steps>li{counter-increment:s;display:grid;grid-template-columns:32px minmax(0,1fr);gap:12px;align-items:start}
+ol.steps>li::before{content:counter(s);font:600 13px/28px var(--f-mono);text-align:center;width:28px;height:28px;border-radius:50%;background:var(--accent-soft);color:var(--accent)}
+.split{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}
+.split>div{min-width:0;display:flex;flex-direction:column;gap:10px}
+h4{margin:0;font:600 15px var(--f-body)}
+</style>
+
+<div class="wrap">
+<nav aria-label="Isi">
+  <span class="lbl">Isi</span>
+  <a href="#jawab">Jawaban singkat</a>
+  <a href="#kini">Alur harga saat ini</a>
+  <a href="#lama">Analisis sebelum perbaikan</a>
+  <a href="#rupiah">Rupiah: hanya tampilan</a>
+  <a href="#polygon">USD ke token Polygon</a>
+  <a href="#contoh">Contoh angka</a>
+  <a href="#fiat">Temuan di gateway fiat</a>
+  <a href="#usulan">Rancangan konversi</a>
+  <a href="#oracle">Sumber kurs &amp; oracle</a>
+  <a href="#data">Perubahan data</a>
+  <a href="#rencana">Status implementasi</a>
+  <a href="#regulasi">Regulasi</a>
+</nav>
+
+<main>
+<header>
+  <span class="eyebrow">Analisis harga &amp; kurs · v0.2.0</span>
+  <h1>Konversi Harga Rupiah ke Polygon</h1>
+  <p class="lede">Apakah harga dalam rupiah diterjemahkan ke dolar AS lalu ke jumlah token di jaringan Polygon? <b>Sekarang ya.</b> Bagian awal menjelaskan mekanisme yang berjalan setelah perbaikan 9 Nov 2026. Bagian “Analisis sebelum perbaikan” dipertahankan sebagai catatan temuan.</p>
+  <div class="meta"><span>Sumber <b>src/handlers/pay.rs</b>, <b>kurs.rs</b>, <b>plugins/payment</b></span><span>Satuan harga <b>sen USD</b></span><span>Diperbarui <b>9 Nov 2026</b></span></div>
+</header>
+
+<section id="jawab">
+  <span class="eyebrow">Ringkasan</span>
+  <h2>Jawaban singkat</h2>
+  <div class="answers">
+    <div class="ans"><span class="q">Rupiah → USD?</span><span class="a yes">Ya</span><p>Kreator bisa memasang harga dalam rupiah. Server menyimpan <code>price_idr</code> dan menurunkan <code>price_cents</code> dari kurs live, dibulatkan ke atas.</p></div>
+    <div class="ans"><span class="q">USD → Rupiah?</span><span class="a yes">Ya, dipakai menagih</span><p>Midtrans dan Xendit menagih rupiah bulat: harga rupiah persis, atau <code>price_cents × kurs</code>. Kurs diambil otomatis dan bisa di-override admin.</p></div>
+    <div class="ans"><span class="q">USD → token Polygon?</span><span class="a yes">Ya</span><p>Stablecoin 1:1. Token native (POL) memakai harga oracle CoinGecko yang segar (≤ 10 menit) dan dibulatkan ke atas; tanpa harga segar token disembunyikan.</p></div>
+    <div class="ans"><span class="q">Tagihan terlihat sebelum bayar?</span><span class="a yes">Ya</span><p><code>watch.html</code> menampilkan Rp di tombol Midtrans/Xendit dan jumlah token di tab x402.</p></div>
+  </div>
+</section>
+
+<section id="kini">
+  <span class="eyebrow">Kondisi sekarang</span>
+  <h2>Alur harga setelah perbaikan</h2>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  K1[Kreator: harga USD] --> PC[(videos.price_cents)]
+  K2[Kreator: harga Rp] --> PI[(videos.price_idr)]
+  FX[(fx_rates<br/>USD/IDR, POL/USD)] --> PC
+  PI -- ceil(Rp × 100 / kurs) --> PC
+  JOB[Job FX<br/>open.er-api.com, CoinGecko] --> FX
+  ADM[Override admin] --> FX
+  PI --> MX[Midtrans / Xendit<br/>tagih Rp persis]
+  PC -- × kurs --> MX
+  PC --> SP[Stripe / PayPal / Wallet<br/>tagih USD]
+  PC --> X[x402]
+  X --> ST[Stablecoin<br/>1 token = $1]
+  X --> NT[Token native<br/>USD / harga oracle, dibulatkan ke atas]
+  FX --> NT
+  </pre></div>
+  <div class="calcs">
+    <div><h4>Harga Rp 50.000, kurs 16.000</h4><div class="calc">
+      <div class="row"><span>price_idr</span><span>50.000</span></div>
+      <div class="row"><span>price_cents = ceil(50.000 × 100 / 16.000)</span><span>313</span></div>
+      <div class="row tot"><span>Midtrans / Xendit</span><span class="pos">Rp 50.000</span></div>
+      <div class="row"><span>Stripe / Wallet</span><span>$3.13</span></div>
+    </div></div>
+    <div><h4>Harga $5.00, POL = $0.25</h4><div class="calc">
+      <div class="row"><span>USDC</span><span>5.00 USDC</span></div>
+      <div class="row"><span>POL = 5 / 0.25</span><span>20 POL</span></div>
+      <div class="row tot"><span>Midtrans (kurs 16.000)</span><span class="pos">Rp 80.000</span></div>
+    </div></div>
+  </div>
+  <div class="tw"><table>
+    <thead><tr><th>Pengaman</th><th>Nilai default</th></tr></thead>
+    <tbody>
+      <tr><td>Rentang wajar USD/IDR</td><td>5.000 – 50.000 (<code>FX_USD_IDR_MIN/MAX</code>)</td></tr>
+      <tr><td>Lonjakan maksimum per refresh</td><td>10% kurs rupiah, 30% harga token (lebih dari itu diabaikan, perlu override)</td></tr>
+      <tr><td>Umur maksimum harga token</td><td>600 detik oracle; 24 jam untuk override admin</td></tr>
+      <tr><td>Kurs rupiah usang</td><td>Peringatan di Admin &gt; Settings setelah 48 jam; tetap memakai nilai terakhir</td></tr>
+      <tr><td>Audit</td><td>Setiap perubahan tercatat di <code>fx_rate_history</code></td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">Harga token dikunci saat invoice dibuat dan berlaku 15 menit. Risiko pergerakan harga selama 15 menit ditanggung platform. Belum ada buffer slippage.</p>
+</section>
+
+<section id="lama">
+  <span class="eyebrow">Arsip</span>
+  <h2>Analisis sebelum perbaikan</h2>
+  <p class="note">Bagian berikut (rupiah, token Polygon, contoh angka, temuan gateway, rancangan, sumber kurs, perubahan data) menggambarkan kode <b>sebelum</b> 9 Nov 2026 dan rancangan yang kemudian diimplementasikan. Lihat tabel status di bagian “Status implementasi”.</p>
+</section>
+
+<section id="rupiah">
+  <span class="eyebrow">Detail</span>
+  <h2>Rupiah: hanya tampilan</h2>
+  <p>Endpoint <code>GET /api/kurs</code> mengembalikan <code>{usd_to_idr}</code> dari variabel env. Halaman <code>index.html</code>, <code>browse.html</code>, <code>watch.html</code>, dan <code>wallet.html</code> memakainya untuk menampilkan harga rupiah:</p>
+  <pre class="code">// public/browse.html
+const priceTxt = 'Rp ' + fmt.format(Math.round(v.price_cents / 100 * USD_TO_IDR));</pre>
+  <ul>
+    <li>Kurs tidak berubah sampai env diubah dan aplikasi di-restart. Halaman admin settings hanya menampilkan kurs, tidak bisa mengubahnya.</li>
+    <li>Rupiah yang dilihat pembeli bisa berbeda dari jumlah yang benar-benar ditagih, karena penagihan tidak memakai kurs ini (lihat temuan gateway fiat).</li>
+  </ul>
+</section>
+
+<section id="polygon">
+  <span class="eyebrow">Detail</span>
+  <h2>USD ke token Polygon</h2>
+  <p>Di <code>x402_start</code> (<code>src/handlers/pay.rs</code>), jumlah token dihitung hanya dari harga dan jumlah desimal token:</p>
+  <pre class="code">// src/handlers/pay.rs
+let token_amount_wei: u128 = if price_cents &lt;= 0 { 0 } else {
+    let numerator = (price_cents as u128).saturating_mul(10u128.pow(decimals));
+    numerator.saturating_add(99) / 100   // dibulatkan ke atas
+};</pre>
+  <p>Artinya <code>jumlah_token = price_cents / 100</code>, yaitu 1 token dianggap bernilai tepat 1 USD. Nilai ini disimpan sebagai <code>required_amount_wei</code>, ditandatangani admin sebagai <code>minAmountWei</code>, lalu ditegakkan oleh kontrak <code>X402Splitter</code>.</p>
+  <div class="tw"><table>
+    <thead><tr><th>Token</th><th>Chain</th><th>Desimal</th><th>Asumsi 1 token = $1</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>USDC</td><td>Polygon (137)</td><td>6</td><td>Sesuai, karena USDC dipatok ke USD</td><td><span class="chip ok">Benar</span></td></tr>
+      <tr><td>POL / MATIC</td><td>Polygon Amoy (80002)</td><td>18</td><td>Tidak sesuai, harga mengikuti pasar</td><td><span class="chip bad">Salah harga</span></td></tr>
+      <tr><td>MEGA</td><td>Mega Testnet (6342)</td><td>18</td><td>Testnet, tidak punya nilai pasar</td><td><span class="chip mute">Uji coba</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="contoh">
+  <span class="eyebrow">Ilustrasi</span>
+  <h2>Contoh angka</h2>
+  <p>Video seharga <b>$10.00</b> (<code>price_cents = 1000</code>), kurs tampilan Rp 17.000. Harga POL di bawah ini hanya ilustrasi, bukan kurs aktual.</p>
+  <div class="tw"><table>
+    <thead><tr><th>Jalur</th><th>Yang dilihat pembeli</th><th>Yang ditagih sekarang</th><th>Seharusnya</th></tr></thead>
+    <tbody>
+      <tr><td>Tampilan rupiah</td><td class="num">Rp 170.000</td><td>—</td><td>—</td></tr>
+      <tr><td>x402 USDC (6 desimal)</td><td class="num">$10.00</td><td class="num">10.000000 USDC<br><small>10.000.000 unit</small></td><td class="num">10.000000 USDC <span class="chip ok">sama</span></td></tr>
+      <tr><td>x402 POL, jika 1 POL = $0.25</td><td class="num">$10.00</td><td class="num">10 POL ≈ $2.50</td><td class="num">40 POL <span class="chip bad">kurang 75%</span></td></tr>
+      <tr><td>x402 POL, jika 1 POL = $2.00</td><td class="num">$10.00</td><td class="num">10 POL ≈ $20.00</td><td class="num">5 POL <span class="chip bad">lebih 100%</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="fiat">
+  <span class="eyebrow">Temuan terkait</span>
+  <h2>Temuan di gateway fiat</h2>
+  <p><code>watch.html</code> selalu mengirim <code>currency: 'USD'</code>, dan server meneruskan <code>price_cents</code> apa adanya ke provider. Setiap provider memaknai angka itu secara berbeda:</p>
+  <div class="tw"><table>
+    <thead><tr><th>Provider</th><th>Yang dikirim (video $10)</th><th>Cara provider membaca</th><th>Hasil</th></tr></thead>
+    <tbody>
+      <tr><td>Stripe</td><td><code>unit_amount=1000</code>, usd</td><td>Satuan terkecil (sen)</td><td class="num">$10.00 <span class="chip ok">benar</span></td></tr>
+      <tr><td>PayPal</td><td><code>value="10.00"</code>, USD</td><td>Dibagi 100 untuk USD</td><td class="num">$10.00 <span class="chip ok">benar</span></td></tr>
+      <tr><td>Midtrans</td><td><code>gross_amount=1000</code></td><td>Rupiah penuh (selalu IDR)</td><td class="num">Rp 1.000 <span class="chip bad">seharusnya Rp 170.000</span></td></tr>
+      <tr><td>Xendit</td><td><code>amount=1000</code>, USD</td><td>Satuan utama</td><td class="num">$1.000 <span class="chip bad">100× lipat</span></td></tr>
+      <tr><td>Xendit disbursement</td><td><code>amount_idr = invoice.amount</code></td><td>Rupiah</td><td class="num">Rp 900 ke kreator <span class="chip bad">salah satuan</span></td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout"><p><b>Perlu verifikasi di sandbox.</b> Kesimpulan untuk Midtrans dan Xendit ditarik dari pembacaan kode dan konvensi satuan API masing-masing, belum diuji ke sandbox. Jika benar, kedua provider ini salah menagih untuk setiap transaksi dan tidak aman diaktifkan di produksi sebelum diperbaiki.</p></div>
+</section>
+
+<section id="usulan">
+  <span class="eyebrow">Usulan</span>
+  <h2>Rancangan konversi yang benar</h2>
+  <p>Prinsipnya: satu harga acuan, kurs diambil dari sumber tepercaya, lalu <b>dikunci</b> per invoice (kurs, sumber, dan waktu disimpan) agar bisa diaudit dan direkonsiliasi.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart TD
+  P[Harga acuan video<br/>price_amount + price_currency<br/>IDR atau USD] --> Q{Metode bayar}
+  FX[Layanan kurs<br/>USD/IDR · cache 5–15 menit] --> N
+  OR[Oracle harga token<br/>Chainlink / CoinGecko] --> T
+  Q -- Midtrans / Xendit IDR --> N[Normalisasi ke IDR<br/>amount_idr = round(usd × kurs)]
+  Q -- Stripe / PayPal USD --> U[Normalisasi ke sen USD]
+  Q -- x402 --> T{Token}
+  T -- USDC / stablecoin USD --> S[unit = usd_cents × 10^d / 100]
+  T -- POL / native --> V[unit = usd / harga_token × 10^d<br/>+ buffer slippage 1–2%]
+  N --> I[(Invoice menyimpan:<br/>jumlah tagih · mata uang<br/>kurs · sumber · waktu kurs)]
+  U --> I
+  S --> I
+  V --> I
+  I --> SIG[x402: minAmountWei ditandatangani<br/>deadline singkat, mis. 10 menit]
+  </pre></div>
+  <div class="split">
+    <div>
+      <h4>Rumus</h4>
+      <pre class="code">// harga rupiah ke USD
+usd_cents = round(price_idr / kurs_usd_idr × 100)
+
+// USD ke stablecoin (USDC, d = 6)
+units = ceil(usd_cents × 10^d / 100)
+
+// USD ke token native (POL, d = 18)
+units = ceil(usd_cents / 100 / harga_token_usd
+             × (1 + buffer) × 10^d)
+
+// USD ke rupiah untuk Midtrans / Xendit
+amount_idr = round(usd_cents / 100 × kurs_usd_idr)</pre>
+    </div>
+    <div>
+      <h4>Contoh: harga Rp 170.000, kurs 17.000, POL $0.25</h4>
+      <pre class="code">usd_cents   = 170000 / 17000 × 100   = 1000  ($10.00)
+USDC        = 1000 × 10^6 / 100      = 10.000.000 unit (10 USDC)
+POL (+1%)   = 10 / 0.25 × 1.01       = 40.4 POL
+            = 40.400.000.000.000.000.000 wei
+Midtrans    = 1000 / 100 × 17000     = Rp 170.000</pre>
+    </div>
+  </div>
+  <p class="note">Jalur termudah dan paling aman untuk Polygon adalah <b>hanya menerima stablecoin USD</b> (USDC/USDT). Dengan begitu tidak perlu oracle harga token, hanya kurs USD/IDR untuk tampilan dan untuk harga yang diinput dalam rupiah.</p>
+</section>
+
+<section id="oracle">
+  <span class="eyebrow">Usulan</span>
+  <h2>Sumber kurs &amp; oracle</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Kebutuhan</th><th>Pilihan sumber</th><th>Catatan</th></tr></thead>
+    <tbody>
+      <tr><td>Kurs USD/IDR</td><td>Kurs referensi JISDOR Bank Indonesia, atau API kurs komersial</td><td>Ambil berkala (cron), simpan riwayat di tabel, sediakan override manual oleh admin, dan hentikan penjualan rupiah bila data kurs basi.</td></tr>
+      <tr><td>Harga POL/USD on-chain</td><td>Chainlink Price Feed di Polygon</td><td>Bisa dibaca backend via RPC, atau kontrak memverifikasi sendiri. Cek umur data (<code>updatedAt</code>).</td></tr>
+      <tr><td>Harga token off-chain</td><td>CoinGecko (sudah ada proxy <code>/api/crypto_price</code>)</td><td>Paling cepat diintegrasikan; batasi rate, tangani bila gagal, dan jangan percayai nilai dari browser.</td></tr>
+      <tr><td>Rupiah langsung on-chain</td><td>Stablecoin rupiah di Polygon, bila tersedia dan legal</td><td>Menghilangkan konversi lewat USD, tetapi perlu kajian regulasi dan likuiditas.</td></tr>
+    </tbody>
+  </table></div>
+  <ul>
+    <li><b>Kunci kuotasi</b>: hitung jumlah token sekali saat <code>x402_start</code>, tandatangani, dan biarkan kontrak menolak di bawah minimum. Deadline 10 menit membatasi risiko perubahan harga.</li>
+    <li><b>Buffer slippage</b> 1–2% untuk token volatil. Kelebihan bayar tetap diteruskan ke kreator dan admin oleh kontrak.</li>
+    <li><b>Kurang bayar</b> sudah ditangani: invoice berstatus <code>underpaid</code> dengan <code>missing_wei</code>.</li>
+  </ul>
+</section>
+
+<section id="data">
+  <span class="eyebrow">Usulan</span>
+  <h2>Perubahan data</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Tabel</th><th>Kolom baru</th><th>Fungsi</th></tr></thead>
+    <tbody>
+      <tr><td><code>videos</code></td><td><code>price_amount NUMERIC</code>, <code>price_currency TEXT</code> ('USD' | 'IDR')</td><td>Kreator bisa memasang harga dalam rupiah; <code>price_cents</code> dipertahankan untuk kompatibilitas.</td></tr>
+      <tr><td><code>fx_rates</code> (baru)</td><td><code>base, quote, rate, source, fetched_at</code></td><td>Riwayat kurs untuk audit dan rekonsiliasi.</td></tr>
+      <tr><td><code>fiat_invoices</code></td><td><code>charged_amount, charged_currency, fx_rate, fx_source, fx_at</code></td><td>Mencatat persis berapa dan dengan kurs apa pembeli ditagih.</td></tr>
+      <tr><td><code>x402_invoices</code></td><td><code>usd_cents, token_usd_price, price_source, quoted_at</code></td><td>Mencatat kuotasi token yang ditandatangani.</td></tr>
+      <tr><td><code>pay_tokens</code></td><td><code>is_stable_usd BOOLEAN</code>, <code>price_feed TEXT</code></td><td>Menentukan apakah token butuh oracle, dan dari mana.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="rencana">
+  <span class="eyebrow">Status</span>
+  <h2>Status implementasi</h2>
+  <div class="tw"><table>
+    <thead><tr><th>#</th><th>Rencana</th><th>Status</th><th>Catatan</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Perbaiki satuan gateway fiat</td><td><span class="chip ok">Selesai</span></td><td>Midtrans/Xendit rupiah bulat; Stripe/PayPal sen USD; webhook mencocokkan nominal. Belum diuji di sandbox.</td></tr>
+      <tr><td>2</td><td>Batasi x402 ke stablecoin</td><td><span class="chip ok">Selesai</span></td><td>Diperluas: token native diizinkan hanya bila ada harga oracle segar</td></tr>
+      <tr><td>3</td><td>Layanan kurs USD/IDR</td><td><span class="chip ok">Selesai</span></td><td><code>src/fx.rs</code>, tabel <code>fx_rates</code> + <code>fx_rate_history</code> (migrasi 037), job refresh, override di Admin &gt; Settings, <code>/api/kurs</code> membaca kurs live</td></tr>
+      <tr><td>4</td><td>Harga dalam rupiah</td><td><span class="chip ok">Selesai</span></td><td>Kolom <code>price_currency</code>, <code>price_idr</code>; pilihan $ USD / Rp IDR di form upload dan edit; harga USD diturunkan ulang saat kurs berubah</td></tr>
+      <tr><td>5</td><td>Oracle token native</td><td><span class="chip ok">Selesai</span></td><td>CoinGecko via <code>FX_TOKEN_IDS</code>. Kuotasi dicatat di log, belum disimpan per invoice; belum memakai Chainlink; belum ada buffer slippage</td></tr>
+      <tr><td>6</td><td>Tampilkan tagihan final</td><td><span class="chip ok">Selesai</span></td><td>Badge Rp di tombol provider dan jumlah token di tab x402</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">Unit test <code>fx.rs</code> (6 tes) lulus. Build penuh dengan database dan uji end-to-end belum dijalankan.</p>
+</section>
+
+<section id="regulasi">
+  <span class="eyebrow">ISO/IEC 27001:2022 · regulasi</span>
+  <h2>Regulasi &amp; kepatuhan</h2>
+  <div class="callout"><p><b>Bukan nasihat hukum.</b> Poin di bawah perlu dikonfirmasi tim legal sebelum pembayaran kripto atau konversi kurs diaktifkan untuk pengguna Indonesia.</p></div>
+  <ul>
+    <li>Transaksi pembayaran di Indonesia wajib memakai rupiah, dan aset kripto bukan alat pembayaran yang sah. Menawarkan harga rupiah yang dibayar dengan token berisiko secara regulasi.</li>
+    <li>Kurs yang dipakai menagih harus transparan bagi pembeli dan tercatat per transaksi (jejak audit, A.8.15; integritas informasi, A.5.33).</li>
+    <li>Sumber kurs eksternal adalah pemasok; tetapkan SLA, fallback, dan perilaku saat data basi (A.5.19–A.5.22).</li>
+    <li>Kesalahan satuan pada gateway fiat berdampak langsung ke konsumen dan pendapatan kreator; perbaiki dan uji sebelum produksi (A.8.29, pengujian keamanan dan fungsi).</li>
+  </ul>
+</section>
+</main>
+</div>
+<script>
+// Diagram dirender oleh viewer Artifact. Saat dibuka langsung sebagai file, muat Mermaid sebagai cadangan.
+setTimeout(function(){
+  if (document.querySelector('pre.mermaid svg') || window.mermaid) return;
+  var s=document.createElement('script');
+  s.src='https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js';
+  s.onload=function(){
+    var dark=matchMedia('(prefers-color-scheme: dark)').matches||document.documentElement.dataset.theme==='dark';
+    mermaid.initialize({startOnLoad:false,theme:dark?'dark':'neutral'});
+    mermaid.run({querySelector:'pre.mermaid'});
+  };
+  document.head.appendChild(s);
+},1500);
+</script>
+</body>
+</html>

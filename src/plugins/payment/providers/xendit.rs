@@ -280,7 +280,9 @@ impl PaymentPlugin for XenditPaymentPlugin {
         let transaction_id = payload["id"].as_str().map(String::from);
         let paid_amount = payload["paid_amount"]
             .as_i64()
+            .or_else(|| payload["paid_amount"].as_f64().map(|f| f.round() as i64))
             .or_else(|| payload["amount"].as_i64())
+            .or_else(|| payload["amount"].as_f64().map(|f| f.round() as i64))
             .unwrap_or(0);
         let currency = payload["currency"].as_str().unwrap_or("IDR").to_uppercase();
 

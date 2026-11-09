@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pembayaran PPV Stream</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,750&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: left rail of domain links + one reading column; each domain = diagram, then table dictionary */
+:root{
+  --bg:#f5f7f8; --surface:#ffffff; --ink:#132029; --muted:#5a6b75; --line:#d9e1e5;
+  --accent:#0b6e79; --accent-soft:#e1f1f2; --pii:#a3470f; --pii-soft:#fbeadf; --code-bg:#edf2f4;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f171c; --surface:#16222a; --ink:#e3ebef; --muted:#93a5ae; --line:#26363f;
+  --accent:#4fc0c9; --accent-soft:#163a3f; --pii:#f0a06b; --pii-soft:#3a2416; --code-bg:#1c2b33; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f171c; --surface:#16222a; --ink:#e3ebef; --muted:#93a5ae; --line:#26363f;
+  --accent:#4fc0c9; --accent-soft:#163a3f; --pii:#f0a06b; --pii-soft:#3a2416; --code-bg:#1c2b33; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--f-body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1180px;margin:0 auto;padding-block:40px 80px;display:grid;grid-template-columns:220px minmax(0,1fr);gap:48px}
+nav{position:sticky;top:calc(env(safe-area-inset-top,0px) + 24px);align-self:start;display:flex;flex-direction:column;gap:4px;font-size:13.5px}
+nav .lbl{font:600 11px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+nav a{color:var(--muted);text-decoration:none;padding:4px 10px;border-left:2px solid var(--line)}
+nav a:hover,nav a:focus-visible{color:var(--accent);border-left-color:var(--accent);outline:none}
+main{min-width:0;display:flex;flex-direction:column;gap:56px}
+header{display:flex;flex-direction:column;gap:14px}
+.eyebrow{font:500 12px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+h1{font:750 clamp(34px,5vw,52px)/1.05 var(--f-display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h2{font:700 28px/1.15 var(--f-display);margin:0;text-wrap:balance}
+h3{font:600 16px/1.3 var(--f-mono);margin:0}
+p{margin:0;max-width:68ch}
+.lede{font-size:17px;color:var(--muted)}
+.meta{display:flex;flex-wrap:wrap;gap:8px 20px;font:13px var(--f-mono);color:var(--muted)}
+.meta b{color:var(--ink);font-weight:500}
+section{display:flex;flex-direction:column;gap:18px;scroll-margin-top:24px}
+.diagram{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:20px;overflow-x:auto}
+.diagram pre.mermaid{margin:0;background:none;text-align:center}
+.tables{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.tbl{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.tbl p{font-size:14px;color:var(--muted)}
+.cols{font:12.5px/1.7 var(--f-mono);display:flex;flex-wrap:wrap;gap:4px 6px}
+.cols span{background:var(--code-bg);padding:0 6px;border-radius:3px}
+.cols span.pk{background:var(--accent-soft);color:var(--accent);font-weight:500}
+.cols span.pii{background:var(--pii-soft);color:var(--pii)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font:12.5px var(--f-mono);color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:600 11.5px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+tr:last-child td{border-bottom:0}
+code{font:13px var(--f-mono);background:var(--code-bg);padding:1px 5px;border-radius:3px}
+.chip{display:inline-block;font:500 11px var(--f-mono);padding:2px 8px;border-radius:99px;white-space:nowrap}
+.chip.high{background:var(--pii-soft);color:var(--pii)} .chip.med{background:var(--accent-soft);color:var(--accent)}
+ul{margin:0;padding-left:20px;max-width:68ch;display:flex;flex-direction:column;gap:6px}
+@media (max-width:860px){.wrap{grid-template-columns:1fr;gap:24px}nav{position:static;flex-direction:row;flex-wrap:wrap}nav .lbl{width:100%}nav a{border-left:0;border-bottom:2px solid var(--line)}}
+</style>
+</head>
+<body>
+<style>
+.answers{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.ans{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.ans .q{font:600 12px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.ans .a{font:700 22px/1.1 var(--f-display);color:var(--accent)}
+.ans p{font-size:14px;color:var(--muted)}
+.chip.ok{background:var(--accent-soft);color:var(--accent)}
+.chip.warn{background:var(--pii-soft);color:var(--pii)}
+.chip.mute{background:var(--code-bg);color:var(--muted)}
+.calc{font:13px/1.8 var(--f-mono);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;overflow-x:auto}
+.calc .row{display:flex;justify-content:space-between;gap:16px;min-width:300px}
+.calc .row span:last-child{font-variant-numeric:tabular-nums}
+.calc .tot{border-top:1px solid var(--line);margin-top:6px;padding-top:6px;font-weight:500}
+.calc .neg{color:var(--pii)} .calc .pos{color:var(--accent)}
+.calcs{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.calcs h4{margin:0 0 8px;font:600 14px var(--f-body)}
+ol.steps{margin:0;padding-left:0;list-style:none;counter-reset:s;display:flex;flex-direction:column;gap:10px;max-width:78ch}
+ol.steps>li{counter-increment:s;display:grid;grid-template-columns:32px minmax(0,1fr);gap:12px;align-items:start}
+ol.steps>li::before{content:counter(s);font:600 13px/28px var(--f-mono);text-align:center;width:28px;height:28px;border-radius:50%;background:var(--accent-soft);color:var(--accent)}
+.callout{border:1px solid var(--pii);background:var(--pii-soft);border-radius:6px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;max-width:82ch}
+.callout b{color:var(--pii)}
+.note{border-left:3px solid var(--accent);padding:4px 0 4px 14px;max-width:78ch;color:var(--muted);font-size:14px}
+h4{margin:0;font:600 15px var(--f-body)}
+.split{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}
+.split>div{min-width:0;display:flex;flex-direction:column;gap:10px}
+pre.code{margin:0;background:var(--code-bg);border-radius:6px;padding:14px 16px;overflow-x:auto;font:12.5px/1.6 var(--f-mono)}
+</style>
+
+<div class="wrap">
+<nav aria-label="Isi">
+  <span class="lbl">Isi</span>
+  <a href="#jawab">Jawaban singkat</a>
+  <a href="#banding">Perbandingan metode</a>
+  <a href="#pilih">Memilih metode</a>
+  <a href="#wallet">1 · Wallet internal</a>
+  <a href="#deposit">Deposit (top up)</a>
+  <a href="#withdraw">Penarikan &amp; transfer</a>
+  <a href="#fiat">2 · Gateway fiat</a>
+  <a href="#chain">3 · Blockchain x402</a>
+  <a href="#split">Pembagian hasil</a>
+  <a href="#affiliate">Komisi affiliate</a>
+  <a href="#admin">Pengaturan admin</a>
+  <a href="#alternatif">Alternatif &amp; rekomendasi</a>
+  <a href="#gap">Keterbatasan saat ini</a>
+  <a href="#regulasi">Regulasi &amp; kepatuhan</a>
+</nav>
+
+<main>
+<header>
+  <span class="eyebrow">Panduan pembayaran · v0.2.0</span>
+  <h1>Pembayaran PPV Stream</h1>
+  <p class="lede">Ada tiga cara membayar per video: saldo wallet internal, gateway pembayaran (PayPal, Xendit, Stripe, Midtrans), dan token kripto lewat smart contract x402. Ketiganya berakhir dengan hal yang sama: pembeli mendapat akses permanen ke video itu.</p>
+  <div class="meta"><span><b>3</b> jalur bayar</span><span><b>4</b> gateway fiat</span><span>Bagi hasil default <b>90 / 10</b></span><span>Satuan internal <b>sen USD</b></span><span>Diperbarui <b>9 Nov 2026</b></span></div>
+</header>
+
+<section id="jawab">
+  <span class="eyebrow">Ringkasan</span>
+  <h2>Jawaban singkat</h2>
+  <div class="answers">
+    <div class="ans"><span class="q">Bisa pakai blockchain?</span><span class="a">Ya, x402</span><p>Bayar dengan token EVM (MEGA, MATIC, USDC Polygon) ke kontrak <code>X402Splitter</code>. Dana langsung terbagi on-chain ke kreator dan admin. Pembeli cukup menekan <b>Connect Wallet</b> lalu <b>Pay with Crypto Wallet</b> di MetaMask.</p></div>
+    <div class="ans"><span class="q">Bisa pakai wallet?</span><span class="a">Ya, instan</span><p>Saldo wallet internal (sen USD) memotong harga video dalam satu transaksi database. Akses langsung terbuka tanpa redirect atau menunggu webhook.</p></div>
+    <div class="ans"><span class="q">Bisa deposit?</span><span class="a">Ya, manual</span><p>Pengguna transfer ke rekening platform, mengisi form deposit (minimal $10), lalu admin menyetujui setelah dana dicek di mutasi bank.</p></div>
+    <div class="ans"><span class="q">Kartu, e-wallet, VA?</span><span class="a">Ya, gateway</span><p>Lewat PayPal, Stripe, Xendit, atau Midtrans. Pembeli diarahkan ke halaman provider; akses dibuka saat webhook lunas diterima.</p></div>
+  </div>
+</section>
+
+<section id="banding">
+  <span class="eyebrow">Gambaran</span>
+  <h2>Perbandingan metode</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Aspek</th><th>Wallet internal</th><th>Gateway fiat</th><th>Blockchain x402</th></tr></thead>
+    <tbody>
+      <tr><td>Yang dibutuhkan pembeli</td><td>Saldo cukup (dari deposit, transfer, atau komisi)</td><td>Kartu, PayPal, VA bank, e-wallet, QRIS (tergantung provider)</td><td>Dompet EVM berisi token + gas</td></tr>
+      <tr><td>Mata uang</td><td>Sen USD</td><td>USD, EUR, IDR, PHP sesuai provider</td><td>MEGA, MATIC, USDC (tabel <code>pay_tokens</code>)</td></tr>
+      <tr><td>Akses terbuka</td><td><span class="chip ok">Instan</span></td><td><span class="chip mute">Setelah webhook</span></td><td><span class="chip mute">Setelah event <code>Paid</code> terbaca</span></td></tr>
+      <tr><td>Dana pembeli masuk ke</td><td>Ledger platform</td><td>Akun merchant platform di provider</td><td>Smart contract, langsung dibagi</td></tr>
+      <tr><td>Kreator dibayar</td><td>Saldo wallet dikredit 90% seketika</td><td>Xendit otomatis ke bank; lainnya manual oleh admin</td><td>90% langsung ke dompet EVM kreator</td></tr>
+      <tr><td>Komisi affiliate</td><td>Dari saldo wallet kreator</td><td>Dari saldo wallet kreator</td><td>Dari saldo wallet kreator</td></tr>
+      <tr><td>Biaya tambahan</td><td>Tidak ada</td><td>Fee provider (dibebankan ke platform)</td><td>Gas fee jaringan (dibayar pembeli)</td></tr>
+      <tr><td>Bisa dimatikan admin</td><td><code>wallet_payment_enabled</code></td><td>Per provider</td><td><code>x402_enabled</code></td></tr>
+      <tr><td>Kesiapan UI</td><td><span class="chip ok">Siap</span></td><td><span class="chip ok">Siap</span></td><td><span class="chip warn">Parsial</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="pilih">
+  <span class="eyebrow">Untuk pembeli</span>
+  <h2>Memilih metode</h2>
+  <p>Semua metode yang aktif tampil sebagai tab di <code>watch.html</code>. Data tab diambil dari <code>GET /api/pay/all_options</code>, termasuk apakah saldo wallet cukup.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart TD
+  S([Buka watch.html]) --> O{Pemilik / sudah beli<br/>/ harga 0?}
+  O -- ya --> P([Langsung tonton])
+  O -- tidak --> W{Saldo wallet<br/>≥ harga?}
+  W -- ya --> WP[Bayar dengan wallet<br/>instan]
+  W -- tidak --> C{Punya dompet<br/>kripto EVM?}
+  C -- ya, dan mau on-chain --> X[x402<br/>token ke smart contract]
+  C -- tidak --> F{Mau rupiah lokal?<br/>VA / e-wallet / QRIS}
+  F -- ya --> FX[Xendit / Midtrans]
+  F -- tidak, kartu / internasional --> FS[Stripe / PayPal]
+  W -- tidak, mau isi saldo --> D[Deposit wallet<br/>tunggu approval admin]
+  D --> WP
+  WP --> P
+  X --> P
+  FX --> P
+  FS --> P
+  </pre></div>
+</section>
+
+<section id="wallet">
+  <span class="eyebrow">Metode 1</span>
+  <h2>Wallet internal</h2>
+  <p>Setiap akun punya saldo <code>users.balance_cents</code> dalam sen USD. Setiap perubahan saldo dicatat di ledger <code>wallet_transactions</code> beserta <code>balance_after</code>, sehingga total saldo semua pengguna sama dengan kewajiban platform kepada pengguna.</p>
+  <div class="split">
+    <div>
+      <h4>Sumber saldo</h4>
+      <ul>
+        <li>Deposit yang disetujui admin</li>
+        <li>Transfer masuk dari pengguna lain</li>
+        <li>Penjualan video kreator yang dibayar pakai wallet</li>
+        <li>Komisi affiliate (dari semua jalur bayar)</li>
+      </ul>
+    </div>
+    <div>
+      <h4>Pemakaian saldo</h4>
+      <ul>
+        <li>Membeli video (<code>POST /api/wallet/pay</code>)</li>
+        <li>Transfer ke pengguna lain</li>
+        <li>Penarikan ke rekening bank atau e-wallet</li>
+        <li>Komisi affiliate yang dipotong dari saldo kreator</li>
+      </ul>
+    </div>
+  </div>
+  <h3>Membeli video dengan wallet</h3>
+  <div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  actor B as Pembeli
+  participant App as PPV Stream
+  participant DB as PostgreSQL
+  B->>App: POST /api/wallet/pay {video_id, ref_code?}
+  App->>App: Bukan pemilik? belum beli? wallet_payment_enabled?
+  App->>DB: BEGIN
+  App->>DB: Kunci saldo pembeli (FOR UPDATE), cek ≥ harga
+  App->>DB: Pembeli − harga
+  App->>DB: Kreator + harga × CREATOR_SPLIT_BP / 10000
+  App->>DB: Ledger pembeli & kreator, INSERT purchases + allowlist
+  App->>DB: COMMIT
+  App->>App: Komisi affiliate (transaksi terpisah)
+  App-->>B: {ok, balance_display, paid_display}
+  </pre></div>
+  <h3>Siklus status transaksi</h3>
+  <div class="diagram"><pre class="mermaid">
+stateDiagram-v2
+  direction LR
+  [*] --> pending: deposit / withdraw diajukan
+  pending --> approved: admin approve (deposit)<br/>saldo bertambah
+  pending --> completed: admin complete (withdraw)<br/>dana sudah dikirim
+  pending --> rejected: admin reject<br/>withdraw dikembalikan
+  [*] --> completed: transfer / pembayaran video<br/>(instan)
+  approved --> [*]
+  completed --> [*]
+  rejected --> [*]
+  </pre></div>
+  <div class="tw"><table>
+    <thead><tr><th>Aturan</th><th>Nilai</th><th>Alasan</th></tr></thead>
+    <tbody>
+      <tr><td>Deposit minimum</td><td>$10.00 (1.000 sen)</td><td>Biaya verifikasi manual admin</td></tr>
+      <tr><td>Penarikan minimum</td><td>$50.00 (5.000 sen)</td><td>Biaya transfer keluar relatif tetap</td></tr>
+      <tr><td>Transfer minimum</td><td>$1.00 (100 sen)</td><td>Mencegah spam transaksi kecil</td></tr>
+      <tr><td>Saldo terendah</td><td>$0.00</td><td>Saldo tidak pernah negatif</td></tr>
+      <tr><td>Saldo penarikan</td><td>Ditahan seketika</td><td>Mencegah penarikan ganda</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="deposit">
+  <span class="eyebrow">Wallet</span>
+  <h2>Deposit (top up saldo)</h2>
+  <p>Deposit saat ini <b>manual</b>. Sistem tidak menerima uang secara otomatis; ia mencatat klaim pengguna, dan admin mencocokkan dengan mutasi rekening platform.</p>
+  <div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  actor U as Pengguna
+  participant Bank as Rekening platform
+  participant App as PPV Stream
+  actor A as Admin
+  U->>Bank: Transfer, misal $50 / Rp setara
+  U->>App: wallet.html → POST /api/wallet/deposit<br/>{amount_cents: 5000, note: "BCA ref 12345"}
+  App-->>U: Status pending
+  A->>Bank: Cek mutasi
+  alt dana diterima sesuai
+    A->>App: POST /admin/wallet/transactions/:id/approve
+    App-->>U: Saldo +$50 (approved)
+  else tidak ditemukan
+    A->>App: POST /admin/wallet/transactions/:id/reject
+    App-->>U: rejected + catatan admin
+  end
+  </pre></div>
+  <ol class="steps">
+    <li><div>Pengguna mentransfer ke rekening platform yang tampil di tab <b>Deposit</b> (diatur lewat env <code>WALLET_DEPOSIT_INSTRUCTIONS</code>).</div></li>
+    <li><div>Pengguna membuka <code>wallet.html</code> tab <b>Deposit</b>, mengisi jumlah dalam dolar (dikirim ke API sebagai sen USD), <b>Transfer Reference</b>, <b>Sender Account Name</b>, dan mengunggah bukti transfer (JPG/PNG/WEBP/PDF, maks. 5 MB).</div></li>
+    <li><div>Admin membuka <code>admin/wallet.html</code>, filter <code>deposit</code> + <code>pending</code>, mencocokkan jumlah, referensi, nama pengirim, dan bukti (<b>View proof</b>) dengan mutasi bank.</div></li>
+    <li><div>Admin menyetujui (saldo bertambah seketika) atau menolak dengan catatan.</div></li>
+  </ol>
+  <p class="note">Nilai deposit dicatat dalam USD. Jika pengguna mentransfer rupiah, admin mengonversi memakai kurs operasional; kurs live aplikasi (lihat <code>konversi-harga.html</code>) bisa dipakai sebagai acuan.</p>
+</section>
+
+<section id="withdraw">
+  <span class="eyebrow">Wallet</span>
+  <h2>Penarikan &amp; transfer</h2>
+  <div class="split">
+    <div>
+      <h4>Penarikan (withdraw)</h4>
+      <ol class="steps">
+        <li><div>Pengguna mengajukan jumlah (min $50) dan tujuan di catatan, misal <code>BCA 1234567890 a.n. Nama</code>.</div></li>
+        <li><div>Saldo langsung dipotong dan ditahan; status <code>pending</code>.</div></li>
+        <li><div>Admin mengirim dana lewat bank atau e-wallet di luar aplikasi.</div></li>
+        <li><div>Admin menandai <b>complete</b>; atau <b>reject</b> dan saldo dikembalikan otomatis.</div></li>
+      </ol>
+    </div>
+    <div>
+      <h4>Transfer antar pengguna</h4>
+      <ol class="steps">
+        <li><div>Pengirim mengisi <code>to_username</code>, jumlah (min $1), dan catatan.</div></li>
+        <li><div>Dalam satu transaksi database: saldo pengirim berkurang, penerima bertambah, dua baris ledger <code>transfer_out</code> dan <code>transfer_in</code>.</div></li>
+        <li><div>Selesai seketika tanpa admin. Bisa dimatikan lewat <code>wallet_transfer_enabled</code>.</div></li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<section id="fiat">
+  <span class="eyebrow">Metode 2</span>
+  <h2>Gateway pembayaran fiat</h2>
+  <p>Provider diaktifkan dengan <code>PAYMENT_PLUGINS</code> (env) dan dinyalakan per provider dari <b>Admin → Settings</b>. Harga diambil dari database, bukan dari browser.</p>
+  <div class="tw"><table>
+    <thead><tr><th>Provider</th><th>Mata uang</th><th>Cocok untuk</th><th>Pencairan ke kreator</th><th>Env yang wajib</th></tr></thead>
+    <tbody>
+      <tr><td><b>Xendit</b></td><td>IDR, PHP, USD</td><td>VA bank, e-wallet, QRIS, kartu di Indonesia</td><td><span class="chip ok">Otomatis</span> ke rekening bank kreator via Disbursement API</td><td><code>XENDIT_SECRET_KEY</code>, <code>XENDIT_WEBHOOK_TOKEN</code></td></tr>
+      <tr><td><b>Midtrans</b></td><td>IDR</td><td>VA, GoPay, QRIS, kartu di Indonesia</td><td><span class="chip warn">Manual</span> oleh admin</td><td><code>MIDTRANS_SERVER_KEY</code>, <code>MIDTRANS_CLIENT_KEY</code></td></tr>
+      <tr><td><b>Stripe</b></td><td>USD, EUR, IDR</td><td>Kartu internasional</td><td><span class="chip warn">Manual</span> (butuh Stripe Connect untuk otomatis)</td><td><code>STRIPE_SECRET_KEY</code>, <code>STRIPE_WEBHOOK_SECRET</code></td></tr>
+      <tr><td><b>PayPal</b></td><td>USD, EUR, IDR</td><td>Pembeli internasional dengan akun PayPal</td><td><span class="chip warn">Manual</span> (butuh Payouts API)</td><td><code>PAYPAL_CLIENT_ID</code>, <code>PAYPAL_CLIENT_SECRET</code>, <code>PAYPAL_WEBHOOK_ID</code></td></tr>
+    </tbody>
+  </table></div>
+  <div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  actor B as Pembeli
+  participant App as PPV Stream
+  participant GW as Provider
+  participant DB as PostgreSQL
+  B->>App: POST /api/pay/{provider}/start {video_id, currency, affiliate_ref?}
+  App->>DB: INSERT fiat_invoices (pending, harga dari DB)
+  App->>GW: Buat checkout
+  GW-->>App: provider_ref + payment_url
+  App-->>B: Redirect ke payment_url
+  B->>GW: Bayar (kartu / VA / e-wallet / QRIS)
+  GW->>App: POST /api/pay/{provider}/webhook
+  App->>App: Verifikasi tanda tangan webhook
+  App->>DB: invoice = paid · INSERT purchases + allowlist
+  App->>DB: Komisi affiliate
+  alt provider = Xendit
+    App->>GW: Disburse bagian kreator ke bank
+    App->>DB: disbursed_at, disburse_ref
+  else provider lain
+    Note over App: Admin mencairkan manual di admin/payments.html
+  end
+  </pre></div>
+  <h3>URL webhook yang didaftarkan di dashboard provider</h3>
+  <pre class="code">${BASE_URL}/api/pay/xendit/webhook
+${BASE_URL}/api/pay/midtrans/webhook
+${BASE_URL}/api/pay/stripe/webhook
+${BASE_URL}/api/pay/paypal/webhook</pre>
+  <div class="tw"><table>
+    <thead><tr><th>Provider</th><th>Verifikasi webhook</th><th>Status yang dianggap lunas</th></tr></thead>
+    <tbody>
+      <tr><td>Xendit</td><td>Header <code>x-callback-token</code> = <code>XENDIT_WEBHOOK_TOKEN</code></td><td><code>PAID</code>, <code>SETTLED</code></td></tr>
+      <tr><td>Midtrans</td><td><code>signature_key</code> = SHA-512(order_id + status_code + gross_amount + server_key)</td><td><code>settlement</code>, <code>capture</code> (accept/challenge)</td></tr>
+      <tr><td>Stripe</td><td><code>Stripe-Signature</code> HMAC-SHA256</td><td><code>checkout.session.completed</code> (paid), <code>payment_intent.succeeded</code></td></tr>
+      <tr><td>PayPal</td><td>API <code>verify-webhook-signature</code></td><td><code>CHECKOUT.ORDER.APPROVED</code>, <code>PAYMENT.CAPTURE.COMPLETED</code></td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">Pencairan Xendit membutuhkan <code>bank_account</code> kreator terisi di profil. Pencairan manual dicatat admin di <code>admin/payments.html</code> lewat tombol <b>Disburse</b>.</p>
+</section>
+
+<section id="chain">
+  <span class="eyebrow">Metode 3</span>
+  <h2>Blockchain: x402</h2>
+  <p>Pembeli membayar langsung ke smart contract <code>X402Splitter.sol</code>. Kontrak memverifikasi tanda tangan admin atas invoice, lalu dalam transaksi yang sama mengirim 90% ke dompet kreator dan 10% ke dompet admin. Platform tidak pernah memegang dana kripto pembeli.</p>
+  <div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  actor B as Pembeli
+  participant App as PPV Stream
+  participant SC as X402Splitter
+  participant Cr as Dompet kreator
+  participant Ad as Dompet admin
+  participant Wt as Watcher
+  B->>App: POST /api/pay/x402/start<br/>{video_id, chain_id, symbol, payer_address, ref_code?}
+  App->>App: INSERT x402_invoices · hitung amount_wei dari harga + kurs
+  App->>App: Tanda tangani (EIP-191) dengan X402_ADMIN_PRIVKEY
+  App-->>B: invoice_uid_bytes32, amount_wei, min_amount_wei,<br/>deadline, v, r, s, split_creator_bp, kontrak
+  B->>SC: payNativeSigned(...) atau approve + payERC20Signed(...)
+  SC->>SC: Cek tanda tangan, deadline, payer, invoice belum dipakai, jumlah ≥ minimum
+  SC->>Cr: 90%
+  SC->>Ad: 10%
+  SC-->>Wt: event Paid(invoiceUid, payer, creator, token, amount, videoId)
+  Wt->>App: Tandai invoice paid · INSERT purchases + allowlist · komisi
+  Note over B,App: Alternatif tanpa watcher: POST /api/pay/x402/confirm {invoice_uid, tx_hash}
+  </pre></div>
+  <div class="split">
+    <div>
+      <h4>Keamanan kontrak</h4>
+      <ul>
+        <li>Tanda tangan mengikat: invoice, token, jumlah minimum, kreator, persentase, video, <b>alamat pembayar</b>, deadline, alamat kontrak, dan <code>chainid</code>.</li>
+        <li><code>usedInvoice</code> mencegah invoice dibayar dua kali.</li>
+        <li><code>ReentrancyGuard</code> dan <code>SafeERC20</code> dari OpenZeppelin.</li>
+        <li>Pembayaran di bawah <code>minAmountWei</code> ditolak kontrak (<code>underpaid</code>).</li>
+      </ul>
+    </div>
+    <div>
+      <h4>Konfirmasi ke aplikasi</h4>
+      <ul>
+        <li><b>Watcher</b> (disarankan): build dengan fitur <code>x402-watcher</code>, set <code>WATCHER_ENABLE=1</code>, <code>X402_RPC_WSS</code>, <code>X402_CONTRACT_ADDRESS</code>. Mendengar event <code>Paid</code> via WebSocket dan otomatis reconnect.</li>
+        <li><b>Manual</b>: <code>POST /api/pay/x402/confirm</code> dengan <code>tx_hash</code>; server membaca receipt lewat <code>X402_RPC_HTTP</code>.</li>
+      </ul>
+    </div>
+  </div>
+  <h3>Token &amp; jaringan bawaan</h3>
+  <div class="tw"><table>
+    <thead><tr><th>Jaringan</th><th>Chain ID</th><th>Token</th><th>Jenis</th><th>Catatan</th></tr></thead>
+    <tbody>
+      <tr><td>Mega Testnet</td><td>6342</td><td>MEGA</td><td>Native</td><td>Testnet, tanpa nilai nyata</td></tr>
+      <tr><td>Polygon Amoy</td><td>80002</td><td>MATIC / POL</td><td>Native</td><td>Testnet, default <code>X402_CHAIN_ID</code></td></tr>
+      <tr><td>Polygon</td><td>137</td><td>USDC</td><td>ERC-20 <code>0x2791…4174</code></td><td>Stablecoin, nilai stabil terhadap USD</td></tr>
+    </tbody>
+  </table></div>
+  <p>Token baru ditambahkan dengan memasukkan baris ke <code>pay_tokens</code> tanpa mengubah kode. Kontrak harus di-deploy di setiap chain yang dipakai (<code>contracts/scripts/deploy_x402.js</code>, Hardhat, service compose <code>x402-deployer</code>).</p>
+  <h3>Persiapan</h3>
+  <div class="split">
+    <div><h4>Kreator</h4><ol class="steps"><li><div>Isi <b>Creator EVM Wallet</b> (<code>0x</code> + 40 hex) dan chain pilihan di profil dashboard.</div></li><li><div>Tanpa dompet, video tidak bisa dibeli via x402.</div></li></ol></div>
+    <div><h4>Platform</h4><ol class="steps"><li><div>Deploy <code>X402Splitter</code> dengan alamat admin.</div></li><li><div>Isi <code>X402_CONTRACT_ADDRESS</code>, <code>X402_ADMIN_WALLET</code>, <code>X402_ADMIN_PRIVKEY</code>, <code>X402_RPC_HTTP</code>, <code>X402_RPC_WSS</code>.</div></li><li><div>Aktifkan <code>x402_enabled</code> di Admin → Settings.</div></li></ol></div>
+  </div>
+  <p class="note">Batas waktu tanda tangan <code>X402_DEADLINE_SECS</code> default 900 detik (15 menit). Pembayaran kurang dari jumlah yang diminta dicatat sebagai <code>underpaid</code> dengan <code>missing_wei</code>.</p>
+</section>
+
+<section id="split">
+  <span class="eyebrow">Uang</span>
+  <h2>Pembagian hasil</h2>
+  <p>Diatur satu variabel: <code>CREATOR_SPLIT_BP</code> (basis poin, 10.000 = 100%). Default 9000: kreator 90%, platform 10%. Kontrak x402 menerima persentase sebagai parameter bertanda tangan, jadi mengubah env tidak perlu deploy ulang kontrak.</p>
+  <div class="calcs">
+    <div><h4>Video $10.00 via wallet, tanpa affiliate</h4>
+      <div class="calc">
+        <div class="row"><span>Pembeli dibayar</span><span class="neg">−1.000 sen</span></div>
+        <div class="row"><span>Kreator (90%)</span><span class="pos">+900 sen</span></div>
+        <div class="row"><span>Platform (10%, tidak dikredit)</span><span>100 sen</span></div>
+        <div class="row tot"><span>Bersih kreator</span><span>$9.00</span></div>
+      </div></div>
+    <div><h4>Video $10.00 via wallet, affiliate 20%</h4>
+      <div class="calc">
+        <div class="row"><span>Pembeli dibayar</span><span class="neg">−1.000 sen</span></div>
+        <div class="row"><span>Kreator (90%)</span><span class="pos">+900 sen</span></div>
+        <div class="row"><span>Komisi = 1.000 × 20 / 100</span><span class="neg">−200 sen</span></div>
+        <div class="row"><span>Affiliate</span><span class="pos">+200 sen</span></div>
+        <div class="row tot"><span>Bersih kreator</span><span>$7.00</span></div>
+      </div></div>
+    <div><h4>Video $10.00 via x402 USDC</h4>
+      <div class="calc">
+        <div class="row"><span>Pembeli kirim ke kontrak</span><span class="neg">10.000000 USDC</span></div>
+        <div class="row"><span>Dompet kreator</span><span class="pos">9.000000 USDC</span></div>
+        <div class="row"><span>Dompet admin</span><span class="pos">1.000000 USDC</span></div>
+        <div class="row tot"><span>Gas fee</span><span>dibayar pembeli</span></div>
+      </div></div>
+  </div>
+</section>
+
+<section id="affiliate">
+  <span class="eyebrow">Uang</span>
+  <h2>Komisi affiliate</h2>
+  <p>Jika pembeli datang dari link <code>watch.html?video_id=…&amp;ref=username</code>, komisi dihitung setelah pembayaran berhasil di jalur mana pun. Komisi <b>selalu</b> diselesaikan di wallet internal: dipotong dari saldo kreator dan dikreditkan ke saldo affiliate.</p>
+  <ul>
+    <li>Kreator mengaktifkan program per video dengan persentase 0–90%.</li>
+    <li>Affiliate tidak boleh pembeli itu sendiri atau pemilik video.</li>
+    <li>Jika saldo wallet kreator kurang, komisi dilewati tanpa membatalkan pembelian. Untuk x402 dan fiat, kreator perlu menyimpan saldo wallet agar komisi terbayar.</li>
+    <li>Komisi berjalan di transaksi terpisah setelah pembelian tersimpan.</li>
+  </ul>
+</section>
+
+<section id="admin">
+  <span class="eyebrow">Operasional</span>
+  <h2>Pengaturan admin</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Pengaturan</th><th>Tempat</th><th>Fungsi</th></tr></thead>
+    <tbody>
+      <tr><td><code>PAYMENT_PLUGINS</code></td><td>Env</td><td>Provider yang dimuat, misal <code>xendit,paypal</code></td></tr>
+      <tr><td><code>PAYMENT_DEFAULT_PROVIDER</code></td><td>Env / Settings</td><td>Provider untuk <code>POST /api/pay/start</code></td></tr>
+      <tr><td><code>wallet_payment_enabled</code></td><td>Admin → Settings</td><td>Izinkan beli video dengan saldo</td></tr>
+      <tr><td><code>wallet_transfer_enabled</code></td><td>Admin → Settings</td><td>Izinkan transfer antar pengguna</td></tr>
+      <tr><td><code>paypal / stripe / xendit / midtrans _enabled</code></td><td>Admin → Settings</td><td>Hanya bisa dinyalakan jika env provider lengkap</td></tr>
+      <tr><td><code>x402_enabled</code></td><td>Admin → Settings</td><td>Izinkan pembayaran kripto</td></tr>
+      <tr><td><code>CREATOR_SPLIT_BP</code></td><td>Env</td><td>Bagian kreator, restart setelah diubah</td></tr>
+      <tr><td><code>DOLLAR_USD_TO_RUPIAH</code></td><td>Env</td><td>Kurs tampilan USD ke IDR</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Rutinitas harian admin</h3>
+  <ol class="steps">
+    <li><div>Cocokkan deposit <code>pending</code> dengan mutasi bank, lalu approve atau reject.</div></li>
+    <li><div>Proses penarikan <code>pending</code>: kirim dana, lalu complete.</div></li>
+    <li><div>Di <code>admin/payments.html</code>, cairkan invoice fiat yang <code>paid</code> tetapi belum <code>disbursed</code> (non-Xendit), atau ulangi pencairan Xendit yang gagal.</div></li>
+    <li><div>Rekonsiliasi: jumlah semua <code>balance_cents</code> harus sama dengan kas platform yang menjadi hak pengguna.</div></li>
+  </ol>
+</section>
+
+<section id="alternatif">
+  <span class="eyebrow">Pilihan</span>
+  <h2>Alternatif &amp; rekomendasi</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Kebutuhan</th><th>Pilihan yang ada</th><th>Alternatif / pengembangan</th></tr></thead>
+    <tbody>
+      <tr><td>Pembeli Indonesia, rupiah</td><td>Xendit atau Midtrans (VA, e-wallet, QRIS)</td><td>Xendit lebih disarankan karena pencairan ke kreator sudah otomatis</td></tr>
+      <tr><td>Pembeli internasional</td><td>Stripe, PayPal</td><td>Stripe Connect atau PayPal Payouts agar pencairan otomatis (belum dibuat)</td></tr>
+      <tr><td>Top up saldo tanpa admin</td><td>Belum ada; deposit manual</td><td>Top up wallet lewat gateway: invoice deposit ke Xendit/Midtrans, webhook mengkredit saldo otomatis</td></tr>
+      <tr><td>Bukti transfer deposit</td><td>Catatan teks</td><td>Upload bukti transfer, atau VA khusus per pengguna agar cocok otomatis</td></tr>
+      <tr><td>Kripto dengan harga stabil</td><td>USDC di Polygon</td><td>Tambah USDT/USDC di chain lain lewat <code>pay_tokens</code> + deploy kontrak</td></tr>
+      <tr><td>Kripto tanpa repot dompet</td><td>Belum ada</td><td>MetaMask sudah terintegrasi; WalletConnect untuk dompet mobile belum</td></tr>
+      <tr><td>Paket / langganan</td><td>Belum ada; per video</td><td>Bundle atau pass berjangka sebagai produk baru</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">Rekomendasi untuk peluncuran di Indonesia: aktifkan <b>Xendit + wallet internal</b> terlebih dulu. Jalankan x402 di testnet sampai antarmuka dompet selesai dan aspek regulasi kripto sudah dikaji.</p>
+</section>
+
+<section id="gap">
+  <span class="eyebrow">Untuk tim pengembang</span>
+  <h2>Status perbaikan (9 Nov 2026)</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Masalah sebelumnya</th><th>Status</th><th>Perbaikan</th></tr></thead>
+    <tbody>
+      <tr><td>UI x402 tidak bisa membayar</td><td><span class="chip ok">Diperbaiki</span></td><td><code>watch.html</code>: connect MetaMask, ganti jaringan, approve ERC-20 sebesar invoice, panggil kontrak, konfirmasi otomatis, dan bisa dilanjutkan setelah reload</td></tr>
+      <tr><td>Masa berlaku x402 10 vs 15 menit</td><td><span class="chip ok">Diperbaiki</span></td><td><code>expires_at</code> = <code>deadline</code> tanda tangan (<code>X402_DEADLINE_SECS</code>)</td></tr>
+      <tr><td>Webhook tidak mencocokkan jumlah</td><td><span class="chip ok">Diperbaiki</span></td><td>Nominal dan mata uang dicek; selisih → status <code>amount_mismatch</code> tanpa akses</td></tr>
+      <tr><td>Stripe tanpa batas umur timestamp</td><td><span class="chip ok">Diperbaiki</span></td><td>Toleransi 300 detik, perbandingan constant-time</td></tr>
+      <tr><td>PayPal <code>ORDER.APPROVED</code> dianggap lunas</td><td><span class="chip ok">Diperbaiki</span></td><td>Server melakukan capture; lunas hanya jika capture <code>COMPLETED</code></td></tr>
+      <tr><td>Link affiliate <code>ref=false</code></td><td><span class="chip ok">Diperbaiki</span></td><td>Memakai username asli, di-URL-encode</td></tr>
+      <tr><td>Pembeli diblokir dapat akses via fiat</td><td><span class="chip ok">Diperbaiki</span></td><td>Ditolak saat membuat invoice; webhook menandai <code>paid_blocked</code> tanpa akses</td></tr>
+      <tr><td>Deposit tanpa info rekening dan bukti</td><td><span class="chip ok">Diperbaiki</span></td><td>Instruksi rekening, referensi, nama pengirim, unggah bukti, tombol View proof untuk admin</td></tr>
+      <tr><td>Kurs tetap dari env</td><td><span class="chip ok">Diperbaiki</span></td><td>Job kurs live + override admin + riwayat; harga video bisa dalam rupiah</td></tr>
+      <tr><td>Token native dihargai 1:1 USD</td><td><span class="chip ok">Diperbaiki</span></td><td>Oracle harga CoinGecko; tanpa harga segar token disembunyikan</td></tr>
+      <tr><td>XSS di panel admin wallet/payments; nominal admin salah 100×</td><td><span class="chip ok">Diperbaiki</span></td><td>Tombol memakai id, bukan JSON di atribut; format sen/rupiah benar</td></tr>
+      <tr><td>Endpoint <code>/api/pay/*</code> dikecualikan dari CSRF; <code>success_url</code>/<code>cancel_url</code> tidak dibatasi domain</td><td><span class="chip warn">Belum</span></td><td>Batasi URL ke <code>BASE_URL</code>; terapkan pemeriksaan Origin</td></tr>
+      <tr><td>Uji sandbox Midtrans/Xendit/Stripe/PayPal dan uji x402 dengan dompet sungguhan</td><td><span class="chip warn">Belum</span></td><td>Jalankan checklist di <code>setup.html</code></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="regulasi">
+  <span class="eyebrow">ISO/IEC 27001:2022 · UU PDP · regulasi pembayaran</span>
+  <h2>Regulasi &amp; kepatuhan</h2>
+  <div class="callout">
+    <p><b>Perlu kajian hukum sebelum produksi di Indonesia.</b> Poin berikut adalah area risiko yang perlu dikonfirmasi oleh tim legal atau kepatuhan. Bagian ini bukan nasihat hukum.</p>
+  </div>
+  <div class="tw"><table>
+    <thead><tr><th>Area</th><th>Risiko</th><th>Langkah yang disarankan</th></tr></thead>
+    <tbody>
+      <tr><td>Wallet internal</td><td>Menyimpan dana pengguna yang bisa ditransfer dan ditarik dapat dikategorikan sebagai uang elektronik yang memerlukan izin Bank Indonesia.</td><td>Kaji ketentuan BI; pertimbangkan membatasi wallet menjadi saldo kredit non-transferable, atau memakai mitra berlisensi.</td></tr>
+      <tr><td>Pembayaran kripto</td><td>Di Indonesia, transaksi pembayaran wajib memakai rupiah dan aset kripto bukan alat pembayaran yang sah; aset kripto diawasi sebagai aset digital.</td><td>Batasi x402 untuk pasar di luar Indonesia atau testnet sampai ada kajian hukum.</td></tr>
+      <tr><td>Anti pencucian uang</td><td>Deposit, transfer P2P, dan penarikan tanpa verifikasi identitas.</td><td>Batas nominal, KYC untuk penarikan, log audit admin (A.5.33, A.8.15).</td></tr>
+      <tr><td>Data kartu</td><td>Aplikasi tidak menyimpan data kartu; semua lewat halaman provider.</td><td>Pertahankan pola redirect agar cakupan PCI DSS minimal.</td></tr>
+      <tr><td>Data pribadi</td><td>Nomor rekening, alamat dompet, email pembeli, catatan transfer tersimpan di database dan sebagian muncul di log/error.</td><td>Masking di log, batasi akses admin, retensi data, enkripsi kolom sensitif (UU PDP 27/2022, A.8.11, A.8.12).</td></tr>
+      <tr><td>Kunci admin x402</td><td><code>X402_ADMIN_PRIVKEY</code> menandatangani semua invoice; jika bocor, invoice palsu bisa dibuat.</td><td>Simpan hanya di secret env Dokploy, akses terbatas, rotasi dengan deploy ulang kontrak (A.8.24).</td></tr>
+      <tr><td>Rekonsiliasi</td><td>Approve deposit manual rentan salah atau penipuan internal.</td><td>Pemisahan tugas (maker-checker) untuk approve dan complete (A.5.3).</td></tr>
+    </tbody>
+  </table></div>
+</section>
+</main>
+</div>
+<script>
+// Diagram dirender oleh viewer Artifact. Saat dibuka langsung sebagai file, muat Mermaid sebagai cadangan.
+setTimeout(function(){
+  if (document.querySelector('pre.mermaid svg') || window.mermaid) return;
+  var s=document.createElement('script');
+  s.src='https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js';
+  s.onload=function(){
+    var dark=matchMedia('(prefers-color-scheme: dark)').matches||document.documentElement.dataset.theme==='dark';
+    mermaid.initialize({startOnLoad:false,theme:dark?'dark':'neutral'});
+    mermaid.run({querySelector:'pre.mermaid'});
+  };
+  document.head.appendChild(s);
+},1500);
+</script>
+</body>
+</html>

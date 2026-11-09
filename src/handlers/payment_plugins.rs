@@ -35,6 +35,9 @@ pub struct CreateInvoicePayload {
     pub video_id: String,
     #[allow(dead_code)]
     pub amount_cents: i64,
+    /// Ignored: the charge currency is chosen server-side per provider.
+    #[allow(dead_code)]
+    #[serde(default)]
     pub currency: String,
     pub buyer_email: Option<String>,
     pub buyer_name: Option<String>,
@@ -52,6 +55,22 @@ pub struct ConfirmPaymentPayload {
     pub provider_payload: Option<serde_json::Value>,
     #[serde(default)]
     pub signature_headers: std::collections::HashMap<String, String>,
+}
+
+/// True when `creator_id` has an active block on `buyer_id`
+/// (see migrations/035_creator_blocked_users.sql).
+async fn buyer_blocked_by_creator(pool: &sqlx::PgPool, creator_id: &str, buyer_id: &str) -> bool {
+    sqlx::query_scalar::<_, bool>(
+        r#"SELECT EXISTS(
+               SELECT 1 FROM creator_blocked_users
+               WHERE creator_user_id = $1 AND blocked_user_id = $2
+                 AND (expires_at IS NULL OR expires_at > NOW()))"#,
+    )
+    .bind(creator_id)
+    .bind(buyer_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(false)
 }
 
 async fn runtime_registry(state: &PaymentPluginState) -> PaymentPluginRegistry {
@@ -167,6 +186,32 @@ async fn create_invoice_with_provider(
         return Json(json!({"ok": false, "error": "invalid video price"}));
     }
 
+    // Prices are stored in USD cents. Convert to the unit each provider
+    // expects and never trust the currency sent by the browser:
+    //   - Midtrans / Xendit: whole rupiah (IDR has no minor unit)
+    //   - Stripe / PayPal:   USD cents (the plugins handle formatting)
+    // The charged amount and currency are stored on the invoice so the
+    // webhook can verify that the provider collected the full amount.
+    //   - Rupiah-priced videos (price_currency='IDR') charge price_idr exactly.
+    let (charge_currency, charge_amount): (String, i64) = match provider.as_str() {
+        "midtrans" | "xendit" => (
+            "IDR".to_string(),
+            match crate::fx::video_idr_price(&state.pool, &payload.video_id).await {
+                Some(idr) => idr,
+                None => crate::fx::cents_to_idr(video_price_cents, state.cfg.dollar_usd_to_rupiah),
+            },
+        ),
+        _ => ("USD".to_string(), video_price_cents),
+    };
+    if charge_amount <= 0 {
+        return Json(json!({"ok": false, "error": "free videos do not need a payment"}));
+    }
+
+    // A buyer blocked by the creator must not be able to start a purchase.
+    if buyer_blocked_by_creator(&state.pool, &creator_id, &buyer_id).await {
+        return Json(json!({"ok": false, "error": "you cannot purchase this creator's videos"}));
+    }
+
     let buyer_email_from_db: Option<String> =
         sqlx::query_scalar("SELECT email FROM users WHERE id = $1 LIMIT 1")
             .bind(&buyer_id)
@@ -188,8 +233,8 @@ async fn create_invoice_with_provider(
         buyer_id,
         payload.video_id,
         creator_id,
-        video_price_cents,
-        payload.currency,
+        charge_amount,
+        charge_currency,
         buyer_email_from_db.as_deref().unwrap_or(""),
     )
     .execute(&state.pool)
@@ -216,8 +261,8 @@ async fn create_invoice_with_provider(
     let request = CreateInvoiceRequest {
         user_id: buyer_id,
         video_id: payload.video_id,
-        amount_cents: video_price_cents,
-        currency: payload.currency,
+        amount_cents: charge_amount,
+        currency: charge_currency,
         buyer_email: buyer_email_from_db.or(payload.buyer_email),
         buyer_name: payload.buyer_name,
         success_url: payload.success_url,
@@ -405,6 +450,44 @@ pub async fn handle_webhook(
         }));
     }
 
+    // The provider must have collected at least the invoiced amount in the
+    // invoiced currency. Anything else is held for admin review.
+    let currency_ok = result.currency.eq_ignore_ascii_case(&inv.currency);
+    if !currency_ok || result.paid_amount_cents < inv.amount {
+        tracing::warn!(
+            "fiat webhook amount mismatch: provider={provider} uid={invoice_uid} \
+             expected={} {} got={} {}",
+            inv.amount,
+            inv.currency,
+            result.paid_amount_cents,
+            result.currency
+        );
+        let _ = sqlx::query(
+            "UPDATE fiat_invoices SET status = 'amount_mismatch' WHERE invoice_uid = $1",
+        )
+        .bind(invoice_uid)
+        .execute(&state.pool)
+        .await;
+        return Json(json!({"ok": false, "error": "paid amount does not match invoice"}));
+    }
+
+    // A buyer blocked by the creator after the invoice was created does not
+    // get access. The money was collected, so flag the invoice for a refund.
+    if buyer_blocked_by_creator(&state.pool, &inv.creator_id, &inv.user_id).await {
+        tracing::warn!(
+            "fiat webhook: buyer {} is blocked by creator {}; access not granted (uid={invoice_uid})",
+            inv.user_id,
+            inv.creator_id
+        );
+        let _ = sqlx::query(
+            "UPDATE fiat_invoices SET status = 'paid_blocked', paid_at = NOW() WHERE invoice_uid = $1",
+        )
+        .bind(invoice_uid)
+        .execute(&state.pool)
+        .await;
+        return Json(json!({"ok": true, "status": "paid_blocked", "invoice_id": invoice_uid}));
+    }
+
     let username = inv.buyer_username.clone();
 
     let _ = sqlx::query!(
@@ -459,12 +542,22 @@ pub async fn handle_webhook(
             });
 
     if let Some(ref_username) = aff_ref.as_deref().filter(|s| !s.is_empty()) {
+        // Commissions are settled in the USD-cent wallet ledger, so use the
+        // video price (USD cents), not the provider amount (may be IDR).
+        let price_usd_cents: i64 =
+            sqlx::query_scalar("SELECT price_cents FROM videos WHERE id = $1")
+                .bind(&inv.video_id)
+                .fetch_optional(&state.pool)
+                .await
+                .ok()
+                .flatten()
+                .unwrap_or(0);
         if let Err(e) = commission::process_affiliate_commission(
             &state.pool,
             &inv.video_id,
             &inv.user_id,
             &inv.creator_id,
-            inv.amount,
+            price_usd_cents,
             ref_username,
             &provider,
             Some(invoice_uid.as_str()),

@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PPV Stream ERD</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,750&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: left rail of domain links + one reading column; each domain = diagram, then table dictionary */
+:root{
+  --bg:#f5f7f8; --surface:#ffffff; --ink:#132029; --muted:#5a6b75; --line:#d9e1e5;
+  --accent:#0b6e79; --accent-soft:#e1f1f2; --pii:#a3470f; --pii-soft:#fbeadf; --code-bg:#edf2f4;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f171c; --surface:#16222a; --ink:#e3ebef; --muted:#93a5ae; --line:#26363f;
+  --accent:#4fc0c9; --accent-soft:#163a3f; --pii:#f0a06b; --pii-soft:#3a2416; --code-bg:#1c2b33; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f171c; --surface:#16222a; --ink:#e3ebef; --muted:#93a5ae; --line:#26363f;
+  --accent:#4fc0c9; --accent-soft:#163a3f; --pii:#f0a06b; --pii-soft:#3a2416; --code-bg:#1c2b33; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--f-body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1180px;margin:0 auto;padding-block:40px 80px;display:grid;grid-template-columns:220px minmax(0,1fr);gap:48px}
+nav{position:sticky;top:calc(env(safe-area-inset-top,0px) + 24px);align-self:start;display:flex;flex-direction:column;gap:4px;font-size:13.5px}
+nav .lbl{font:600 11px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+nav a{color:var(--muted);text-decoration:none;padding:4px 10px;border-left:2px solid var(--line)}
+nav a:hover,nav a:focus-visible{color:var(--accent);border-left-color:var(--accent);outline:none}
+main{min-width:0;display:flex;flex-direction:column;gap:56px}
+header{display:flex;flex-direction:column;gap:14px}
+.eyebrow{font:500 12px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+h1{font:750 clamp(34px,5vw,52px)/1.05 var(--f-display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h2{font:700 28px/1.15 var(--f-display);margin:0;text-wrap:balance}
+h3{font:600 16px/1.3 var(--f-mono);margin:0}
+p{margin:0;max-width:68ch}
+.lede{font-size:17px;color:var(--muted)}
+.meta{display:flex;flex-wrap:wrap;gap:8px 20px;font:13px var(--f-mono);color:var(--muted)}
+.meta b{color:var(--ink);font-weight:500}
+section{display:flex;flex-direction:column;gap:18px;scroll-margin-top:24px}
+.diagram{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:20px;overflow-x:auto}
+.diagram pre.mermaid{margin:0;background:none;text-align:center}
+.tables{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.tbl{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.tbl p{font-size:14px;color:var(--muted)}
+.cols{font:12.5px/1.7 var(--f-mono);display:flex;flex-wrap:wrap;gap:4px 6px}
+.cols span{background:var(--code-bg);padding:0 6px;border-radius:3px}
+.cols span.pk{background:var(--accent-soft);color:var(--accent);font-weight:500}
+.cols span.pii{background:var(--pii-soft);color:var(--pii)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font:12.5px var(--f-mono);color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:600 11.5px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+tr:last-child td{border-bottom:0}
+code{font:13px var(--f-mono);background:var(--code-bg);padding:1px 5px;border-radius:3px}
+.chip{display:inline-block;font:500 11px var(--f-mono);padding:2px 8px;border-radius:99px;white-space:nowrap}
+.chip.high{background:var(--pii-soft);color:var(--pii)} .chip.med{background:var(--accent-soft);color:var(--accent)}
+ul{margin:0;padding-left:20px;max-width:68ch;display:flex;flex-direction:column;gap:6px}
+@media (max-width:860px){.wrap{grid-template-columns:1fr;gap:24px}nav{position:static;flex-direction:row;flex-wrap:wrap}nav .lbl{width:100%}nav a{border-left:0;border-bottom:2px solid var(--line)}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+<nav aria-label="Domain">
+  <span class="lbl">Domain</span>
+  <a href="#overview">Peta domain</a>
+  <a href="#akun">1 · Akun &amp; akses</a>
+  <a href="#video">2 · Video &amp; playback</a>
+  <a href="#bayar">3 · Pembayaran</a>
+  <a href="#wallet">4 · Wallet &amp; affiliate</a>
+  <a href="#chat">5 · Chat</a>
+  <a href="#config">6 · Storage &amp; konfigurasi</a>
+  <a href="#fed">7 · Federation</a>
+  <a href="#integrity">Integritas data</a>
+  <a href="#pdp">Data pribadi</a>
+</nav>
+
+<main>
+<header>
+  <span class="eyebrow">Dokumentasi database · PostgreSQL 16</span>
+  <h1>PPV Stream ERD</h1>
+  <p class="lede">Struktur tabel platform pay-per-view: akun, katalog video, pembayaran fiat dan kripto, wallet internal, affiliate, chat, storage, dan federation. Setiap domain punya diagram Mermaid sendiri agar tetap terbaca, diikuti kamus tabel.</p>
+  <div class="meta"><span><b>36</b> tabel</span><span>Sumber <b>sql/</b> (sqlx) + <b>migrations/</b></span><span>Versi app <b>0.2.0</b></span><span>Diperbarui <b>9 Nov 2026</b></span></div>
+  <div class="legend"><span><i style="background:var(--accent-soft);border:1px solid var(--accent)"></i>Primary key</span><span><i style="background:var(--pii-soft);border:1px solid var(--pii)"></i>Data pribadi / rahasia</span><span>Tipe <code>text</code> id = UUID string</span></div>
+</header>
+
+<section id="overview">
+  <span class="eyebrow">Gambaran</span>
+  <h2>Peta domain</h2>
+  <p>Hampir semua tabel berpusat pada <code>users</code> dan <code>videos</code>. Pembayaran punya tiga jalur (gateway fiat, x402 on-chain, wallet internal) yang semuanya berakhir di <code>purchases</code> sebagai bukti akses.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  A[Akun<br/>users · sessions] --> V[Video<br/>videos · allowlist]
+  A --> P[Pembayaran<br/>fiat_invoices · x402_invoices]
+  V --> P
+  P --> PU[(purchases)]
+  A --> W[Wallet<br/>wallet_transactions]
+  W --> PU
+  PU --> PB[Playback<br/>playback_sessions]
+  P --> AF[Affiliate<br/>affiliate_commissions]
+  W --> AF
+  A --> C[Chat]
+  V --> F[Federation<br/>actors · catalog · revenue]
+  P --> F
+  CFG[Konfigurasi<br/>payment · smtp · storage] -.-> P
+  CFG -.-> V
+  </pre></div>
+</section>
+
+<section id="akun">
+  <span class="eyebrow">Domain 1</span>
+  <h2>Akun &amp; akses</h2>
+  <p>Satu tabel <code>users</code> menampung semua peran: pembeli, kreator, affiliate, dan admin (<code>is_admin</code>). Sesi login disimpan di server, bukan di JWT.</p>
+  <div class="diagram"><pre class="mermaid">
+erDiagram
+  USERS ||--o{ SESSIONS : "login"
+  USERS ||--o{ PASSWORD_RESETS : "minta reset"
+  USERS ||--o{ CREATOR_BLOCKED_USERS : "kreator memblokir"
+  USERS ||--o{ CREATOR_BLOCKED_USERS : "diblokir"
+  USERS {
+    text id PK
+    text username UK
+    text email UK
+    text password_hash
+    int is_admin
+    bigint balance_cents
+    text bank_account
+    text wallet_account
+    text whatsapp
+    text actor_uri
+  }
+  SESSIONS {
+    text id PK
+    text user_id FK
+    int is_admin
+    text expires_at
+  }
+  PASSWORD_RESETS {
+    int id PK
+    text user_id FK
+    text token
+    int used
+  }
+  CREATOR_BLOCKED_USERS {
+    bigint id PK
+    text creator_user_id FK
+    text blocked_user_id FK
+    text ban_type "soft | hard"
+    timestamptz expires_at
+  }
+  </pre></div>
+  <div class="tables">
+    <div class="tbl"><h3>users</h3><p>Akun tunggal untuk semua peran. Saldo wallet disimpan langsung di sini dan dicatat di ledger.</p>
+      <div class="cols"><span class="pk">id</span><span>username</span><span class="pii">email</span><span class="pii">password_hash</span><span>is_admin</span><span class="pii">bank_account</span><span class="pii">wallet_account</span><span>wallet_chain_id</span><span class="pii">whatsapp</span><span>profile_desc</span><span>balance_cents</span><span>actor_uri</span><span>federation_enabled</span><span>discoverable</span><span>created_at</span></div></div>
+    <div class="tbl"><h3>sessions</h3><p>Token sesi di cookie dicocokkan ke baris ini. <code>is_admin</code> memisahkan sesi admin dan user.</p>
+      <div class="cols"><span class="pk">id</span><span>user_id</span><span>is_admin</span><span>created_at</span><span>expires_at</span></div></div>
+    <div class="tbl"><h3>password_resets</h3><p>Token sekali pakai untuk lupa password, dikirim lewat SMTP.</p>
+      <div class="cols"><span class="pk">id</span><span>user_id</span><span class="pii">token</span><span>expires_at</span><span>used</span><span>created_at</span></div></div>
+    <div class="tbl"><h3>creator_blocked_users</h3><p>Kreator memblokir pembeli tertentu. Trigger database menolak <code>purchases</code> dari pembeli yang diblokir.</p>
+      <div class="cols"><span class="pk">id</span><span>creator_user_id</span><span>blocked_user_id</span><span>ban_type</span><span>reason</span><span>expires_at</span><span>created_at</span><span>updated_at</span></div></div>
+  </div>
+</section>
+
+<section id="video">
+  <span class="eyebrow">Domain 2</span>
+  <h2>Video &amp; playback</h2>
+  <p>Video diunggah kreator, ditranskode ke HLS, lalu dijual. Akses diberikan lewat <code>purchases</code> atau <code>allowlist</code> (berbasis username). Setiap pemutaran membuat sesi HLS sementara.</p>
+  <div class="diagram"><pre class="mermaid">
+erDiagram
+  USERS ||--o{ VIDEOS : "mengunggah"
+  VIDEOS ||--o{ ALLOWLIST : "akses gratis"
+  USERS ||--o{ PURCHASES : "membeli"
+  VIDEOS ||--o{ PURCHASES : "dibeli"
+  VIDEOS ||--o| AFFILIATE_SETTINGS : "program affiliate"
+  USERS ||..o{ PLAYBACK_SESSIONS : "menonton"
+  VIDEOS ||..o{ PLAYBACK_SESSIONS : "diputar"
+  VIDEOS {
+    text id PK
+    text owner_id FK
+    text title
+    text description
+    bigint price_cents
+    text filename
+    boolean hls_ready
+    text hls_master
+    text processing_state
+    int duration_sec
+    text federation_visibility
+  }
+  ALLOWLIST {
+    text video_id PK
+    text username PK
+  }
+  PURCHASES {
+    text id PK
+    text user_id FK
+    text video_id FK
+    text created_at
+  }
+  PLAYBACK_SESSIONS {
+    text session_id PK
+    text user_id
+    text video_id
+    text session_dir
+    text status
+    timestamptz expires_at
+  }
+  AFFILIATE_SETTINGS {
+    text video_id PK
+    text owner_id FK
+    int commission_pct
+    boolean is_enabled
+  }
+  </pre></div>
+  <div class="tables">
+    <div class="tbl"><h3>videos</h3><p>Metadata video, status transcode (<code>processing_state</code>, <code>hls_ready</code>), dimensi, dan visibilitas federation.</p>
+      <div class="cols"><span class="pk">id</span><span>owner_id</span><span>title</span><span>description</span><span>price_cents</span><span>filename</span><span>hls_ready</span><span>hls_master</span><span>processing_state</span><span>last_error</span><span>width</span><span>height</span><span>duration_sec</span><span>object_uri</span><span>federation_visibility</span><span>federated_at</span><span>created_at</span></div></div>
+    <div class="tbl"><h3>purchases</h3><p>Bukti hak tonton. Dibuat setelah invoice fiat, invoice x402, atau pembayaran wallet berhasil.</p>
+      <div class="cols"><span class="pk">id</span><span>user_id</span><span>video_id</span><span>created_at</span></div></div>
+    <div class="tbl"><h3>allowlist</h3><p>Kreator memberi akses ke username tertentu tanpa pembelian. Kunci gabungan <code>(video_id, username)</code>.</p>
+      <div class="cols"><span class="pk">video_id</span><span class="pk">username</span></div></div>
+    <div class="tbl"><h3>playback_sessions</h3><p>Sesi HLS sekali pakai per penonton (dengan watermark). Dibersihkan oleh cleanup task setelah kedaluwarsa. Relasi bersifat logis, tanpa FK.</p>
+      <div class="cols"><span class="pk">session_id</span><span>user_id</span><span>video_id</span><span>session_dir</span><span>status</span><span>last_error</span><span>created_at</span><span>expires_at</span></div></div>
+    <div class="tbl"><h3>affiliate_settings</h3><p>Satu baris per video: persentase komisi untuk affiliate dan status aktif.</p>
+      <div class="cols"><span class="pk">video_id</span><span>owner_id</span><span>commission_pct</span><span>is_enabled</span><span>created_at</span><span>updated_at</span></div></div>
+  </div>
+</section>
+
+<section id="bayar">
+  <span class="eyebrow">Domain 3</span>
+  <h2>Pembayaran</h2>
+  <p>Dua tabel invoice terpisah: <code>fiat_invoices</code> untuk PayPal, Xendit, Stripe, Midtrans; <code>x402_invoices</code> untuk pembayaran token on-chain yang dipantau watcher. Keduanya menyimpan <code>creator_id</code> agar pembagian hasil (<code>CREATOR_SPLIT_BP</code>) dan pencairan bisa dilacak.</p>
+  <div class="diagram"><pre class="mermaid">
+erDiagram
+  USERS ||--o{ FIAT_INVOICES : "pembeli"
+  USERS ||--o{ FIAT_INVOICES : "kreator"
+  VIDEOS ||--o{ FIAT_INVOICES : "ditagih"
+  USERS ||--o{ X402_INVOICES : "pembeli"
+  USERS ||--o{ X402_INVOICES : "kreator"
+  VIDEOS ||--o{ X402_INVOICES : "ditagih"
+  PAY_TOKENS ||..o{ X402_INVOICES : "token dipakai"
+  FIAT_INVOICES {
+    bigint id PK
+    text invoice_uid UK
+    text provider
+    text provider_ref
+    bigint amount
+    text currency
+    text status
+    text buyer_email
+    jsonb meta
+    timestamptz disbursed_at
+    text affiliate_ref
+  }
+  X402_INVOICES {
+    bigint id PK
+    text invoice_uid UK
+    text invoice_uid_hash UK
+    bigint chain_id
+    text token_symbol
+    numeric required_amount_wei
+    numeric paid_amount_wei
+    text status
+    text payer_address
+    text tx_hash
+    timestamptz expires_at
+  }
+  PAY_TOKENS {
+    int id PK
+    bigint chain_id
+    text symbol
+    int decimals
+    text erc20_address
+    text token_kind "NATIVE | ERC20 | STABLE"
+    boolean is_active
+  }
+  PAYMENT_SETTINGS {
+    boolean id PK "singleton"
+    boolean wallet_payment_enabled
+    boolean paypal_enabled
+    boolean x402_enabled
+    text default_provider
+  }
+  </pre></div>
+  <div class="tables">
+    <div class="tbl"><h3>fiat_invoices</h3><p>Invoice gateway. Status berubah lewat webhook atau konfirmasi; admin mencatat pencairan ke kreator (<code>disbursed_at</code>, <code>disburse_ref</code>).</p>
+      <div class="cols"><span class="pk">id</span><span>invoice_uid</span><span>provider</span><span>provider_ref</span><span>user_id</span><span>video_id</span><span>creator_id</span><span>amount</span><span>currency</span><span>status</span><span>payment_url</span><span class="pii">buyer_email</span><span>meta</span><span>created_at</span><span>paid_at</span><span>disbursed_at</span><span>disburse_ref</span><span>affiliate_ref</span></div></div>
+    <div class="tbl"><h3>x402_invoices</h3><p>Invoice kripto. <code>invoice_uid_hash</code> dipakai kontrak untuk mencocokkan event pembayaran; mendukung kurang bayar (<code>paid_amount_wei</code>) dan batas waktu.</p>
+      <div class="cols"><span class="pk">id</span><span>invoice_uid</span><span>invoice_uid_hash</span><span>user_id</span><span>video_id</span><span>creator_id</span><span>chain_id</span><span>token_symbol</span><span>token_address</span><span>price_cents</span><span>token_amount</span><span>required_amount_wei</span><span>paid_amount_wei</span><span>invoice_group_uid</span><span>status</span><span class="pii">payer_address</span><span>tx_hash</span><span>paid_at</span><span>expires_at</span><span>affiliate_ref</span></div></div>
+    <div class="tbl"><h3>pay_tokens</h3><p>Daftar token yang diterima per chain (native, ERC-20, stablecoin). Ada view kompatibilitas <code>pay_tokens_compat</code>.</p>
+      <div class="cols"><span class="pk">id</span><span>chain</span><span>chain_id</span><span>symbol</span><span>decimals</span><span>erc20_address</span><span>is_active</span><span>token_kind</span><span>is_native</span><span>updated_at</span></div></div>
+    <div class="tbl"><h3>payment_settings</h3><p>Baris tunggal: menyalakan atau mematikan tiap metode pembayaran dari panel admin.</p>
+      <div class="cols"><span class="pk">id</span><span>wallet_payment_enabled</span><span>wallet_transfer_enabled</span><span>paypal_enabled</span><span>stripe_enabled</span><span>xendit_enabled</span><span>midtrans_enabled</span><span>x402_enabled</span><span>default_provider</span><span>updated_at</span></div></div>
+  </div>
+</section>
+
+<section id="wallet">
+  <span class="eyebrow">Domain 4</span>
+  <h2>Wallet &amp; affiliate</h2>
+  <p><code>wallet_transactions</code> adalah ledger: setiap deposit, penarikan, transfer, dan pembelian memakai saldo tercatat dengan <code>balance_after</code>. Deposit dan penarikan menunggu persetujuan admin. Komisi affiliate dicatat terpisah per pembelian.</p>
+  <div class="diagram"><pre class="mermaid">
+erDiagram
+  USERS ||--o{ WALLET_TRANSACTIONS : "pemilik ledger"
+  USERS |o--o{ WALLET_TRANSACTIONS : "lawan transaksi"
+  VIDEOS ||--o{ AFFILIATE_COMMISSIONS : "menghasilkan"
+  USERS ||--o{ AFFILIATE_COMMISSIONS : "affiliate"
+  USERS ||--o{ AFFILIATE_COMMISSIONS : "pembeli"
+  USERS ||--o{ AFFILIATE_COMMISSIONS : "kreator"
+  WALLET_TRANSACTIONS {
+    bigint id PK
+    text user_id FK
+    text ref_user_id FK
+    text txn_type "deposit | withdraw | transfer | pay"
+    bigint amount_cents
+    bigint balance_after
+    text status "pending | approved | completed | rejected"
+    text admin_note
+  }
+  AFFILIATE_COMMISSIONS {
+    bigint id PK
+    text video_id FK
+    text affiliate_id FK
+    text buyer_id FK
+    text owner_id FK
+    bigint purchase_price_cents
+    bigint commission_cents
+    text payment_method
+    text ref_invoice_uid
+  }
+  </pre></div>
+  <div class="tables">
+    <div class="tbl"><h3>wallet_transactions</h3><p>Ledger saldo internal. Status alur admin: approve, complete, atau reject.</p>
+      <div class="cols"><span class="pk">id</span><span>user_id</span><span>ref_user_id</span><span>txn_type</span><span>amount_cents</span><span>balance_after</span><span>status</span><span>note</span><span>admin_note</span><span>created_at</span><span>updated_at</span></div></div>
+    <div class="tbl"><h3>affiliate_commissions</h3><p>Satu baris per pembelian lewat link affiliate. <code>ref_invoice_uid</code> menunjuk ke invoice fiat atau x402.</p>
+      <div class="cols"><span class="pk">id</span><span>video_id</span><span>affiliate_id</span><span>buyer_id</span><span>owner_id</span><span>purchase_price_cents</span><span>commission_cents</span><span>payment_method</span><span>ref_invoice_uid</span><span>created_at</span></div></div>
+  </div>
+</section>
+
+<section id="chat">
+  <span class="eyebrow">Domain 5</span>
+  <h2>Chat</h2>
+  <p>Dua jenis percakapan: <code>support</code> (user ke admin) dan <code>direct</code> (user ke user). Kolom peserta berbeda per jenis.</p>
+  <div class="diagram"><pre class="mermaid">
+erDiagram
+  USERS ||--o{ CHAT_CONVERSATIONS : "peserta / pembuat"
+  CHAT_CONVERSATIONS ||--o{ CHAT_MESSAGES : "berisi"
+  USERS ||--o{ CHAT_MESSAGES : "mengirim"
+  CHAT_CONVERSATIONS {
+    text id PK
+    text conversation_type "support | direct"
+    text direct_user_a_id FK
+    text direct_user_b_id FK
+    text support_user_id FK
+    text created_by_user_id FK
+    text last_message_at
+  }
+  CHAT_MESSAGES {
+    text id PK
+    text conversation_id FK
+    text sender_user_id FK
+    text body
+    text created_at
+  }
+  </pre></div>
+  <div class="tables">
+    <div class="tbl"><h3>chat_conversations</h3><p>Header percakapan, diurutkan berdasarkan <code>last_message_at</code>.</p>
+      <div class="cols"><span class="pk">id</span><span>conversation_type</span><span>direct_user_a_id</span><span>direct_user_b_id</span><span>support_user_id</span><span>created_by_user_id</span><span>created_at</span><span>updated_at</span><span>last_message_at</span></div></div>
+    <div class="tbl"><h3>chat_messages</h3><p>Isi pesan. Bisa memuat data pribadi yang diketik pengguna.</p>
+      <div class="cols"><span class="pk">id</span><span>conversation_id</span><span>sender_user_id</span><span class="pii">body</span><span>created_at</span></div></div>
+  </div>
+</section>
+
+<section id="config">
+  <span class="eyebrow">Domain 6</span>
+  <h2>Storage &amp; konfigurasi</h2>
+  <p>Pengaturan yang diubah dari panel admin disimpan sebagai tabel singleton. Migrasi file dari disk lokal ke S3-compatible storage berjalan sebagai job dengan item per file, bisa dilanjutkan dan diulang.</p>
+  <div class="diagram"><pre class="mermaid">
+erDiagram
+  USERS |o--o{ STORAGE_MIGRATION_JOBS : "dimulai oleh admin"
+  STORAGE_MIGRATION_JOBS ||--o{ STORAGE_MIGRATION_JOB_ITEMS : "file"
+  STORAGE_SETTINGS {
+    boolean id PK "singleton"
+    text backend "local | s3"
+    text bucket
+    text endpoint
+    text secret_key
+  }
+  STORAGE_MIGRATION_JOBS {
+    text id PK
+    text status
+    text backend
+    bigint total_files
+    bigint copied_files
+    bigint failed_files
+    text started_by_user_id FK
+  }
+  STORAGE_MIGRATION_JOB_ITEMS {
+    text id PK
+    text job_id FK
+    text scope
+    text source_path
+    text object_key
+    text status
+    bigint retry_attempts
+  }
+  SMTP_SETTINGS {
+    int id PK
+    text host
+    int port
+    text username
+    text password
+    boolean enabled
+  }
+  </pre></div>
+  <div class="tables">
+    <div class="tbl"><h3>storage_settings</h3><p>Backend penyimpanan aktif dan kredensial S3/R2/B2/MinIO.</p>
+      <div class="cols"><span class="pk">id</span><span>backend</span><span>bucket</span><span>region</span><span class="pii">access_key</span><span class="pii">secret_key</span><span>endpoint</span><span>public_url</span><span>path_style</span><span>updated_at</span></div></div>
+    <div class="tbl"><h3>storage_migration_jobs</h3><p>Satu job migrasi: cakupan (uploads, media) dan penghitung progres.</p>
+      <div class="cols"><span class="pk">id</span><span>status</span><span>backend</span><span>bucket</span><span>endpoint</span><span>include_uploads</span><span>include_media</span><span>total_files</span><span>copied_files</span><span>failed_files</span><span>last_error</span><span>started_by_user_id</span><span>started_at</span><span>completed_at</span></div></div>
+    <div class="tbl"><h3>storage_migration_job_items</h3><p>Status per file, termasuk jumlah percobaan ulang.</p>
+      <div class="cols"><span class="pk">id</span><span>job_id</span><span>scope</span><span>source_path</span><span>object_key</span><span>status</span><span>retry_attempts</span><span>error_message</span><span>created_at</span></div></div>
+    <div class="tbl"><h3>smtp_settings</h3><p>Server email untuk reset password dan notifikasi.</p>
+      <div class="cols"><span class="pk">id</span><span>host</span><span>port</span><span>username</span><span class="pii">password</span><span>from_email</span><span>from_name</span><span>use_tls</span><span>enabled</span><span>updated_at</span></div></div>
+  </div>
+</section>
+
+<section id="fed">
+  <span class="eyebrow">Domain 7</span>
+  <h2>Federation</h2>
+  <p>Model <em>index-only</em> berbasis ActivityPub: instance lain hanya menerima metadata katalog, bukan file video. Pembelian tetap terjadi di instance asal, dan instance perujuk mendapat bagi hasil.</p>
+  <div class="diagram"><pre class="mermaid">
+erDiagram
+  USERS |o--o| FEDERATION_ACTORS : "aktor lokal"
+  FEDERATION_ACTORS ||--o{ FEDERATION_FOLLOWS : "follower"
+  FEDERATION_ACTORS ||--o{ FEDERATION_FOLLOWS : "following"
+  FEDERATION_ACTIVITIES ||--o{ FEDERATION_DELIVERY_JOBS : "dikirim ke inbox"
+  FEDERATION_INSTANCES ||..o{ REMOTE_VIDEO_CATALOG : "origin_domain"
+  FEDERATION_REFERRALS |o--o{ FEDERATION_REVENUE_SHARES : "rujukan"
+  REVENUE_SHARE_POLICIES ||..o{ FEDERATION_REVENUE_SHARES : "persentase"
+  FEDERATION_REVENUE_SHARES ||--o{ REVENUE_LEDGER_ENTRIES : "jurnal"
+  FEDERATION_INSTANCES {
+    uuid id PK
+    text domain UK
+    text status
+    text trust_level
+  }
+  FEDERATION_ACTORS {
+    uuid id PK
+    text local_user_id FK
+    text actor_uri UK
+    text inbox_url
+    text public_key_pem
+    text private_key_encrypted
+  }
+  REMOTE_VIDEO_CATALOG {
+    uuid id PK
+    text object_uri UK
+    text origin_domain
+    text title
+    numeric price_amount
+    text availability_status
+  }
+  FEDERATION_REVENUE_SHARES {
+    uuid id PK
+    text invoice_id
+    text invoice_type
+    bigint gross_cents
+    int share_basis_points
+    bigint share_cents
+    text status
+  }
+  </pre></div>
+  <div class="tw"><table>
+    <thead><tr><th>Tabel</th><th>Fungsi</th></tr></thead>
+    <tbody>
+      <tr><td><code>federation_instances</code></td><td>Server PPV/ActivityPub lain yang dikenal, beserta status dan tingkat kepercayaan.</td></tr>
+      <tr><td><code>federation_actors</code></td><td>Aktor lokal (terhubung ke <code>users</code>) dan remote; menyimpan kunci RSA untuk HTTP Signatures.</td></tr>
+      <tr><td><code>federation_follows</code></td><td>Relasi follow antar aktor, unik per pasangan.</td></tr>
+      <tr><td><code>federation_activities</code></td><td>Log aktivitas masuk dan keluar (Create, Update, Follow, dll) dengan payload JSONB.</td></tr>
+      <tr><td><code>federation_delivery_jobs</code></td><td>Antrian pengiriman ke inbox remote dengan retry (maks 10 kali).</td></tr>
+      <tr><td><code>remote_video_catalog</code></td><td>Metadata video dari instance lain: judul, harga, link checkout ke asal.</td></tr>
+      <tr><td><code>federation_domain_rules</code></td><td>Moderasi per domain: <code>allow</code>, <code>silence</code>, <code>reject_media</code>, <code>suspend</code>, <code>block</code>.</td></tr>
+      <tr><td><code>federation_referrals</code></td><td>Rujukan pembeli yang datang dari instance lain, beserta status verifikasi.</td></tr>
+      <tr><td><code>revenue_share_policies</code></td><td>Persentase bagi hasil per instance (default 500 bp = 5%).</td></tr>
+      <tr><td><code>federation_revenue_shares</code></td><td>Bagi hasil per invoice; unik per <code>(invoice_id, invoice_type)</code>.</td></tr>
+      <tr><td><code>revenue_ledger_entries</code></td><td>Jurnal mutasi untuk setiap bagi hasil.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="integrity">
+  <span class="eyebrow">Catatan</span>
+  <h2>Integritas data</h2>
+  <ul>
+    <li><b>Ditegakkan FK:</b> sessions, password_resets, videos, purchases, invoice fiat dan x402, wallet_transactions, affiliate, chat, creator_blocked_users, storage jobs, federation follows dan delivery.</li>
+    <li><b>Relasi logis tanpa FK:</b> <code>playback_sessions</code> (user_id, video_id), <code>allowlist.username</code> (berbasis nama, bukan id), <code>affiliate_commissions.ref_invoice_uid</code> dan <code>federation_revenue_shares.invoice_id</code> (polimorfik ke dua tabel invoice).</li>
+    <li><b>Trigger:</b> insert ke <code>purchases</code> ditolak dengan pesan <code>buyer is blocked by this creator</code> bila pembeli ada di <code>creator_blocked_users</code>.</li>
+    <li><b>Denormalisasi:</b> <code>users.balance_cents</code> adalah cache saldo; kebenarannya ada di <code>wallet_transactions.balance_after</code>. <code>creator_id</code> di invoice disalin dari <code>videos.owner_id</code> saat invoice dibuat.</li>
+    <li><b>Singleton:</b> <code>payment_settings</code> dan <code>storage_settings</code> dibatasi satu baris (<code>id = TRUE</code>).</li>
+    <li><b>Urutan migrasi:</b> <code>sql/</code> dijalankan oleh <code>sqlx::migrate!</code> (tabel <code>_sqlx_migrations</code>), lalu <code>migrations/</code> dijalankan saat startup dan dicatat di <code>_ppv_extra_migrations</code>.</li>
+  </ul>
+</section>
+
+<section id="pdp">
+  <span class="eyebrow">ISO/IEC 27001:2022 · UU PDP 27/2022</span>
+  <h2>Data pribadi &amp; rahasia</h2>
+  <p>Kolom berikut berisi data pribadi atau kredensial. Klasifikasi dan rekomendasi kontrol disusun untuk kebutuhan audit.</p>
+  <div class="tw"><table>
+    <thead><tr><th>Kolom</th><th>Jenis</th><th>Kelas</th><th>Kontrol yang disarankan</th></tr></thead>
+    <tbody>
+      <tr><td><code>users.password_hash</code></td><td>Kredensial</td><td><span class="chip high">Rahasia</span></td><td>Sudah Argon2. Jangan pernah dikirim di respons API atau log (A.8.5).</td></tr>
+      <tr><td><code>users.email</code>, <code>whatsapp</code>, <code>fiat_invoices.buyer_email</code></td><td>Identitas kontak</td><td><span class="chip high">Pribadi</span></td><td>Batasi akses admin, masking di log dan export (A.8.11).</td></tr>
+      <tr><td><code>users.bank_account</code>, <code>wallet_account</code>, <code>x402_invoices.payer_address</code></td><td>Data keuangan</td><td><span class="chip high">Pribadi</span></td><td>Pertimbangkan enkripsi kolom, akses berbasis peran (A.8.3, A.8.24).</td></tr>
+      <tr><td><code>smtp_settings.password</code>, <code>storage_settings.access_key</code> / <code>secret_key</code></td><td>Kredensial sistem</td><td><span class="chip high">Rahasia</span></td><td>Saat ini tersimpan plaintext di DB. Enkripsi dengan kunci dari env atau pindahkan ke secret store (A.8.12).</td></tr>
+      <tr><td><code>federation_actors.private_key_encrypted</code></td><td>Kunci kriptografi</td><td><span class="chip high">Rahasia</span></td><td>Pastikan kunci enkripsinya tidak tersimpan di DB yang sama (A.8.24).</td></tr>
+      <tr><td><code>password_resets.token</code>, <code>sessions.id</code></td><td>Token</td><td><span class="chip med">Internal</span></td><td>Kedaluwarsa singkat, hapus berkala (A.8.10).</td></tr>
+      <tr><td><code>chat_messages.body</code></td><td>Konten pengguna</td><td><span class="chip med">Pribadi</span></td><td>Tetapkan masa retensi dan prosedur penghapusan atas permintaan subjek data.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+</main>
+</div>
+
+<script>
+// Diagram dirender oleh viewer Artifact. Saat dibuka langsung sebagai file, muat Mermaid sebagai cadangan.
+setTimeout(function(){
+  if (document.querySelector('pre.mermaid svg') || window.mermaid) return;
+  var s=document.createElement('script');
+  s.src='https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js';
+  s.onload=function(){
+    var dark=matchMedia('(prefers-color-scheme: dark)').matches||document.documentElement.dataset.theme==='dark';
+    mermaid.initialize({startOnLoad:false,theme:dark?'dark':'neutral'});
+    mermaid.run({querySelector:'pre.mermaid'});
+  };
+  document.head.appendChild(s);
+},1500);
+</script>
+</body>
+</html>

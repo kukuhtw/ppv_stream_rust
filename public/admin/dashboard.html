@@ -137,6 +137,13 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+function fmtInvoiceAmount(p) {
+  const cur = String(p.currency || 'USD').toUpperCase();
+  const amount = Number(p.amount || 0);
+  if (cur === 'IDR') return 'Rp ' + new Intl.NumberFormat('id-ID').format(amount);
+  if (cur === 'JPY') return cur + ' ' + amount;
+  return cur + ' ' + (amount / 100).toFixed(2);
+}
 document.getElementById('logoutBtn').addEventListener('click', async () => {
   await fetch('/admin/logout', { method:'POST' }).catch(() => {});
   location.href = '/public/admin/login.html';
@@ -277,7 +284,7 @@ async function loadAdminOverview() {
         <td class="small font-monospace">${esc((p.invoice_uid || '-').slice(0, 12))}</td>
         <td class="small">${esc(p.buyer_username || '-')}</td>
         <td class="small">${esc(p.video_title || '-')}</td>
-        <td class="small fw-semibold">${esc(p.currency || 'USD')} ${Number(p.amount || 0).toFixed(2)}</td>
+        <td class="small fw-semibold">${esc(fmtInvoiceAmount(p))}</td>
         <td class="small">${esc(p.provider || '-')}</td>
         <td class="small">${esc(p.status || '-')}</td>
       </tr>`).join('') : '<tr><td colspan="7" class="text-body-secondary">No invoices yet.</td></tr>';

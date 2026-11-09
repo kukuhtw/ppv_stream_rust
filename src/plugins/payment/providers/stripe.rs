@@ -72,6 +72,18 @@ impl StripePaymentPlugin {
             }
         }
         let ts = ts.ok_or_else(|| anyhow!("stripe: missing timestamp in Stripe-Signature"))?;
+
+        // Reject old events to prevent replay (Stripe's own libraries use a
+        // 300-second tolerance).
+        const TOLERANCE_SECS: i64 = 300;
+        let ts_num: i64 = ts
+            .trim()
+            .parse()
+            .map_err(|_| anyhow!("stripe: invalid timestamp in Stripe-Signature"))?;
+        if (chrono::Utc::now().timestamp() - ts_num).abs() > TOLERANCE_SECS {
+            bail!("stripe: webhook timestamp outside tolerance");
+        }
+
         let signed = [ts.as_bytes(), b".", raw_payload].concat();
 
         let mut mac = Hmac::<Sha256>::new_from_slice(self.webhook_secret.as_bytes())
@@ -79,7 +91,18 @@ impl StripePaymentPlugin {
         mac.update(&signed);
         let computed = hex::encode(mac.finalize().into_bytes());
 
-        if v1_sigs.contains(&computed.as_str()) {
+        // Constant-time comparison against every v1 signature.
+        let matched = v1_sigs.iter().fold(false, |acc, candidate| {
+            let a = candidate.trim().as_bytes();
+            let b = computed.as_bytes();
+            let mut diff = a.len() ^ b.len();
+            for i in 0..a.len().max(b.len()) {
+                diff |= (a.get(i).copied().unwrap_or(0) ^ b.get(i).copied().unwrap_or(0)) as usize;
+            }
+            acc | (diff == 0)
+        });
+
+        if matched {
             Ok(())
         } else {
             bail!("stripe: Stripe-Signature verification failed")
@@ -259,7 +282,13 @@ impl PaymentPlugin for StripePaymentPlugin {
 
         let invoice_uid = obj["metadata"]["invoice_uid"].as_str().unwrap_or("").into();
         let transaction_id = obj["payment_intent"].as_str().map(String::from);
-        let paid_amount = obj["amount_total"].as_i64().unwrap_or(0);
+        // checkout.session uses amount_total; payment_intent uses
+        // amount_received / amount.
+        let paid_amount = obj["amount_total"]
+            .as_i64()
+            .or_else(|| obj["amount_received"].as_i64())
+            .or_else(|| obj["amount"].as_i64())
+            .unwrap_or(0);
         let currency = obj["currency"].as_str().unwrap_or("usd").to_uppercase();
 
         Ok(PaymentResult {

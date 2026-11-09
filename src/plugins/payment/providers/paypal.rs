@@ -270,13 +270,6 @@ impl PaymentPlugin for PaypalPaymentPlugin {
         let event_type = payload["event_type"].as_str().unwrap_or("");
         let resource = &payload["resource"];
 
-        let status = match event_type {
-            "CHECKOUT.ORDER.APPROVED" | "PAYMENT.CAPTURE.COMPLETED" => PaymentStatus::Paid,
-            "PAYMENT.CAPTURE.DENIED" | "PAYMENT.CAPTURE.DECLINED" => PaymentStatus::Failed,
-            "CHECKOUT.ORDER.CANCELLED" => PaymentStatus::Cancelled,
-            _ => PaymentStatus::Unknown,
-        };
-
         // custom_id = our invoice_uid (set when creating the order)
         let invoice_uid = resource["purchase_units"]
             .as_array()
@@ -285,16 +278,71 @@ impl PaymentPlugin for PaypalPaymentPlugin {
             .unwrap_or_else(|| resource["custom_id"].as_str().unwrap_or(""))
             .to_string();
 
-        let transaction_id = resource["id"].as_str().map(String::from);
-        let paid_amount = resource["amount"]["value"]
-            .as_str()
-            .and_then(|v| v.parse::<f64>().ok())
-            .map(|f| (f * 100.0) as i64)
-            .unwrap_or(0);
-        let currency = resource["amount"]["currency_code"]
+        // An approved order is NOT paid yet: the money only moves when the
+        // order is captured. Capture it here and use the capture result.
+        let (status, transaction_id, amount_node) = match event_type {
+            "CHECKOUT.ORDER.APPROVED" => {
+                let order_id = resource["id"].as_str().unwrap_or("");
+                if order_id.is_empty() {
+                    bail!("paypal: ORDER.APPROVED without order id");
+                }
+                let cap: Value = client
+                    .post(format!(
+                        "{}/v2/checkout/orders/{}/capture",
+                        self.api_base, order_id
+                    ))
+                    .bearer_auth(&token)
+                    .header("Content-Type", "application/json")
+                    .header("PayPal-Request-Id", format!("capture-{order_id}"))
+                    .body("{}")
+                    .send()
+                    .await
+                    .map_err(|e| anyhow!("paypal: capture request failed: {e}"))?
+                    .json()
+                    .await
+                    .map_err(|e| anyhow!("paypal: capture parse error: {e}"))?;
+                let capture = cap["purchase_units"]
+                    .as_array()
+                    .and_then(|us| us.first())
+                    .and_then(|u| u["payments"]["captures"].as_array())
+                    .and_then(|c| c.first())
+                    .cloned()
+                    .unwrap_or(Value::Null);
+                let st = if capture["status"].as_str() == Some("COMPLETED") {
+                    PaymentStatus::Paid
+                } else {
+                    PaymentStatus::Pending
+                };
+                (
+                    st,
+                    capture["id"].as_str().map(String::from),
+                    capture["amount"].clone(),
+                )
+            }
+            "PAYMENT.CAPTURE.COMPLETED" => (
+                PaymentStatus::Paid,
+                resource["id"].as_str().map(String::from),
+                resource["amount"].clone(),
+            ),
+            "PAYMENT.CAPTURE.DENIED" | "PAYMENT.CAPTURE.DECLINED" => {
+                (PaymentStatus::Failed, None, Value::Null)
+            }
+            "CHECKOUT.ORDER.CANCELLED" => (PaymentStatus::Cancelled, None, Value::Null),
+            _ => (PaymentStatus::Unknown, None, Value::Null),
+        };
+
+        let currency = amount_node["currency_code"]
             .as_str()
             .unwrap_or("USD")
             .to_uppercase();
+        let paid_amount = amount_node["value"]
+            .as_str()
+            .and_then(|v| v.parse::<f64>().ok())
+            .map(|f| match currency.as_str() {
+                "IDR" | "JPY" | "HUF" | "TWD" => f.round() as i64,
+                _ => (f * 100.0).round() as i64,
+            })
+            .unwrap_or(0);
 
         Ok(PaymentResult {
             provider: self.provider_key().into(),

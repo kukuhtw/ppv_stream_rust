@@ -26,6 +26,7 @@
       <div class="d-flex align-items-center gap-2 mt-2 mt-md-0">
         <span id="userbar" class="badge bg-secondary">Loading...</span>
         <button class="btn btn-sm btn-outline-secondary" onclick="toggleTheme()" id="themeToggle">Theme</button>
+        <button id="logoutBtn" class="btn btn-sm btn-outline-danger d-none">Logout</button>
       </div>
     </div>
   </div>
@@ -66,10 +67,19 @@ const fmt = new Intl.NumberFormat('id-ID');
   try {
     const j = await fetch('/api/me').then(r => r.json());
     const el = document.getElementById('userbar');
-    if (j.ok && j.user) el.innerHTML = `<b>${esc(j.user.username)}</b> &lt;${esc(j.user.email)}&gt;`;
-    else el.innerHTML = `<a href="/public/auth/login.html" class="text-white">Sign In</a>`;
+    if (j.ok && j.user) {
+      el.innerHTML = `<b>${esc(j.user.username)}</b> &lt;${esc(j.user.email)}&gt;`;
+      document.getElementById('logoutBtn').classList.remove('d-none');
+    } else {
+      el.innerHTML = `<a href="/public/auth/login.html" class="text-white">Sign In</a>`;
+    }
   } catch {}
 })();
+
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  await fetch('/auth/logout', { method:'POST' }).catch(() => {});
+  location.href = '/public/auth/login.html?status=ok';
+});
 
 (async function init() {
   try {

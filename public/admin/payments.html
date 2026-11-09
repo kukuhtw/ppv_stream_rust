@@ -141,6 +141,8 @@ async function loadPayments() {
       tbody.innerHTML = '<tr><td colspan="10" class="text-body-secondary">No invoices found.</td></tr>';
       return;
     }
+    paymentRows.clear();
+    items.forEach(p => paymentRows.set(String(p.invoice_uid || ''), p));
     tbody.innerHTML = items.map(p => {
       const canDisburse = p.status === 'paid' && !p.disbursed_at;
       return `<tr>
@@ -149,13 +151,13 @@ async function loadPayments() {
         <td class="small">${esc(p.buyer_username || '-')}</td>
         <td class="small">${esc(p.video_title || '-')}</td>
         <td class="small">${esc(p.creator_username || '-')}</td>
-        <td class="small fw-semibold">${esc(p.currency || 'USD')} ${Number(p.amount || 0).toFixed(2)}</td>
+        <td class="small fw-semibold">${esc(fmtInvoiceAmount(p))}</td>
         <td class="small">${esc(p.provider || '-')}</td>
         <td class="small">${esc(p.status || '-')}</td>
         <td class="small">${p.disbursed_at ? esc((p.disbursed_at || '').slice(0, 16)) : '<span class="text-body-secondary">Not yet</span>'}</td>
         <td class="small">
           ${canDisburse
-            ? `<button class="btn btn-sm btn-outline-primary py-0 px-2" onclick='openDisburse(${JSON.stringify(JSON.stringify(p))})'>Disburse</button>`
+            ? `<button class="btn btn-sm btn-outline-primary py-0 px-2" data-uid="${esc(p.invoice_uid || '')}" onclick="openDisburse(this.dataset.uid)">Disburse</button>`
             : '<span class="text-body-secondary">-</span>'}
         </td>
       </tr>`;
@@ -165,18 +167,31 @@ async function loadPayments() {
   }
 }
 
-function openDisburse(raw) {
-  const p = JSON.parse(raw);
+function openDisburse(uid) {
+  const p = paymentRows.get(String(uid));
+  if (!p) return;
   document.getElementById('modalInvoiceUid').value = p.invoice_uid || '';
   document.getElementById('modalInfo').innerHTML = `
     <div><strong>Invoice:</strong> <code>${esc(p.invoice_uid || '-')}</code></div>
     <div><strong>Buyer:</strong> ${esc(p.buyer_username || '-')}</div>
     <div><strong>Creator:</strong> ${esc(p.creator_username || '-')}</div>
-    <div><strong>Amount:</strong> ${esc(p.currency || 'USD')} ${Number(p.amount || 0).toFixed(2)}</div>
+    <div><strong>Amount:</strong> ${esc(fmtInvoiceAmount(p))}</div>
     <div><strong>Provider:</strong> ${esc(p.provider || '-')}</div>
     <div><strong>Creator bank:</strong> ${esc(p.creator_bank || '-')}</div>
   `;
   disburseModal.show();
+}
+
+// fiat_invoices.amount is stored in the provider's charge unit:
+// IDR = whole rupiah (no minor unit), other currencies = cents.
+const paymentRows = new Map();
+function fmtInvoiceAmount(p) {
+  const cur = String(p.currency || 'USD').toUpperCase();
+  const amount = Number(p.amount || 0);
+  if (cur === 'IDR' || cur === 'JPY') {
+    return cur === 'IDR' ? 'Rp ' + new Intl.NumberFormat('id-ID').format(amount) : cur + ' ' + amount;
+  }
+  return cur + ' ' + (amount / 100).toFixed(2);
 }
 
 async function submitDisbursement() {

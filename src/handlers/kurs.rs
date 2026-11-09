@@ -13,13 +13,22 @@ pub struct KursState {
 struct KursResp {
     ok: bool,
     usd_to_idr: f64,
+    source: String,
+    updated_at: String,
+    stale: bool,
 }
 
-// GET /api/kurs -> { ok: true, usd_to_idr: <f64> }
+// GET /api/kurs -> { ok, usd_to_idr, source, updated_at, stale }
+// The rate comes from crate::fx (live source or admin override), falling back
+// to DOLLAR_USD_TO_RUPIAH when no rate is known.
 async fn get_kurs(State(state): State<KursState>) -> Json<KursResp> {
+    let r = crate::fx::usd_to_idr_info(state.cfg.dollar_usd_to_rupiah);
     Json(KursResp {
         ok: true,
-        usd_to_idr: state.cfg.dollar_usd_to_rupiah,
+        usd_to_idr: r.rate,
+        source: r.source,
+        updated_at: r.fetched_at.to_rfc3339(),
+        stale: crate::fx::usd_to_idr_is_stale(),
     })
 }
 

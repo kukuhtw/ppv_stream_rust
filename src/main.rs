@@ -12,6 +12,7 @@ mod db;
 mod email;
 mod federation;
 mod ffmpeg;
+mod fx;
 mod handlers;
 mod middleware;
 mod payment_settings;
@@ -46,8 +47,9 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
     use crate::handlers::pay;
     use crate::handlers::{
         admin::{
-            admin_data, admin_disburse, admin_payment_settings_get, admin_payment_settings_save,
-            admin_payments, admin_smtp_get, admin_smtp_save, admin_storage_migration_cancel,
+            admin_data, admin_disburse, admin_fx_clear, admin_fx_list, admin_fx_override,
+            admin_payment_settings_get, admin_payment_settings_save, admin_payments,
+            admin_smtp_get, admin_smtp_save, admin_storage_migration_cancel,
             admin_storage_migration_items_get, admin_storage_migrations_get,
             admin_storage_migrations_start, admin_storage_settings_get,
             admin_storage_settings_save, admin_storage_settings_test, admin_wallet_approve,
@@ -76,8 +78,9 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
         users::{get_my_profile, public_profile, update_my_profile, UsersState},
         video::{add_allow, list_videos, my_videos, update_video, user_lookup, VideoState},
         wallet::{
-            wallet_balance, wallet_deposit, wallet_pay_video, wallet_transactions, wallet_transfer,
-            wallet_withdraw, WalletState,
+            admin_wallet_deposit_proof, wallet_balance, wallet_deposit, wallet_deposit_info,
+            wallet_deposit_proof, wallet_pay_video, wallet_transactions, wallet_transfer,
+            wallet_withdraw, WalletState, MAX_PROOF_BYTES,
         },
     };
     use crate::plugins::payment::PaymentPluginRegistry;
@@ -99,7 +102,7 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
     let static_service = ServeDir::new(&cfg.public_dir).append_index_html_on_directories(true);
     let hls_service = ServeDir::new(&cfg.media_dir);
 
-    let static_router = Router::new()
+    let mut static_router = Router::new()
         .route("/", get(|| async { Redirect::to("/public/") }))
         .route("/browse", get(|| async { Redirect::to("/public/") }))
         .route(
@@ -107,8 +110,13 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
             get(|| async { Redirect::to("/public/dashboard.html") }),
         )
         .route("/health", get(|| async { "ok" }))
-        .nest_service("/public", static_service)
-        .nest_service("/static_hls", hls_service);
+        .nest_service("/public", static_service);
+    // /static_hls menyajikan MEDIA_DIR (HLS tanpa watermark) tanpa cek login/pembelian.
+    // Default dimatikan agar paywall tidak bisa dilewati; aktifkan hanya untuk dev.
+    if parse_bool_env("ENABLE_STATIC_HLS") {
+        tracing::warn!("ENABLE_STATIC_HLS=1: /static_hls is publicly accessible without auth");
+        static_router = static_router.nest_service("/static_hls", hls_service);
+    }
 
     let admin_pages_router = Router::new()
         .route("/admin/data", get(admin_data))
@@ -251,6 +259,15 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
         .route("/api/wallet/withdraw", post(wallet_withdraw))
         .route("/api/wallet/transfer", post(wallet_transfer))
         .route("/api/wallet/pay", post(wallet_pay_video))
+        .route("/api/wallet/deposit_info", get(wallet_deposit_info))
+        .route(
+            "/api/wallet/deposit_proof",
+            post(wallet_deposit_proof).layer(DefaultBodyLimit::max(MAX_PROOF_BYTES + 64 * 1024)),
+        )
+        .route(
+            "/admin/wallet/transactions/:id/proof",
+            get(admin_wallet_deposit_proof),
+        )
         .with_state(WalletState {
             pool: pool.clone(),
             cfg: cfg.clone(),
@@ -270,6 +287,9 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
             "/admin/wallet/transactions/:id/reject",
             post(admin_wallet_reject),
         )
+        .route("/admin/fx", get(admin_fx_list))
+        .route("/admin/fx/override", post(admin_fx_override))
+        .route("/admin/fx/clear", post(admin_fx_clear))
         .with_state(AdminState {
             pool: pool.clone(),
             cfg: cfg.clone(),
@@ -325,6 +345,11 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
 
     let federation_router =
         federation::router(pool.clone(), &cfg.base_url).map_err(anyhow::Error::msg)?;
+
+    // Exchange rates / token price oracle (USD/IDR, <TOKEN>/USD).
+    fx::load_cache(&pool, cfg.dollar_usd_to_rupiah).await;
+    fx::reprice_idr_videos(&pool, cfg.dollar_usd_to_rupiah).await;
+    fx::start_fx_worker(pool.clone(), cfg.dollar_usd_to_rupiah);
 
     if parse_bool_env("FEDERATION_ENABLED") {
         federation::delivery::start_delivery_worker(pool.clone());

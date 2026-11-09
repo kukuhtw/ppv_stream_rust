@@ -233,17 +233,54 @@ pub async fn process_remote_update(
 }
 
 /// Process a remote `Delete` activity (object may be a URI string or object).
-pub async fn process_remote_delete(pool: &PgPool, object_uri: &str) -> anyhow::Result<()> {
+///
+/// Only the actor that originally published an entry may delete it. A
+/// `Delete` whose object is the actor itself removes all of that actor's
+/// entries (account deletion).
+pub async fn process_remote_delete(
+    pool: &PgPool,
+    actor_uri: &str,
+    object_uri: &str,
+) -> anyhow::Result<()> {
+    if object_uri == actor_uri {
+        sqlx::query(
+            "UPDATE remote_video_catalog \
+             SET is_deleted = TRUE, availability_status = 'deleted', updated_at = NOW() \
+             WHERE origin_actor_uri = $1",
+        )
+        .bind(actor_uri)
+        .execute(pool)
+        .await
+        .context("remote actor delete failed")?;
+        return Ok(());
+    }
+
     sqlx::query(
         "UPDATE remote_video_catalog \
          SET is_deleted = TRUE, availability_status = 'deleted', updated_at = NOW() \
-         WHERE object_uri = $1",
+         WHERE object_uri = $1 AND origin_actor_uri = $2",
     )
     .bind(object_uri)
+    .bind(actor_uri)
     .execute(pool)
     .await
     .context("remote video delete failed")?;
     Ok(())
+}
+
+/// Read a PPV extension property, accepting the bare, `ppv:` and
+/// `PPVStream:` spellings used by different serialisers.
+fn ppv_prop<'a>(object: &'a Value, name: &str) -> Option<&'a Value> {
+    object
+        .get(name)
+        .or_else(|| object.get(format!("ppv:{name}").as_str()))
+        .or_else(|| object.get(format!("PPVStream:{name}").as_str()))
+}
+
+/// Keep a URL only when it is on the same origin as the publishing actor,
+/// so a remote server cannot point checkout/watch links at a third party.
+fn same_origin_or_none(url: Option<String>, actor_uri: &str) -> Option<String> {
+    url.filter(|u| crate::federation::resolver::same_origin(u, actor_uri))
 }
 
 fn extract_object_uri(object: &Value) -> Option<&str> {
@@ -287,6 +324,12 @@ async fn upsert_remote_video(
         return Ok(());
     }
 
+    // The object must be hosted on the sender's origin (no spoofing of other
+    // servers' videos).
+    if !crate::federation::resolver::same_origin(object_uri, actor_uri) {
+        anyhow::bail!("Video object {object_uri} is not on the origin of actor {actor_uri}");
+    }
+
     let origin_domain = actor_uri
         .strip_prefix("https://")
         .or_else(|| actor_uri.strip_prefix("http://"))
@@ -326,20 +369,30 @@ async fn upsert_remote_video(
                 None
             }
         })
+        .filter(|u: &String| crate::federation::resolver::same_origin(u, actor_uri))
         .unwrap_or_else(|| object_uri.to_string());
 
-    let checkout_url = object
-        .get("checkoutUrl")
-        .and_then(|u| u.as_str())
-        .map(|s| s.to_string());
+    let checkout_url = same_origin_or_none(
+        ppv_prop(object, "checkoutUrl")
+            .and_then(|u| u.as_str())
+            .map(|s| s.to_string()),
+        actor_uri,
+    );
 
-    let price_amount = object
-        .get("priceAmount")
-        .and_then(|p| p.as_str())
-        .and_then(|s| s.parse::<f64>().ok());
+    let price_amount = ppv_prop(object, "priceAmount")
+        .and_then(|p| {
+            p.as_str()
+                .and_then(|s| s.parse::<f64>().ok())
+                .or_else(|| p.as_f64())
+        })
+        .or_else(|| {
+            ppv_prop(object, "priceCents")
+                .and_then(|p| p.as_f64())
+                .map(|c| c / 100.0)
+        });
 
-    let price_currency = object
-        .get("priceCurrency")
+    let price_currency = ppv_prop(object, "priceCurrency")
+        .or_else(|| ppv_prop(object, "currency"))
         .and_then(|c| c.as_str())
         .map(|s| s.to_string());
 
@@ -367,7 +420,6 @@ async fn upsert_remote_video(
             $13, $14, NOW(), NOW()
         )
         ON CONFLICT (object_uri) DO UPDATE SET
-            origin_actor_uri    = EXCLUDED.origin_actor_uri,
             title               = EXCLUDED.title,
             description         = EXCLUDED.description,
             canonical_url       = EXCLUDED.canonical_url,
@@ -379,6 +431,7 @@ async fn upsert_remote_video(
             raw_object          = EXCLUDED.raw_object,
             is_deleted          = EXCLUDED.is_deleted,
             updated_at          = NOW()
+        WHERE remote_video_catalog.origin_actor_uri = EXCLUDED.origin_actor_uri
         "#,
     )
     .bind(Uuid::new_v4())

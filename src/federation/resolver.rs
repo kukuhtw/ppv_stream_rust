@@ -11,6 +11,37 @@ fn dev_bypass_enabled() -> bool {
         .unwrap_or(false)
 }
 
+/// Return `scheme://host:port` (port defaulted per scheme, host lower-cased)
+/// for an absolute http(s) URL.
+pub fn url_origin(url: &str) -> Option<String> {
+    let parsed = reqwest::Url::parse(url).ok()?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return None;
+    }
+    let host = parsed.host_str()?.to_ascii_lowercase();
+    let port = parsed.port_or_known_default()?;
+    Some(format!("{}://{}:{}", parsed.scheme(), host, port))
+}
+
+/// True when both URLs are absolute http(s) URLs on the same origin.
+pub fn same_origin(a: &str, b: &str) -> bool {
+    match (url_origin(a), url_origin(b)) {
+        (Some(x), Some(y)) => x == y,
+        _ => false,
+    }
+}
+
+/// True when the HTTP Signature `keyId` belongs to `actor_uri`: either it is
+/// exactly the key id advertised in the actor document, or it is the actor
+/// URI itself with an optional `#fragment`.
+pub fn key_id_matches_actor(sig_key_id: &str, actor_key_id: &str, actor_uri: &str) -> bool {
+    if sig_key_id == actor_key_id {
+        return true;
+    }
+    let without_fragment = sig_key_id.split('#').next().unwrap_or("");
+    without_fragment == actor_uri
+}
+
 /// Returns `true` when the IP address is safe to contact from a server
 /// context (i.e. not a private, loopback, link-local, or reserved range).
 pub fn is_safe_ip(ip: IpAddr) -> bool {
@@ -209,6 +240,34 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(assert_safe_url("https://localhost/actor"));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn same_origin_compares_scheme_host_port() {
+        assert!(same_origin(
+            "https://a.example/users/x",
+            "https://A.example:443/videos/1"
+        ));
+        assert!(!same_origin("https://a.example/x", "https://b.example/x"));
+        assert!(!same_origin("https://a.example/x", "http://a.example/x"));
+        assert!(!same_origin("https://a.example/x", "not a url"));
+    }
+
+    #[test]
+    fn key_id_must_belong_to_actor() {
+        let actor = "https://a.example/users/alice";
+        let advertised = "https://a.example/users/alice#main-key";
+        assert!(key_id_matches_actor(advertised, advertised, actor));
+        assert!(key_id_matches_actor(
+            "https://a.example/users/alice#other",
+            advertised,
+            actor
+        ));
+        assert!(!key_id_matches_actor(
+            "https://evil.example/users/mallory#main-key",
+            advertised,
+            actor
+        ));
     }
 
     #[test]

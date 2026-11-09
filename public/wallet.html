@@ -63,12 +63,34 @@
       <div class="card-header fw-semibold">Request Wallet Top-Up</div>
       <div class="card-body">
         <div id="depositAlert" class="d-none mb-3"></div>
+        <div id="depositInstructions" class="mb-4 d-none">
+          <div class="fw-semibold mb-1">1. Transfer to the platform account</div>
+          <pre id="depositInstructionsText" class="p-3 rounded border bg-body-tertiary small mb-0" style="white-space:pre-wrap"></pre>
+        </div>
+        <div id="depositNotConfigured" class="alert alert-warning small d-none">Deposit instructions have not been configured by the admin yet. Contact support via chat before transferring any money.</div>
+        <div class="fw-semibold mb-2">2. Tell us about your transfer</div>
         <form id="depositForm">
           <div class="row g-3">
             <div class="col-md-4">
-              <label for="depositAmt" class="form-label">Amount (USD cents)</label>
-              <input id="depositAmt" type="number" min="1000" step="100" value="1000" class="form-control" required>
-              <div class="form-text">$10.00 minimum</div>
+              <label for="depositAmt" class="form-label">Amount</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input id="depositAmt" type="number" inputmode="decimal" min="10" step="0.01" value="10" class="form-control usd-amount" data-hint="depositAmtHint" required>
+              </div>
+              <div class="form-text"><span id="depositMinText">$10.00 minimum</span> · <span id="depositAmtHint"></span></div>
+            </div>
+            <div class="col-md-4">
+              <label for="depositRef" class="form-label">Transfer Reference</label>
+              <input id="depositRef" class="form-control" maxlength="100" placeholder="Bank reference / receipt no." required>
+            </div>
+            <div class="col-md-4">
+              <label for="depositSender" class="form-label">Sender Account Name</label>
+              <input id="depositSender" class="form-control" maxlength="100" placeholder="Name on the sending account" required autocomplete="name">
+            </div>
+            <div class="col-md-8">
+              <label for="depositProof" class="form-label">Proof of Transfer</label>
+              <input id="depositProof" type="file" class="form-control" accept="image/jpeg,image/png,image/webp,application/pdf">
+              <div class="form-text">JPG, PNG, WEBP or PDF, max 5 MB. Only admins can view it. Do not upload ID cards or other documents.</div>
             </div>
             <div class="col-12">
               <button class="btn btn-primary" type="submit">Submit Top-Up Request</button>
@@ -76,7 +98,7 @@
           </div>
         </form>
         <div class="alert alert-info small mt-4 mb-0">
-          Top-ups create a pending ledger entry. An admin must approve it before the balance is credited.
+          Top-ups create a pending ledger entry. An admin checks your transfer against the bank statement and then approves it before the balance is credited.
         </div>
       </div>
     </div>
@@ -90,8 +112,12 @@
         <form id="withdrawForm">
           <div class="row g-3">
             <div class="col-md-4">
-              <label for="wdAmt" class="form-label">Amount (USD cents)</label>
-              <input id="wdAmt" type="number" min="5000" step="100" class="form-control" required placeholder="e.g. 5000 = $50">
+              <label for="wdAmt" class="form-label">Amount</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input id="wdAmt" type="number" inputmode="decimal" min="50" step="0.01" class="form-control usd-amount" data-hint="wdAmtHint" required placeholder="50.00">
+              </div>
+              <div class="form-text"><span>$50.00 minimum</span> <span id="wdAmtHint"></span></div>
             </div>
             <div class="col-md-4">
               <label for="wdMethod" class="form-label">Withdrawal Method</label>
@@ -123,8 +149,12 @@
               <div id="trLookup" class="small text-body-secondary mt-1"></div>
             </div>
             <div class="col-md-4">
-              <label for="trAmt" class="form-label">Amount (USD cents)</label>
-              <input id="trAmt" type="number" min="100" class="form-control" required placeholder="e.g. 500 = $5">
+              <label for="trAmt" class="form-label">Amount</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input id="trAmt" type="number" inputmode="decimal" min="0.01" step="0.01" class="form-control usd-amount" data-hint="trAmtHint" required placeholder="5.00">
+              </div>
+              <div class="form-text" id="trAmtHint"></div>
             </div>
             <div class="col-md-4">
               <label for="trNote" class="form-label">Note</label>
@@ -152,10 +182,11 @@
                 <th>Amount</th>
                 <th>Status</th>
                 <th>Note</th>
+                <th></th>
               </tr>
             </thead>
             <tbody id="historyBody">
-              <tr><td colspan="5" class="text-body-secondary">Loading...</td></tr>
+              <tr><td colspan="6" class="text-body-secondary">Loading...</td></tr>
             </tbody>
           </table>
         </div>
@@ -192,6 +223,22 @@ function esc(value) {
     .replaceAll("'", '&#39;');
 }
 
+// Users type dollars; the API still receives integer cents.
+function usdToCents(id) {
+  const v = Number(String(document.getElementById(id).value).replace(',', '.'));
+  return Number.isFinite(v) ? Math.round(v * 100) : 0;
+}
+
+function updateAmountHints() {
+  document.querySelectorAll('.usd-amount').forEach(inp => {
+    const hint = document.getElementById(inp.dataset.hint);
+    if (!hint) return;
+    const cents = usdToCents(inp.id);
+    hint.textContent = cents > 0 ? '≈ Rp ' + fmtIdr.format(Math.round(cents / 100 * USD_TO_IDR)) : '';
+  });
+}
+document.addEventListener('input', e => { if (e.target.classList?.contains('usd-amount')) updateAmountHints(); });
+
 function showAlert(el, type, msg) {
   el.className = `alert alert-${type}`;
   el.textContent = msg;
@@ -222,7 +269,7 @@ async function loadBalance() {
       document.getElementById('balanceDisplay').textContent = '$' + (cents / 100).toFixed(2);
       try {
         const k = await fetch('/api/kurs').then(r => r.json());
-        if (k.usd_to_idr) USD_TO_IDR = k.usd_to_idr;
+        if (k.usd_to_idr) { USD_TO_IDR = k.usd_to_idr; updateAmountHints(); }
       } catch {}
       document.getElementById('balanceIdr').textContent = 'Approx. Rp ' + fmtIdr.format(Math.round(cents / 100 * USD_TO_IDR));
     } else {
@@ -245,14 +292,25 @@ document.getElementById('depositForm').addEventListener('submit', async e => {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
-        amount_cents: parseInt(document.getElementById('depositAmt').value, 10),
-        note: 'Wallet top-up requested from browser'
+        amount_cents: usdToCents('depositAmt'),
+        note: 'Wallet top-up requested from browser',
+        transfer_ref: document.getElementById('depositRef').value.trim(),
+        sender_name: document.getElementById('depositSender').value.trim()
       })
     }).then(r => r.json());
     if (j.ok) {
-      showAlert(alert, 'success', j.message || 'Top-up request submitted.');
+      const file = document.getElementById('depositProof').files[0];
+      let proofMsg = '';
+      if (file && j.txn_id) {
+        const up = await uploadDepositProof(j.txn_id, file);
+        proofMsg = up.ok ? ' Proof uploaded.' : ' Proof upload failed (' + (up.error || 'unknown') + '); you can retry from History.';
+      } else if (!file) {
+        proofMsg = ' You can still upload proof from the History tab.';
+      }
+      showAlert(alert, 'success', (j.message || 'Top-up request submitted.') + proofMsg);
       e.target.reset();
-      document.getElementById('depositAmt').value = '1000';
+      document.getElementById('depositAmt').value = document.getElementById('depositAmt').min || '10';
+      updateAmountHints();
       loadHistory();
     } else {
       showAlert(alert, 'danger', 'Failed: ' + (j.error || 'unknown'));
@@ -277,13 +335,13 @@ document.getElementById('withdrawForm').addEventListener('submit', async e => {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
-        amount_cents: parseInt(document.getElementById('wdAmt').value, 10),
+        amount_cents: usdToCents('wdAmt'),
         note: `Withdrawal via ${document.getElementById('wdMethod').value}`
       })
     }).then(r => r.json());
     if (j.ok) {
       showAlert(alert, 'success', j.message || 'Withdrawal request submitted.');
-      e.target.reset();
+      e.target.reset(); updateAmountHints();
       loadBalance();
       loadHistory();
     } else {
@@ -327,13 +385,13 @@ document.getElementById('transferForm').addEventListener('submit', async e => {
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
         to_username: document.getElementById('trTarget').value.trim(),
-        amount_cents: parseInt(document.getElementById('trAmt').value, 10),
+        amount_cents: usdToCents('trAmt'),
         note: document.getElementById('trNote').value.trim() || null
       })
     }).then(r => r.json());
     if (j.ok) {
       showAlert(alert, 'success', 'Transfer sent successfully.');
-      e.target.reset();
+      e.target.reset(); updateAmountHints();
       document.getElementById('trLookup').textContent = '';
       loadBalance();
       loadHistory();
@@ -350,12 +408,12 @@ document.getElementById('transferForm').addEventListener('submit', async e => {
 
 async function loadHistory() {
   const tbody = document.getElementById('historyBody');
-  tbody.innerHTML = '<tr><td colspan="5" class="text-body-secondary">Loading...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="6" class="text-body-secondary">Loading...</td></tr>';
   try {
     const j = await fetch('/api/wallet/transactions').then(r => r.json());
     const items = Array.isArray(j.items) ? j.items : [];
     if (!j.ok || !items.length) {
-      tbody.innerHTML = '<tr><td colspan="5" class="text-body-secondary">No transactions yet.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="text-body-secondary">No transactions yet.</td></tr>';
       return;
     }
     const statusBadge = s => {
@@ -364,21 +422,82 @@ async function loadHistory() {
     };
     tbody.innerHTML = items.map(t => {
       const sign = ['deposit', 'transfer_in'].includes(t.txn_type) ? '+' : '-';
-      const note = t.note || t.admin_note || (t.ref_username ? `Related user: ${t.ref_username}` : '');
+      const note = [t.transfer_ref ? `Ref: ${t.transfer_ref}` : '', t.admin_note || t.note || (t.ref_username ? `Related user: ${t.ref_username}` : '')].filter(Boolean).join(' · ');
+      let action = '';
+      if (t.txn_type === 'deposit' && t.status === 'pending') {
+        action = t.has_proof
+          ? `<span class="badge bg-success-subtle text-success-emphasis">proof sent</span> <button class="btn btn-sm btn-link p-0 ms-1" onclick="pickProof(${Number(t.id)})">replace</button>`
+          : `<button class="btn btn-sm btn-outline-primary" onclick="pickProof(${Number(t.id)})">Upload proof</button>`;
+      }
       return `<tr>
         <td class="small text-nowrap">${esc((t.created_at || '').slice(0, 16))}</td>
         <td class="small">${esc(t.txn_type || '-')}</td>
         <td class="small fw-semibold">${sign}$${(Math.abs(t.amount_cents || 0) / 100).toFixed(2)}</td>
         <td class="small">${statusBadge(t.status || '-')}</td>
         <td class="small text-body-secondary">${esc(note)}</td>
+        <td class="small text-nowrap">${action}</td>
       </tr>`;
     }).join('');
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="5" class="text-body-secondary">Error: ${esc(String(err))}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="text-body-secondary">Error: ${esc(String(err))}</td></tr>`;
   }
 }
 
+let proofMaxBytes = 5 * 1024 * 1024;
+
+async function loadDepositInfo() {
+  try {
+    const j = await fetch('/api/wallet/deposit_info').then(r => r.json());
+    if (!j.ok) return;
+    if (j.proof_max_bytes) proofMaxBytes = j.proof_max_bytes;
+    if (j.min_deposit_cents) {
+      const minUsd = (j.min_deposit_cents / 100).toFixed(2);
+      const amt = document.getElementById('depositAmt');
+      amt.min = minUsd;
+      if (!amt.value || Number(amt.value) < Number(minUsd)) amt.value = minUsd;
+      document.getElementById('depositMinText').textContent = `${j.min_deposit_display || '$' + minUsd} minimum`;
+      updateAmountHints();
+    }
+    if (j.configured) {
+      document.getElementById('depositInstructionsText').textContent = j.instructions;
+      document.getElementById('depositInstructions').classList.remove('d-none');
+    } else {
+      document.getElementById('depositNotConfigured').classList.remove('d-none');
+    }
+  } catch {}
+}
+
+async function uploadDepositProof(txnId, file) {
+  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+  if (file.type && !allowed.includes(file.type)) return { ok: false, error: 'only JPG, PNG, WEBP or PDF are accepted' };
+  if (file.size > proofMaxBytes) return { ok: false, error: 'file is larger than 5 MB' };
+  const fd = new FormData();
+  fd.append('txn_id', String(txnId));
+  fd.append('file', file);
+  try {
+    return await fetch('/api/wallet/deposit_proof', { method: 'POST', body: fd }).then(r => r.json());
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+function pickProof(txnId) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/jpeg,image/png,image/webp,application/pdf';
+  input.onchange = async () => {
+    const file = input.files[0];
+    if (!file) return;
+    const j = await uploadDepositProof(txnId, file);
+    showTab('deposit');
+    showAlert(document.getElementById('depositAlert'), j.ok ? 'success' : 'danger',
+      j.ok ? 'Proof uploaded. The admin will review it shortly.' : 'Upload failed: ' + (j.error || 'unknown'));
+  };
+  input.click();
+}
+
 loadBalance();
+loadDepositInfo();
 initTabFromUrl();
 </script>
 </body>

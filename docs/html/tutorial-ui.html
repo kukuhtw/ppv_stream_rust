@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tutorial Tampilan PPV Stream</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,750&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: left rail of domain links + one reading column; each domain = diagram, then table dictionary */
+:root{
+  --bg:#f5f7f8; --surface:#ffffff; --ink:#132029; --muted:#5a6b75; --line:#d9e1e5;
+  --accent:#0b6e79; --accent-soft:#e1f1f2; --pii:#a3470f; --pii-soft:#fbeadf; --code-bg:#edf2f4;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f171c; --surface:#16222a; --ink:#e3ebef; --muted:#93a5ae; --line:#26363f;
+  --accent:#4fc0c9; --accent-soft:#163a3f; --pii:#f0a06b; --pii-soft:#3a2416; --code-bg:#1c2b33; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f171c; --surface:#16222a; --ink:#e3ebef; --muted:#93a5ae; --line:#26363f;
+  --accent:#4fc0c9; --accent-soft:#163a3f; --pii:#f0a06b; --pii-soft:#3a2416; --code-bg:#1c2b33; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--f-body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1180px;margin:0 auto;padding-block:40px 80px;display:grid;grid-template-columns:220px minmax(0,1fr);gap:48px}
+nav{position:sticky;top:calc(env(safe-area-inset-top,0px) + 24px);align-self:start;display:flex;flex-direction:column;gap:4px;font-size:13.5px}
+nav .lbl{font:600 11px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+nav a{color:var(--muted);text-decoration:none;padding:4px 10px;border-left:2px solid var(--line)}
+nav a:hover,nav a:focus-visible{color:var(--accent);border-left-color:var(--accent);outline:none}
+main{min-width:0;display:flex;flex-direction:column;gap:56px}
+header{display:flex;flex-direction:column;gap:14px}
+.eyebrow{font:500 12px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+h1{font:750 clamp(34px,5vw,52px)/1.05 var(--f-display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h2{font:700 28px/1.15 var(--f-display);margin:0;text-wrap:balance}
+h3{font:600 16px/1.3 var(--f-mono);margin:0}
+p{margin:0;max-width:68ch}
+.lede{font-size:17px;color:var(--muted)}
+.meta{display:flex;flex-wrap:wrap;gap:8px 20px;font:13px var(--f-mono);color:var(--muted)}
+.meta b{color:var(--ink);font-weight:500}
+section{display:flex;flex-direction:column;gap:18px;scroll-margin-top:24px}
+.diagram{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:20px;overflow-x:auto}
+.diagram pre.mermaid{margin:0;background:none;text-align:center}
+.tables{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.tbl{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.tbl p{font-size:14px;color:var(--muted)}
+.cols{font:12.5px/1.7 var(--f-mono);display:flex;flex-wrap:wrap;gap:4px 6px}
+.cols span{background:var(--code-bg);padding:0 6px;border-radius:3px}
+.cols span.pk{background:var(--accent-soft);color:var(--accent);font-weight:500}
+.cols span.pii{background:var(--pii-soft);color:var(--pii)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font:12.5px var(--f-mono);color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:600 11.5px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+tr:last-child td{border-bottom:0}
+code{font:13px var(--f-mono);background:var(--code-bg);padding:1px 5px;border-radius:3px}
+.chip{display:inline-block;font:500 11px var(--f-mono);padding:2px 8px;border-radius:99px;white-space:nowrap}
+.chip.high{background:var(--pii-soft);color:var(--pii)} .chip.med{background:var(--accent-soft);color:var(--accent)}
+ul{margin:0;padding-left:20px;max-width:68ch;display:flex;flex-direction:column;gap:6px}
+@media (max-width:860px){.wrap{grid-template-columns:1fr;gap:24px}nav{position:static;flex-direction:row;flex-wrap:wrap}nav .lbl{width:100%}nav a{border-left:0;border-bottom:2px solid var(--line)}}
+</style>
+</head>
+<body>
+<style>
+.answers{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.ans{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.ans .q{font:600 12px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.ans .a{font:700 22px/1.1 var(--f-display);color:var(--accent)}
+.ans p{font-size:14px;color:var(--muted)}
+.ans a{font-size:14px}
+.chip.ok{background:var(--accent-soft);color:var(--accent)}
+.chip.warn{background:var(--pii-soft);color:var(--pii)}
+.chip.mute{background:var(--code-bg);color:var(--muted)}
+.calc{font:13px/1.8 var(--f-mono);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;overflow-x:auto}
+.calc .row{display:flex;justify-content:space-between;gap:16px;min-width:300px}
+.calc .row span:last-child{font-variant-numeric:tabular-nums}
+.calc .tot{border-top:1px solid var(--line);margin-top:6px;padding-top:6px;font-weight:500}
+.calc .neg{color:var(--pii)} .calc .pos{color:var(--accent)}
+.calcs{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.calcs h4{margin:0 0 8px;font:600 14px var(--f-body)}
+ol.steps{margin:0;padding-left:0;list-style:none;counter-reset:s;display:flex;flex-direction:column;gap:10px;max-width:78ch}
+ol.steps>li{counter-increment:s;display:grid;grid-template-columns:32px minmax(0,1fr);gap:12px;align-items:start}
+ol.steps>li::before{content:counter(s);font:600 13px/28px var(--f-mono);text-align:center;width:28px;height:28px;border-radius:50%;background:var(--accent-soft);color:var(--accent)}
+.callout{border:1px solid var(--pii);background:var(--pii-soft);border-radius:6px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;max-width:82ch}
+.callout b{color:var(--pii)}
+.note{border-left:3px solid var(--accent);padding:4px 0 4px 14px;max-width:78ch;color:var(--muted);font-size:14px}
+h3{margin:8px 0 0;font:650 18px/1.3 var(--f-display)}
+h4{margin:0;font:600 15px var(--f-body)}
+.split{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}
+.split>div{min-width:0;display:flex;flex-direction:column;gap:10px}
+pre.code{margin:0;background:var(--code-bg);border-radius:6px;padding:14px 16px;overflow-x:auto;font:12.5px/1.6 var(--f-mono)}
+.role{display:inline-block;font:600 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
+figure.shot{margin:0;display:flex;flex-direction:column;gap:6px;min-width:0}
+figure.shot img{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:6px;background:#fff}
+figure.shot figcaption{font-size:13px;color:var(--muted)}
+figure.shot.narrow{max-width:540px}
+.phones{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px;align-items:start}
+figure.phone img{border-radius:14px;max-height:620px;object-fit:cover;object-position:top}
+ol.marks{margin:0;padding:0;list-style:none;counter-reset:m;display:flex;flex-direction:column;gap:8px;max-width:82ch}
+ol.marks>li{counter-increment:m;position:relative;padding-left:36px;min-height:24px;line-height:1.55}
+ol.marks>li::before{content:counter(m);position:absolute;left:0;top:0;font:700 12px/24px var(--f-body);text-align:center;width:24px;height:24px;border-radius:50%;background:#e8590c;color:#fff}
+main,section,.split>*,.tw{min-width:0}
+.mk{display:inline-block;font:700 11px/20px var(--f-body);text-align:center;width:20px;height:20px;border-radius:50%;background:#e8590c;color:#fff;vertical-align:1px}
+.kbd{font:12px var(--f-mono);border:1px solid var(--line);border-radius:4px;padding:1px 6px}
+section h3{margin-top:18px}
+</style>
+
+<div class="wrap">
+<nav aria-label="Isi">
+  <span class="lbl">Isi</span>
+  <a href="#mulai">Cara membaca</a>
+  <a href="#peran">Peran &amp; menu</a>
+  <a href="#tamu">1 · Tamu</a>
+  <a href="#penonton">2 · Penonton</a>
+  <a href="#nav-user">· Menu navigasi</a>
+  <a href="#beli">· Membeli video</a>
+  <a href="#dompet">· Dompet</a>
+  <a href="#kreator">3 · Kreator</a>
+  <a href="#affiliate">4 · Affiliate</a>
+  <a href="#admin">5 · Admin</a>
+  <a href="#admin-wallet">· Deposit &amp; penarikan</a>
+  <a href="#admin-pay">· Pembayaran</a>
+  <a href="#admin-set">· Settings</a>
+  <a href="#mobile">6 · Di ponsel</a>
+  <a href="#ringkas">Ringkasan aktivitas</a>
+  <a href="#iso">Keamanan &amp; data pribadi</a>
+</nav>
+
+<main>
+<header>
+  <span class="eyebrow">Tutorial UI · v0.2.0</span>
+  <h1>Tutorial Tampilan PPV Stream</h1>
+  <p class="lede">Panduan bergambar untuk setiap pengguna: tamu, penonton, kreator, affiliate, dan admin. Setiap layar diberi badge bernomor <span class="mk">1</span> yang dijelaskan di bawah gambar, mulai dari menu navigasi sampai aktivitas sehari-hari.</p>
+  <div class="meta"><span>Bootstrap 5.3</span><span>Desktop 1280 px · ponsel 390 px</span><span>Tema terang</span><span>Diperbarui <b>9 Nov 2026</b></span></div>
+</header>
+
+<section id="mulai">
+  <span class="eyebrow">Sebelum mulai</span>
+  <h2>Cara membaca tutorial ini</h2>
+  <div class="split">
+    <div>
+      <p>Semua gambar adalah tangkapan layar asli dari halaman <code>public/*.html</code> di repo ini, dibuka di Chrome. Badge oranye dan garis tepi ditambahkan saat pengambilan gambar dan tidak ada di aplikasi.</p>
+      <p>Tombol <span class="kbd">🌙</span> di navbar mengganti tema terang/gelap. Tutorial memakai tema terang.</p>
+    </div>
+    <div class="callout"><b>Data di gambar adalah data contoh fiktif.</b><span>Gambar diambil dengan server tiruan (mock API) tanpa database. Nama seperti <code>budi_penonton</code>, <code>rina_kreator</code>, <code>sari_affiliate</code>, email <code>@example.com</code>, nomor rekening, alamat wallet, dan nominal transaksi semuanya karangan. Tidak ada data pribadi pengguna sungguhan.</span></div>
+  </div>
+</section>
+
+<section id="peran">
+  <span class="eyebrow">Gambaran</span>
+  <h2>Peran dan menu yang terlihat</h2>
+  <p>Penonton, kreator, dan affiliate memakai <b>akun yang sama</b>. Satu akun bisa membeli video, mengunggah video, dan membagikan link referral. Admin memakai login terpisah dengan navbar merah.</p>
+  <div class="tw"><table>
+    <thead><tr><th>Peran</th><th>Masuk dari</th><th>Menu utama</th><th>Aktivitas inti</th></tr></thead>
+    <tbody>
+      <tr><td><span class="role">Tamu</span></td><td><code>/</code></td><td>Tidak ada navbar; form Sign In + katalog</td><td>Melihat katalog, daftar, masuk, lupa password</td></tr>
+      <tr><td><span class="role">Penonton</span></td><td><code>/</code> → Sign In</td><td>Browse · Dashboard · Wallet · Affiliate</td><td>Mencari, membeli, menonton, top up, tarik dana, transfer</td></tr>
+      <tr><td><span class="role">Kreator</span></td><td>Akun yang sama</td><td>Dashboard</td><td>Profil payout, upload, harga $/Rp, allowlist, komisi affiliate, chat</td></tr>
+      <tr><td><span class="role">Affiliate</span></td><td>Akun yang sama</td><td>Affiliate</td><td>Membuat link referral, memantau komisi</td></tr>
+      <tr><td><span class="role">Admin</span></td><td><code>/public/admin/login.html</code></td><td>Dashboard · Payments · Wallets · Settings</td><td>Menyetujui deposit/penarikan, pencairan, kurs, gateway, SMTP</td></tr>
+    </tbody>
+  </table></div>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  T[Tamu] -- Create account --> U[Akun pengguna]
+  U --> P[Penonton<br/>Browse, Watch, Wallet]
+  U --> K[Kreator<br/>Dashboard]
+  U --> A[Affiliate<br/>Affiliate]
+  ADM[Admin<br/>login terpisah] --> W[Wallets: setujui deposit & penarikan]
+  ADM --> PY[Payments: pencairan]
+  ADM --> S[Settings: gateway, kurs, SMTP]
+  P -. top up .-> W
+  K -. tarik dana .-> W
+</pre></div>
+</section>
+
+<!-- ================= TAMU ================= -->
+<section id="tamu">
+  <span class="eyebrow"><span class="role">Tamu</span> belum login</span>
+  <h2>1 · Halaman depan, daftar, dan masuk</h2>
+  <figure class="shot"><img src="img/tutorial/g01-landing.png" width="1280" height="900" alt="Halaman depan dengan form Sign In dan katalog video" loading="lazy"><figcaption>Halaman depan <code>/</code></figcaption></figure>
+  <ol class="marks">
+    <li><b>Email</b> akun Anda.</li>
+    <li><b>Password</b>. Ikon mata menampilkan/menyembunyikan password.</li>
+    <li><b>Create account</b>: membuka halaman pendaftaran.</li>
+    <li><b>Forgot password?</b>: mengirim link reset ke email (butuh SMTP aktif).</li>
+    <li><b>Pencarian</b> judul, kreator, atau deskripsi. Tamu bisa melihat katalog tanpa login.</li>
+    <li><b>Kartu video</b> dengan harga dalam rupiah. Klik kartu untuk melihat detail; untuk membeli Anda diminta masuk.</li>
+  </ol>
+
+  <h3>Mendaftar akun</h3>
+  <div class="split">
+    <figure class="shot"><img src="img/tutorial/g02-register.png" width="1280" height="760" alt="Form pendaftaran akun" loading="lazy"><figcaption>Create account</figcaption></figure>
+    <div>
+      <ol class="marks">
+        <li><b>Username</b>: nama publik, juga dipakai sebagai kode referral.</li>
+        <li><b>Email</b>: untuk login dan reset password.</li>
+        <li><b>Password</b>: minimal 8 karakter. Gunakan password kuat yang tidak dipakai di situs lain.</li>
+        <li><b>Create Account</b>: akun dibuat, lalu masuk dari halaman depan (<i>Sign in</i>).</li>
+      </ol>
+      <p class="note">Setelah masuk, Anda langsung bisa menjadi penonton, kreator, dan affiliate. Tidak perlu mendaftar ulang per peran.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= PENONTON ================= -->
+<section id="penonton">
+  <span class="eyebrow"><span class="role">Penonton</span></span>
+  <h2>2 · Menonton dan membayar</h2>
+
+  <h3 id="nav-user">Menu navigasi pengguna</h3>
+  <p>Navbar yang sama muncul di semua halaman pengguna. Menu yang sedang dibuka ditebalkan.</p>
+  <figure class="shot"><img src="img/tutorial/v01-navbar.png" width="1280" height="85" alt="Navbar pengguna dengan delapan item bernomor" loading="lazy"></figure>
+  <ol class="marks">
+    <li><b>PPV Stream</b>: kembali ke halaman utama.</li>
+    <li><b>Browse</b>: katalog semua video.</li>
+    <li><b>Dashboard</b>: area kreator (profil, upload, video saya, allowlist, chat).</li>
+    <li><b>Wallet</b>: saldo, top up, tarik dana, transfer, riwayat.</li>
+    <li><b>Affiliate</b>: komisi dan link referral.</li>
+    <li><b>Username &lt;email&gt;</b>: akun yang sedang login.</li>
+    <li><b>Tema</b>: terang/gelap, tersimpan di browser.</li>
+    <li><b>Logout</b>: mengakhiri sesi. Selalu logout di komputer bersama.</li>
+  </ol>
+
+  <h3>Browse: mencari video</h3>
+  <figure class="shot"><img src="img/tutorial/v02-browse.png" width="1280" height="900" alt="Halaman Browse dengan pencarian, urutan, dan kartu video" loading="lazy"></figure>
+  <ol class="marks">
+    <li><b>Cari</b> judul, kreator, atau deskripsi.</li>
+    <li><b>Urutkan</b>: terbaru, harga, dan lainnya.</li>
+    <li><b>Kartu video</b>: judul, kreator, status (<i>Ready</i> = siap diputar), dan harga. <i>Free</i> berarti gratis. Klik untuk membuka halaman tonton.</li>
+  </ol>
+
+  <h3 id="beli">Membeli video</h3>
+  <p>Halaman tonton menampilkan panel pembayaran bila video belum Anda miliki. Pilih salah satu tab metode. Tab hanya muncul bila diaktifkan admin.</p>
+  <ol class="steps">
+    <li>Buka video dari Browse atau link referral.</li>
+    <li>Pilih tab metode: <b>Wallet</b>, <b>gateway</b> (Midtrans, Xendit, Stripe, PayPal), atau <b>Blockchain x402</b>.</li>
+    <li>Selesaikan pembayaran. Setelah terkonfirmasi, pemutar video terbuka otomatis.</li>
+  </ol>
+
+  <h4>a. Bayar dengan saldo Wallet (paling cepat)</h4>
+  <figure class="shot"><img src="img/tutorial/v03-watch-wallet.png" width="1280" height="1263" alt="Halaman tonton dengan tab Wallet" loading="lazy"></figure>
+  <ol class="marks">
+    <li><b>Tab metode pembayaran</b>.</li>
+    <li><b>Saldo</b> wallet Anda. Bila kurang, muncul peringatan dan tautan top up.</li>
+    <li><b>Pay with Wallet</b>: saldo dipotong dan video langsung terbuka.</li>
+  </ol>
+
+  <h4>b. Bayar lewat gateway (kartu, VA, e-wallet, PayPal)</h4>
+  <figure class="shot"><img src="img/tutorial/v04-watch-gateway.png" width="1280" height="1313" alt="Tab gateway dengan tombol Midtrans, Xendit, Stripe, PayPal beserta nominal" loading="lazy"></figure>
+  <ol class="marks">
+    <li><b>Tab gateway</b>.</li>
+    <li><b>Midtrans / Xendit</b> menagih dalam <b>rupiah</b>. Badge menunjukkan nominal final, misalnya Rp 81.250.</li>
+    <li><b>Stripe / PayPal</b> menagih dalam <b>USD</b>, misalnya $5.00.</li>
+  </ol>
+  <p class="note">Anda diarahkan ke halaman pembayaran provider. Setelah selesai, kembali ke halaman tonton. Akses terbuka saat webhook provider diterima dan nominalnya cocok.</p>
+
+  <h4>c. Bayar dengan crypto (Blockchain x402)</h4>
+  <figure class="shot"><img src="img/tutorial/v05-watch-x402.png" width="1280" height="1357" alt="Tab Blockchain x402 dengan pilihan token dan alamat wallet" loading="lazy"></figure>
+  <ol class="marks">
+    <li><b>Token</b>: stablecoin (USDC/USDT, 1 token = $1) atau token native (POL) bila harga oracle tersedia.</li>
+    <li><b>Wallet pembayar</b>: terisi otomatis setelah menghubungkan MetaMask.</li>
+    <li><b>Jumlah token</b> yang akan ditagih, ditambah biaya gas jaringan.</li>
+    <li><b>Pay</b>: membuat invoice lalu membuka MetaMask.</li>
+  </ol>
+  <figure class="shot"><img src="img/tutorial/v06-watch-x402-invoice.png" width="1106" height="428" alt="Detail invoice x402 dan langkah approve" loading="lazy"><figcaption>Detail invoice: kontrak, wallet kreator, jumlah, pembagian kreator/platform</figcaption></figure>
+  <ol class="steps">
+    <li>Untuk token ERC-20, MetaMask meminta <b>Approve</b> (langkah 1 dari 2), lalu <b>transaksi pembayaran</b> (langkah 2).</li>
+    <li>Invoice berlaku 15 menit. Jika halaman tertutup, buka lagi video yang sama: transaksi yang tertunda dilanjutkan otomatis.</li>
+    <li>Setelah transaksi terkonfirmasi di jaringan, server memverifikasi dan membuka video. Gunakan <i>Retry</i> bila konfirmasi lambat.</li>
+  </ol>
+
+  <h4>d. Video sudah dimiliki</h4>
+  <figure class="shot"><img src="img/tutorial/v07-watch-unlocked.png" width="1280" height="860" alt="Pemutar video terbuka" loading="lazy"></figure>
+  <p>Video gratis atau yang sudah dibeli langsung diputar. Streaming memakai HLS dengan link bertanda tangan yang kedaluwarsa, sehingga link tidak bisa dibagikan.</p>
+
+  <h3 id="dompet">Wallet: saldo, top up, tarik, transfer</h3>
+  <figure class="shot"><img src="img/tutorial/v09-wallet-deposit.png" width="1280" height="1033" alt="Halaman Wallet tab Deposit" loading="lazy"><figcaption>Tab Deposit (top up)</figcaption></figure>
+  <ol class="marks">
+    <li><b>Saldo tersedia</b> dalam USD, beserta perkiraan rupiah.</li>
+    <li><b>Tab</b>: Deposit · Withdraw · Transfer · History.</li>
+    <li><b>Instruksi transfer</b>: rekening tujuan dari admin.</li>
+    <li><b>Jumlah</b> top up dalam dolar, minimal $10. Di bawah kolom tampil perkiraan rupiahnya.</li>
+    <li><b>Nomor referensi</b> transfer bank.</li>
+    <li><b>Nama pengirim</b> sesuai rekening.</li>
+    <li><b>Bukti transfer</b> (gambar/PDF, opsional tetapi mempercepat).</li>
+    <li><b>Submit</b>: permintaan masuk antrean admin dengan status <i>pending</i>.</li>
+  </ol>
+  <ol class="steps">
+    <li>Transfer ke rekening di kotak instruksi.</li>
+    <li>Isi formulir dan kirim. Saldo <b>belum</b> bertambah.</li>
+    <li>Admin mencocokkan dengan mutasi bank, lalu menyetujui. Saldo bertambah dan status menjadi <i>completed</i>.</li>
+  </ol>
+
+  <figure class="shot"><img src="img/tutorial/v10-wallet-history.png" width="1280" height="800" alt="Riwayat transaksi wallet" loading="lazy"><figcaption>Tab History</figcaption></figure>
+  <ol class="marks">
+    <li><b>Status</b>: <i>pending</i> (menunggu admin), <i>completed</i>, atau <i>rejected</i>.</li>
+    <li><b>Upload proof</b>: menambahkan bukti transfer ke deposit yang masih pending.</li>
+  </ol>
+
+  <div class="split">
+    <div>
+      <figure class="shot"><img src="img/tutorial/v11-wallet-withdraw.png" width="1148" height="303" alt="Form tarik dana" loading="lazy"><figcaption>Tab Withdraw</figcaption></figure>
+      <ol class="marks">
+        <li><b>Jumlah</b> dalam dolar, minimal $50, beserta perkiraan rupiah.</li>
+        <li><b>Metode</b>: Bank Transfer atau crypto. Tujuannya diambil dari <a href="#kreator">profil</a>, jadi isi rekening/alamat wallet dulu.</li>
+        <li><b>Request Withdrawal</b>: saldo ditahan sampai admin mentransfer dana.</li>
+      </ol>
+    </div>
+    <div>
+      <figure class="shot"><img src="img/tutorial/v12-wallet-transfer.png" width="1148" height="256" alt="Form transfer antar pengguna" loading="lazy"><figcaption>Tab Transfer</figcaption></figure>
+      <ol class="marks">
+        <li><b>Username</b> penerima.</li>
+        <li><b>Jumlah</b> dalam dolar, misalnya <code>5</code> atau <code>19.99</code>. Kolom <i>Note</i> opsional.</li>
+        <li><b>Send Transfer</b>: saldo pindah seketika. Periksa username sebelum mengirim; transfer tidak bisa dibatalkan.</li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<!-- ================= KREATOR ================= -->
+<section id="kreator">
+  <span class="eyebrow"><span class="role">Kreator</span> menu Dashboard</span>
+  <h2>3 · Mengunggah dan menjual video</h2>
+  <figure class="shot"><img src="img/tutorial/c01-dashboard-top.png" width="1280" height="900" alt="Dashboard kreator bagian atas" loading="lazy"></figure>
+  <ol class="marks">
+    <li><b>Status wallet</b> dan saldo. Tombolnya membuka top up, riwayat, dan tarik dana.</li>
+    <li><b>Profile &amp; Payout Info</b>: lengkapi sebelum menjual.</li>
+  </ol>
+
+  <h3>Langkah 1 · Lengkapi profil payout</h3>
+  <figure class="shot"><img src="img/tutorial/c02-profile.png" width="1148" height="537" alt="Form profil dan payout" loading="lazy"></figure>
+  <ol class="marks">
+    <li><b>Bank Account</b>: tujuan pencairan fiat dan penarikan Bank Transfer.</li>
+    <li><b>EVM Wallet</b>: alamat penerima pembayaran x402. Tanpa alamat ini, tab crypto tidak muncul di video Anda.</li>
+    <li><b>Preferred Chain</b>: pilih jaringan yang sama dengan kontrak x402, misalnya Polygon Amoy (80002) saat uji coba atau Polygon Mainnet (137).</li>
+    <li><b>WhatsApp</b> (opsional).</li>
+    <li><b>Save Profile</b>.</li>
+  </ol>
+
+  <h3>Langkah 2 · Upload video dan atur harga</h3>
+  <figure class="shot"><img src="img/tutorial/c03-upload.png" width="1148" height="452" alt="Form upload video dengan harga rupiah" loading="lazy"></figure>
+  <ol class="marks">
+    <li><b>Judul</b> video.</li>
+    <li><b>Mata uang</b>: <code>$ USD</code> atau <code>Rp IDR</code>.</li>
+    <li><b>Harga</b>. <code>0</code> = gratis.</li>
+    <li><b>Perkiraan</b> konversi dengan kurs hari ini. Harga rupiah ditagih persis lewat Midtrans/Xendit; harga USD-nya mengikuti kurs.</li>
+    <li><b>File MP4</b>.</li>
+    <li><b>Upload</b>: video diproses menjadi HLS. Status <i>Processing</i> berubah menjadi <i>Ready</i> setelah selesai.</li>
+  </ol>
+
+  <h3>Langkah 3 · Kelola video saya</h3>
+  <figure class="shot"><img src="img/tutorial/c04-my-videos.png" width="1114" height="683" alt="Daftar video saya dengan form edit" loading="lazy"></figure>
+  <ol class="marks">
+    <li><b>Status</b> transcoding: <i>Ready</i> atau <i>Processing</i>.</li>
+    <li><b>Edit title, description &amp; price</b>: buka untuk mengubah.</li>
+    <li><b>Mata uang dan harga</b> bisa diganti kapan saja. Pembeli lama tetap punya akses.</li>
+    <li><b>Save Changes</b>.</li>
+  </ol>
+
+  <div class="split">
+    <div>
+      <h3>Allowlist: akses gratis untuk pengguna tertentu</h3>
+      <figure class="shot"><img src="img/tutorial/c05-allowlist.png" width="1148" height="257" alt="Form allowlist" loading="lazy"></figure>
+      <ol class="marks">
+        <li><b>Pilih video</b>.</li>
+        <li><b>Username</b> yang diberi akses.</li>
+        <li><b>Grant Access</b>: pengguna itu bisa menonton tanpa membayar.</li>
+      </ol>
+    </div>
+    <div>
+      <h3>Chat</h3>
+      <figure class="shot"><img src="img/tutorial/c06-chat.png" width="1148" height="583" alt="Panel chat" loading="lazy"></figure>
+      <ol class="marks">
+        <li><b>Chat Admin</b>: bantuan dari admin (misalnya deposit belum masuk).</li>
+        <li><b>Cari pengguna</b> untuk memulai chat baru.</li>
+        <li><b>Daftar percakapan</b>.</li>
+        <li><b>Tulis pesan</b> lalu <i>Send</i>. Pesan tersimpan di database; jangan kirim password atau nomor kartu.</li>
+      </ol>
+    </div>
+  </div>
+
+  <h3>Langkah 4 · Aktifkan komisi affiliate (opsional)</h3>
+  <figure class="shot"><img src="img/tutorial/c07-affiliate-settings.png" width="1280" height="1020" alt="Pengaturan komisi affiliate per video" loading="lazy"><figcaption>Menu Affiliate → tab Creator Settings</figcaption></figure>
+  <ol class="marks">
+    <li><b>Creator Settings</b>.</li>
+    <li><b>Enable affiliate program</b> untuk video ini.</li>
+    <li><b>Persentase komisi</b> (0–90%).</li>
+    <li><b>Save Settings</b>. Komisi dipotong dari bagian kreator setiap penjualan lewat link referral.</li>
+  </ol>
+  <p class="note">Pendapatan penjualan masuk ke saldo Wallet (pembayaran fiat/wallet) atau langsung ke EVM wallet Anda (x402). Tarik saldo lewat <a href="#dompet">Wallet → Withdraw</a>.</p>
+</section>
+
+<!-- ================= AFFILIATE ================= -->
+<section id="affiliate">
+  <span class="eyebrow"><span class="role">Affiliate</span> menu Affiliate</span>
+  <h2>4 · Membagikan link dan mendapat komisi</h2>
+  <figure class="shot"><img src="img/tutorial/a01-affiliate-links.png" width="1280" height="890" alt="Tab Get Links untuk membuat link referral" loading="lazy"></figure>
+  <ol class="marks">
+    <li><b>Total komisi</b> yang sudah diterima.</li>
+    <li><b>Get Links</b>.</li>
+    <li><b>Pilih video</b> berbayar.</li>
+    <li><b>Status program</b>: <i>Enabled – 20% commission</i>, atau <i>Disabled</i> bila kreator belum mengaktifkan komisi. Video disabled tidak menghasilkan komisi.</li>
+    <li><b>Link referral</b> berisi <code>&amp;ref=username</code>. Klik <i>Copy</i> lalu bagikan.</li>
+  </ol>
+  <figure class="shot"><img src="img/tutorial/a02-affiliate-earnings.png" width="1280" height="800" alt="Tab Earnings berisi riwayat komisi" loading="lazy"><figcaption>Tab Earnings</figcaption></figure>
+  <ol class="marks">
+    <li><b>Total komisi</b>.</li>
+    <li><b>Komisi bulan ini</b>.</li>
+    <li><b>Jumlah pembelian</b> lewat link Anda.</li>
+    <li><b>Riwayat</b> per transaksi: video, pembeli, persentase, nominal.</li>
+  </ol>
+  <figure class="shot"><img src="img/tutorial/a03-affiliate-wallet.png" width="1148" height="185" alt="Riwayat wallet affiliate" loading="lazy"><figcaption>Komisi masuk ke Wallet sebagai transaksi dan bisa ditarik</figcaption></figure>
+  <p class="note">Komisi dikreditkan otomatis setelah pembayaran terkonfirmasi. Mempromosikan link tidak boleh memakai spam atau klaim menyesatkan.</p>
+</section>
+
+<!-- ================= ADMIN ================= -->
+<section id="admin">
+  <span class="eyebrow"><span class="role">Admin</span></span>
+  <h2>5 · Mengelola platform</h2>
+  <div class="split">
+    <figure class="shot"><img src="img/tutorial/m01-admin-login.png" width="1280" height="440" alt="Halaman login admin" loading="lazy"><figcaption><code>/public/admin/login.html</code></figcaption></figure>
+    <div>
+      <ol class="marks">
+        <li><b>Email admin</b>.</li>
+        <li><b>Password admin</b>.</li>
+        <li><b>Login Admin</b>.</li>
+      </ol>
+      <p class="note">Admin pertama dibuat lewat <code>ADMIN_BOOTSTRAP_*</code> (lihat <a href="setup.html">setup.html</a>). Setelah itu kosongkan token bootstrap. Jangan berbagi akun admin.</p>
+    </div>
+  </div>
+
+  <h3>Dashboard dan menu admin</h3>
+  <figure class="shot"><img src="img/tutorial/m02-admin-dashboard.png" width="1280" height="1262" alt="Dashboard admin" loading="lazy"></figure>
+  <ol class="marks">
+    <li><b>Dashboard</b>: ringkasan.</li>
+    <li><b>Payments</b>: invoice semua metode pembayaran dan pencairan.</li>
+    <li><b>Wallets</b>: antrean deposit dan penarikan.</li>
+    <li><b>Settings</b>: gateway, kurs, SMTP, storage, branding.</li>
+    <li><b>Statistik</b>: total invoice, lunas, pending, dan transaksi wallet yang menunggu.</li>
+    <li><b>Chat dukungan</b>: pilih pengguna untuk membalas.</li>
+    <li><b>Invoice terbaru</b>: nominal rupiah atau USD sesuai mata uang tagihan.</li>
+  </ol>
+
+  <h3 id="admin-wallet">Menyetujui deposit</h3>
+  <figure class="shot"><img src="img/tutorial/m03-admin-deposits.png" width="1280" height="800" alt="Antrean deposit" loading="lazy"></figure>
+  <ol class="marks">
+    <li><b>Tab</b> Withdrawals / Deposits.</li>
+    <li><b>Filter status</b>: Pending, Completed, Rejected.</li>
+    <li><b>View proof</b>: membuka bukti transfer. Baris tanpa bukti ditandai <i>no proof</i>.</li>
+    <li><b>Process</b>: membuka dialog keputusan.</li>
+  </ol>
+  <div class="split">
+    <figure class="shot"><img src="img/tutorial/m04-admin-deposit-modal.png" width="532" height="539" alt="Dialog proses deposit" loading="lazy"></figure>
+    <div>
+      <ol class="marks">
+        <li><b>View proof</b>.</li>
+        <li><b>Catatan admin</b> untuk jejak audit.</li>
+        <li><b>Approve Deposit</b>: saldo pengguna bertambah. <i>Reject</i> menolak.</li>
+      </ol>
+      <div class="callout"><b>Setujui hanya setelah dicocokkan dengan mutasi bank.</b><span>Nominal, nomor referensi, dan nama pengirim harus sama. Gambar bukti transfer saja bukan bukti pembayaran karena mudah dipalsukan.</span></div>
+    </div>
+  </div>
+
+  <h3>Memproses penarikan</h3>
+  <figure class="shot"><img src="img/tutorial/m05-admin-withdrawals.png" width="1280" height="800" alt="Antrean penarikan" loading="lazy"></figure>
+  <ol class="marks">
+    <li><b>Filter status</b>.</li>
+    <li><b>Process</b>: transfer dana ke rekening/wallet pengguna di luar sistem, lalu tandai selesai dengan catatan referensi. <i>Reject</i> mengembalikan saldo.</li>
+  </ol>
+
+  <h3 id="admin-pay">Payments dan pencairan</h3>
+  <figure class="shot"><img src="img/tutorial/m06-admin-payments.png" width="1280" height="800" alt="Daftar invoice pembayaran" loading="lazy"></figure>
+  <ol class="marks">
+    <li><b>Filter status</b>: paid, pending, failed, <i>amount_mismatch</i> (nominal webhook tidak cocok; perlu diselidiki).</li>
+    <li><b>Filter provider</b>.</li>
+    <li><b>Nominal</b>: Rp untuk Midtrans/Xendit, USD untuk Stripe/PayPal.</li>
+    <li><b>Disburse</b>: mencatat pencairan bagian kreator untuk invoice lunas.</li>
+  </ol>
+  <figure class="shot narrow"><img src="img/tutorial/m07-admin-disburse.png" width="532" height="326" alt="Dialog pencairan" loading="lazy"><figcaption>Dialog Manual Disbursement</figcaption></figure>
+  <p>Dialog menampilkan invoice, pembeli, kreator, nominal, dan rekening kreator. Transfer bagian kreator di luar sistem, lalu klik <b>Mark Disbursed</b>.</p>
+
+  <h3 id="admin-set">Settings</h3>
+  <figure class="shot"><img src="img/tutorial/m08-settings-payments.png" width="1148" height="574" alt="Pengaturan metode pembayaran" loading="lazy"><figcaption>Payment Methods</figcaption></figure>
+  <ol class="marks">
+    <li><b>Pembayaran video dengan wallet</b> on/off.</li>
+    <li><b>Transfer antar pengguna</b> on/off.</li>
+    <li><b>Provider default</b>.</li>
+    <li><b>Enabled</b>: on/off per provider. <i>Incomplete env</i> berarti variabel lingkungan belum lengkap (kolom Missing Env menyebutkan yang kurang); provider itu tidak bisa diaktifkan.</li>
+  </ol>
+  <figure class="shot"><img src="img/tutorial/m09-settings-fx.png" width="1148" height="324" alt="Kurs dan harga token" loading="lazy"><figcaption>Exchange Rates &amp; Token Prices</figcaption></figure>
+  <ol class="marks">
+    <li><b>Kurs terkini</b>, sumber, dan waktu update. USD/IDR diperbarui tiap jam; harga token tiap 2 menit.</li>
+    <li><b>Pasangan</b>, misalnya <code>USD/IDR</code> atau <code>POL/USD</code>.</li>
+    <li><b>Nilai</b> override.</li>
+    <li><b>Set Override</b>: dipakai bila sumber otomatis salah. Override token kedaluwarsa setelah 24 jam. Semua perubahan tercatat.</li>
+  </ol>
+  <div class="split">
+    <div>
+      <figure class="shot"><img src="img/tutorial/m10-settings-brand-smtp.png" width="1148" height="514" alt="Pengaturan SMTP" loading="lazy"><figcaption>Email (SMTP)</figcaption></figure>
+      <ol class="marks">
+        <li><b>Host SMTP</b> beserta port, user, password.</li>
+        <li><b>Aktifkan</b> pengiriman email.</li>
+        <li><b>Kirim email uji</b>.</li>
+      </ol>
+    </div>
+    <div>
+      <figure class="shot"><img src="img/tutorial/m12-settings-brand.png" width="1148" height="268" alt="Pengaturan branding" loading="lazy"><figcaption>Branding</figcaption></figure>
+      <ol class="marks">
+        <li><b>Nama aplikasi</b>.</li>
+        <li><b>Tagline</b>.</li>
+      </ol>
+    </div>
+  </div>
+  <figure class="shot"><img src="img/tutorial/m11-settings-storage.png" width="1148" height="1071" alt="Pengaturan storage" loading="lazy"><figcaption>Storage: lokal atau object storage S3/R2</figcaption></figure>
+</section>
+
+<!-- ================= MOBILE ================= -->
+<section id="mobile">
+  <span class="eyebrow">Responsif</span>
+  <h2>6 · Menggunakan di ponsel</h2>
+  <p>Semua halaman memakai grid Bootstrap. Di layar sempit menu dilipat ke tombol <b>☰</b>, tombol menjadi selebar layar, dan tab bisa digeser ke samping.</p>
+  <div class="phones">
+    <figure class="shot phone"><img src="img/tutorial/g03-landing-mobile.png" width="390" height="844" alt="Halaman depan di ponsel" loading="lazy"><figcaption>Halaman depan</figcaption></figure>
+    <figure class="shot phone"><img src="img/tutorial/v13-browse-mobile.png" width="390" height="844" alt="Browse di ponsel" loading="lazy"><figcaption>Browse</figcaption></figure>
+    <figure class="shot phone"><img src="img/tutorial/v14-mobile-menu.png" width="390" height="844" alt="Menu terbuka di ponsel" loading="lazy"><figcaption>Ketuk ☰ untuk membuka menu</figcaption></figure>
+    <figure class="shot phone"><img src="img/tutorial/v08-watch-mobile.png" width="390" height="1115" alt="Halaman tonton di ponsel" loading="lazy"><figcaption>Pembayaran gateway</figcaption></figure>
+    <figure class="shot phone"><img src="img/tutorial/m13-admin-mobile.png" width="390" height="844" alt="Admin wallet di ponsel" loading="lazy"><figcaption>Admin: tabel bisa digeser</figcaption></figure>
+  </div>
+  <p class="note">Pembayaran x402 di ponsel memerlukan browser di dalam aplikasi MetaMask (atau wallet lain yang menyuntikkan <code>window.ethereum</code>).</p>
+</section>
+
+<section id="ringkas">
+  <span class="eyebrow">Ringkasan</span>
+  <h2>Aktivitas dan letak menunya</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Saya ingin…</th><th>Peran</th><th>Menu</th></tr></thead>
+    <tbody>
+      <tr><td>Membuat akun</td><td>Tamu</td><td>Halaman depan → Create account</td></tr>
+      <tr><td>Reset password</td><td>Tamu</td><td>Halaman depan → Forgot password?</td></tr>
+      <tr><td>Mencari dan membeli video</td><td>Penonton</td><td>Browse → kartu video → tab pembayaran</td></tr>
+      <tr><td>Top up saldo</td><td>Penonton</td><td>Wallet → Deposit</td></tr>
+      <tr><td>Melampirkan bukti transfer</td><td>Penonton</td><td>Wallet → History → Upload proof</td></tr>
+      <tr><td>Menarik saldo</td><td>Semua</td><td>Wallet → Withdraw</td></tr>
+      <tr><td>Mengirim saldo ke pengguna lain</td><td>Semua</td><td>Wallet → Transfer</td></tr>
+      <tr><td>Mengisi rekening / alamat wallet</td><td>Kreator</td><td>Dashboard → Profile &amp; Payout Info</td></tr>
+      <tr><td>Upload video, harga $ atau Rp</td><td>Kreator</td><td>Dashboard → Upload Video</td></tr>
+      <tr><td>Mengubah harga</td><td>Kreator</td><td>Dashboard → My Videos → Edit</td></tr>
+      <tr><td>Memberi akses gratis</td><td>Kreator</td><td>Dashboard → Allowlist</td></tr>
+      <tr><td>Mengatur komisi affiliate</td><td>Kreator</td><td>Affiliate → Creator Settings</td></tr>
+      <tr><td>Membuat link referral</td><td>Affiliate</td><td>Affiliate → Get Links</td></tr>
+      <tr><td>Melihat komisi</td><td>Affiliate</td><td>Affiliate → Earnings</td></tr>
+      <tr><td>Bertanya ke admin</td><td>Semua</td><td>Dashboard → Chat → Chat Admin</td></tr>
+      <tr><td>Menyetujui deposit / penarikan</td><td>Admin</td><td>Wallets</td></tr>
+      <tr><td>Mencairkan dana kreator</td><td>Admin</td><td>Payments → Disburse</td></tr>
+      <tr><td>Mengaktifkan gateway, kurs, SMTP</td><td>Admin</td><td>Settings</td></tr>
+    </tbody>
+  </table></div>
+  <p>Panduan terkait: <a href="tutorial.html">tutorial.html</a> (alur per peran), <a href="payments.html">payments.html</a> (metode bayar), <a href="setup.html">setup.html</a> (instalasi).</p>
+</section>
+
+<section id="iso">
+  <span class="eyebrow">ISO/IEC 27001:2022 · UU PDP 27/2022</span>
+  <h2>Keamanan dan data pribadi</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Data / tindakan</th><th>Yang perlu diperhatikan</th></tr></thead>
+    <tbody>
+      <tr><td>Email, username, WhatsApp, rekening bank</td><td>Data pribadi. Hanya pemilik dan admin yang berwenang yang boleh melihat (A.5.34, A.8.3)</td></tr>
+      <tr><td>Bukti transfer</td><td>Bisa memuat nama, nomor rekening, dan saldo. Admin membuka hanya untuk verifikasi (A.5.15)</td></tr>
+      <tr><td>Alamat wallet EVM</td><td>Bersifat publik dan permanen di blockchain; transaksi dapat ditelusuri</td></tr>
+      <tr><td>Chat</td><td>Tersimpan di database. Jangan kirim password, OTP, atau data kartu</td></tr>
+      <tr><td>Akun admin</td><td>Satu orang satu akun, password kuat, logout setelah selesai (A.5.16, A.5.17)</td></tr>
+      <tr><td>Screenshot untuk dokumentasi</td><td>Gunakan data fiktif seperti di dokumen ini; jangan memotret data pengguna sungguhan (A.8.11)</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout"><b>Belum sepenuhnya patuh: perlu tindakan sebelum menerima pengguna sungguhan.</b><span>Belum ada halaman kebijakan privasi dan persetujuan saat mendaftar, fitur ekspor/hapus data oleh pengguna, aturan masa simpan bukti transfer dan chat, enkripsi kolom rekening bank, maupun log akses admin terhadap bukti transfer. Autentikasi dua faktor untuk admin juga belum tersedia.</span></div>
+</section>
+</main>
+</div>
+
+<script>
+// Diagram dirender oleh viewer Artifact. Saat dibuka langsung sebagai file, muat Mermaid sebagai cadangan.
+setTimeout(function(){
+  if (document.querySelector('pre.mermaid svg') || window.mermaid) return;
+  var s=document.createElement('script');
+  s.src='https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js';
+  s.onload=function(){
+    var dark=matchMedia('(prefers-color-scheme: dark)').matches||document.documentElement.dataset.theme==='dark';
+    mermaid.initialize({startOnLoad:false,theme:dark?'dark':'neutral'});
+    mermaid.run({querySelector:'pre.mermaid'});
+  };
+  document.head.appendChild(s);
+},1500);
+</script>
+</body>
+</html>

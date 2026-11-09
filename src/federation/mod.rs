@@ -812,32 +812,57 @@ async fn admin_send_follow(
     let local_actor_url = format!("{}/users/{}", state.config.base_url, local_username);
 
     // Verify the local actor exists
-    let actor_exists: Option<i64> = sqlx::query_scalar(
-        "SELECT 1 FROM federation_actors WHERE actor_uri = $1 AND is_local = TRUE LIMIT 1",
+    let local_actor_id: Option<uuid::Uuid> = sqlx::query_scalar(
+        "SELECT id FROM federation_actors WHERE actor_uri = $1 AND is_local = TRUE LIMIT 1",
     )
     .bind(&local_actor_url)
     .fetch_optional(&state.pool)
     .await
     .unwrap_or(None);
 
-    if actor_exists.is_none() {
+    let Some(local_actor_id) = local_actor_id else {
         return api_error(
             StatusCode::NOT_FOUND,
             "local actor not found — call /admin/actors/init first",
         );
-    }
+    };
 
     // Fetch the remote actor to get their inbox URL
-    let remote_actor = match activities::upsert_remote_actor(&state.pool, &remote_actor_url).await {
-        Ok((_id, inbox)) => inbox,
-        Err(e) => {
-            tracing::warn!("admin_send_follow: remote actor fetch failed: {}", e);
-            return api_error(StatusCode::BAD_GATEWAY, "could not retrieve remote actor");
-        }
-    };
+    let (remote_actor_id, remote_actor) =
+        match activities::upsert_remote_actor(&state.pool, &remote_actor_url).await {
+            Ok((id, inbox)) => (id, inbox),
+            Err(e) => {
+                tracing::warn!("admin_send_follow: remote actor fetch failed: {}", e);
+                return api_error(StatusCode::BAD_GATEWAY, "could not retrieve remote actor");
+            }
+        };
 
     let follow_activity_id = uuid::Uuid::new_v4();
     let follow_activity_uri = format!("{}/activities/{}", local_actor_url, follow_activity_id);
+
+    // Record the outbound follow as pending so that the remote Accept/Reject
+    // can be matched (by activity URI) and the following collection is correct.
+    if let Err(e) = sqlx::query(
+        r#"
+        INSERT INTO federation_follows (
+            id, follower_actor_id, following_actor_id, activity_uri, status
+        ) VALUES ($1, $2, $3, $4, 'pending')
+        ON CONFLICT (follower_actor_id, following_actor_id)
+            DO UPDATE SET status = 'pending',
+                          activity_uri = EXCLUDED.activity_uri,
+                          updated_at = NOW()
+        "#,
+    )
+    .bind(uuid::Uuid::new_v4())
+    .bind(local_actor_id)
+    .bind(remote_actor_id)
+    .bind(&follow_activity_uri)
+    .execute(&state.pool)
+    .await
+    {
+        tracing::error!("admin_send_follow: follow record failed: {}", e);
+        return api_error(StatusCode::INTERNAL_SERVER_ERROR, "failed to record follow");
+    }
 
     let follow = serde_json::json!({
         "@context": "https://www.w3.org/ns/activitystreams",
@@ -879,8 +904,12 @@ async fn admin_send_follow(
 /// `federation_follows` row.
 async fn admin_reject_follow(
     State(state): State<FederationState>,
+    headers: HeaderMap,
     Path(follow_id): Path<String>,
 ) -> Response {
+    if !moderation::check_admin_token_pub(&headers) {
+        return api_error(StatusCode::FORBIDDEN, "X-Federation-Admin-Token required");
+    }
     let id = match uuid::Uuid::parse_str(&follow_id) {
         Ok(id) => id,
         Err(_) => return api_error(StatusCode::BAD_REQUEST, "invalid follow id"),
