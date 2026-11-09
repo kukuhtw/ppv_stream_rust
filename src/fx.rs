@@ -467,7 +467,7 @@ async fn refresh_usd_idr(pool: &PgPool, client: &reqwest::Client, env_usd_idr: f
         return;
     };
     let (lo, hi) = usd_idr_bounds();
-    if !(rate.is_finite() && rate >= lo && rate <= hi) {
+    if !(rate.is_finite() && (lo..=hi).contains(&rate)) {
         tracing::warn!(rate, "fx: USD/IDR outside sanity bounds; ignored");
         return;
     }
@@ -677,7 +677,7 @@ fn token_units_ceil(tokens: f64, decimals: u32) -> Option<u128> {
     let shown = decimals.min(6);
     // Whole micro-units (or fewer decimals for low-decimal tokens), rounded up.
     let micro = (tokens * 10f64.powi(shown as i32)).ceil();
-    if !(micro.is_finite() && micro >= 1.0 && micro < 1e30) {
+    if !(micro.is_finite() && (1.0..1e30).contains(&micro)) {
         return None;
     }
     (micro as u128).checked_mul(10u128.checked_pow(decimals - shown)?)

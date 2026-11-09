@@ -179,7 +179,7 @@ pub async fn upload_video(
                         .into_response();
                 }
 
-                let filename = format!("{}.{}", &video_id, extension);
+                let filename = format!("{}.{}", video_id, extension);
                 let full_path = Path::new(&upload_dir).join(&filename);
                 let temporary_path = full_path.with_extension(format!("{}.part", extension));
                 let temporary_dir = temporary_path
