@@ -49,7 +49,7 @@ File terkait:
 
 | Env | Fungsi |
 |---|---|
-| `WALLET_DEPOSIT_INSTRUCTIONS` | Rekening tujuan top up yang tampil di `wallet.html` (`\n` = baris baru) |
+| `WALLET_DEPOSIT_INSTRUCTIONS` | Opsional. Catatan tambahan di tab Deposit `wallet.html` (`\n` = baris baru). Rekening bank / e-wallet tujuan dikelola di Admin > Settings > Manual Payment Accounts |
 | `FX_*`, `COINGECKO_API_KEY` | Kurs USD/IDR live dan oracle harga token; override di Admin > Settings |
 | `X402_ALLOW_VOLATILE_TOKENS` | `1` hanya untuk testnet (token tanpa harga dihitung 1:1) |
 | `X402_ORACLE_MAX_AGE_SECS` | Umur maksimum harga token untuk invoice x402 (default 600) |

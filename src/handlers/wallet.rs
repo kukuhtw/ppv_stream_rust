@@ -24,6 +24,7 @@ use tower_cookies::Cookies;
 
 use crate::commission;
 use crate::config::Config;
+use crate::deposit_accounts;
 use crate::payment_settings::load_payment_settings;
 use crate::sessions;
 
@@ -85,6 +86,7 @@ struct TxnRow {
     admin_note: Option<String>,
     created_at: String,
     transfer_ref: Option<String>,
+    deposit_account_label: Option<String>,
     has_proof: bool,
 }
 
@@ -104,7 +106,7 @@ pub async fn wallet_transactions(
         r#"SELECT wt.id, wt.txn_type, wt.amount_cents, wt.balance_after,
                   wt.status, wt.note, wt.admin_note,
                   wt.created_at::TEXT AS created_at,
-                  wt.transfer_ref,
+                  wt.transfer_ref, wt.deposit_account_label,
                   (wt.proof_path IS NOT NULL) AS has_proof,
                   u2.username AS ref_username
            FROM wallet_transactions wt
@@ -139,6 +141,7 @@ pub async fn wallet_transactions(
                 .unwrap_or(None)
                 .unwrap_or_default(),
             transfer_ref: r.try_get("transfer_ref").unwrap_or(None),
+            deposit_account_label: r.try_get("deposit_account_label").unwrap_or(None),
             has_proof: r
                 .try_get::<Option<bool>, _>("has_proof")
                 .unwrap_or(None)
@@ -161,6 +164,11 @@ pub struct DepositPayload {
     /// Account holder name used for the transfer.
     #[serde(default)]
     pub sender_name: Option<String>,
+    /// Platform bank / e-wallet account the money was sent to
+    /// (`platform_deposit_accounts.id`). Required once the admin has
+    /// configured at least one active account.
+    #[serde(default)]
+    pub deposit_account_id: Option<i64>,
 }
 
 pub async fn wallet_deposit(
@@ -180,6 +188,28 @@ pub async fn wallet_deposit(
         }));
     }
 
+    // Destination account: must be one of the active platform accounts.
+    let dest = match p.deposit_account_id {
+        Some(id) => match deposit_accounts::get_active(&st.pool, id).await {
+            Some(acc) => Some(acc),
+            None => {
+                return Json(json!({
+                    "ok": false,
+                    "error": "selected destination account is not available"
+                }))
+            }
+        },
+        None => {
+            if !deposit_accounts::list_active(&st.pool).await.is_empty() {
+                return Json(json!({
+                    "ok": false,
+                    "error": "choose the platform account you transferred to"
+                }));
+            }
+            None
+        }
+    };
+
     let cur_bal: i64 = sqlx::query("SELECT balance_cents FROM users WHERE id = $1")
         .bind(&uid)
         .fetch_optional(&st.pool)
@@ -191,14 +221,17 @@ pub async fn wallet_deposit(
 
     let res = sqlx::query(
         r#"INSERT INTO wallet_transactions
-               (user_id, txn_type, amount_cents, balance_after, status, note)
-           VALUES ($1, 'deposit', $2, $3, 'pending', $4)
+               (user_id, txn_type, amount_cents, balance_after, status, note,
+                deposit_account_id, deposit_account_label)
+           VALUES ($1, 'deposit', $2, $3, 'pending', $4, $5, $6)
            RETURNING id"#,
     )
     .bind(&uid)
     .bind(p.amount_cents)
     .bind(cur_bal)
     .bind(p.note.as_deref())
+    .bind(dest.as_ref().map(|a| a.id))
+    .bind(dest.as_ref().map(|a| a.label()))
     .fetch_one(&st.pool)
     .await;
 
@@ -241,17 +274,46 @@ pub async fn wallet_deposit(
 }
 
 // ─── GET /api/wallet/deposit_info ────────────────────────────────────────────
-// Where to send money for a deposit. Configured by the platform through
-// WALLET_DEPOSIT_INSTRUCTIONS (multi-line text: bank, account number, holder,
-// e-wallet, etc.). `\n` in the env value is turned into a line break.
+// Where to send money for a manual deposit (bank transfer / e-wallet).
+// Accounts are managed by the admin in Settings (platform_deposit_accounts).
+// WALLET_DEPOSIT_INSTRUCTIONS (free text, `\n` = line break) is still shown
+// as an extra note, or as the only instructions when no account is set up.
+// Account details are only returned to logged-in users.
 
-pub async fn wallet_deposit_info(State(st): State<WalletState>) -> impl IntoResponse {
-    let instructions = std::env::var("WALLET_DEPOSIT_INSTRUCTIONS")
-        .unwrap_or_default()
-        .replace("\\n", "\n");
+pub async fn wallet_deposit_info(
+    State(st): State<WalletState>,
+    cookies: Cookies,
+) -> impl IntoResponse {
+    let logged_in = sessions::current_user_id(&st.pool, &st.cfg, &cookies)
+        .await
+        .is_some();
+    let (accounts, instructions) = if logged_in {
+        let accounts = deposit_accounts::list_active(&st.pool).await;
+        let instructions = std::env::var("WALLET_DEPOSIT_INSTRUCTIONS")
+            .unwrap_or_default()
+            .replace("\\n", "\n");
+        (accounts, instructions)
+    } else {
+        (Vec::new(), String::new())
+    };
+    let accounts: Vec<_> = accounts
+        .into_iter()
+        .map(|a| {
+            json!({
+                "id": a.id,
+                "kind": a.kind,
+                "provider": a.provider,
+                "account_number": a.account_number,
+                "account_holder": a.account_holder,
+                "note": a.note,
+            })
+        })
+        .collect();
     Json(json!({
         "ok": true,
-        "configured": !instructions.trim().is_empty(),
+        "logged_in": logged_in,
+        "configured": !accounts.is_empty() || !instructions.trim().is_empty(),
+        "accounts": accounts,
         "instructions": instructions,
         "min_deposit_cents": MIN_DEPOSIT_CENTS,
         "min_deposit_display": cents_to_display(MIN_DEPOSIT_CENTS),

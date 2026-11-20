@@ -263,8 +263,8 @@ sequenceDiagram
   end
   </pre></div>
   <ol class="steps">
-    <li><div>Pengguna mentransfer ke rekening platform yang tampil di tab <b>Deposit</b> (diatur lewat env <code>WALLET_DEPOSIT_INSTRUCTIONS</code>).</div></li>
-    <li><div>Pengguna membuka <code>wallet.html</code> tab <b>Deposit</b>, mengisi jumlah dalam dolar (dikirim ke API sebagai sen USD), <b>Transfer Reference</b>, <b>Sender Account Name</b>, dan mengunggah bukti transfer (JPG/PNG/WEBP/PDF, maks. 5 MB).</div></li>
+    <li><div>Pengguna mentransfer manual ke salah satu rekening bank atau e-wallet (GoPay, DANA, OVO, LinkAja, ShopeePay) milik platform yang tampil di tab <b>Deposit</b>. Daftar akun dikelola admin di Admin &gt; Settings &gt; <b>Manual Payment Accounts</b>; env <code>WALLET_DEPOSIT_INSTRUCTIONS</code> opsional sebagai catatan tambahan/cadangan.</div></li>
+    <li><div>Pengguna membuka <code>wallet.html</code> tab <b>Deposit</b>, memilih akun tujuan (<b>Transferred To</b>), mengisi jumlah dalam dolar (dikirim ke API sebagai sen USD), <b>Transfer Reference</b>, <b>Sender Account Name</b>, dan mengunggah bukti transfer (JPG/PNG/WEBP/PDF, maks. 5 MB).</div></li>
     <li><div>Admin membuka <code>admin/wallet.html</code>, filter <code>deposit</code> + <code>pending</code>, mencocokkan jumlah, referensi, nama pengirim, dan bukti (<b>View proof</b>) dengan mutasi bank.</div></li>
     <li><div>Admin menyetujui (saldo bertambah seketika) atau menolak dengan catatan.</div></li>
   </ol>

@@ -111,6 +111,19 @@ transfer:
 
 **Goal:** User adds money to their platform wallet.
 
+**Where users send money.** The admin manages the platform's own destination
+accounts in **Admin > Settings > Manual Payment Accounts** (table
+`platform_deposit_accounts`, migration `038`): bank accounts (BCA, Mandiri,
+BRI, ...) and e-wallets (GoPay, DANA, OVO, LinkAja, ShopeePay — not blockchain
+wallets). Active accounts are listed on the Deposit tab (logged-in users only)
+with a copy button. When at least one account is active, the user must pick the
+account they transferred to (`deposit_account_id`); the transaction stores a
+label snapshot (`deposit_account_label`, e.g. `BCA 1234567890 a.n. PT Contoh`)
+so the admin can reconcile against that account's statement even if it is later
+edited or deleted. `WALLET_DEPOSIT_INSTRUCTIONS` is optional extra text.
+
+Admin API: `GET/POST /admin/deposit_accounts`, `POST/DELETE /admin/deposit_accounts/:id`.
+
 ```
 User                       Platform                      Admin
  │                             │                           │

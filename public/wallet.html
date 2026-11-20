@@ -64,13 +64,19 @@
       <div class="card-body">
         <div id="depositAlert" class="d-none mb-3"></div>
         <div id="depositInstructions" class="mb-4 d-none">
-          <div class="fw-semibold mb-1">1. Transfer to the platform account</div>
-          <pre id="depositInstructionsText" class="p-3 rounded border bg-body-tertiary small mb-0" style="white-space:pre-wrap"></pre>
+          <div class="fw-semibold mb-1">1. Transfer manually to one of the platform accounts</div>
+          <div class="small text-body-secondary mb-2">Bank transfer or e-wallet (GoPay, DANA, OVO, LinkAja, ShopeePay). Transfer the exact amount shown below the Amount field.</div>
+          <div id="depositAccounts" class="row g-2 mb-2"></div>
+          <pre id="depositInstructionsText" class="p-3 rounded border bg-body-tertiary small mb-0 d-none" style="white-space:pre-wrap"></pre>
         </div>
         <div id="depositNotConfigured" class="alert alert-warning small d-none">Deposit instructions have not been configured by the admin yet. Contact support via chat before transferring any money.</div>
         <div class="fw-semibold mb-2">2. Tell us about your transfer</div>
         <form id="depositForm">
           <div class="row g-3">
+            <div id="depositAccountWrap" class="col-12 d-none">
+              <label for="depositAccount" class="form-label">Transferred To</label>
+              <select id="depositAccount" class="form-select"></select>
+            </div>
             <div class="col-md-4">
               <label for="depositAmt" class="form-label">Amount</label>
               <div class="input-group">
@@ -295,7 +301,8 @@ document.getElementById('depositForm').addEventListener('submit', async e => {
         amount_cents: usdToCents('depositAmt'),
         note: 'Wallet top-up requested from browser',
         transfer_ref: document.getElementById('depositRef').value.trim(),
-        sender_name: document.getElementById('depositSender').value.trim()
+        sender_name: document.getElementById('depositSender').value.trim(),
+        deposit_account_id: Number(document.getElementById('depositAccount').value) || null
       })
     }).then(r => r.json());
     if (j.ok) {
@@ -309,6 +316,8 @@ document.getElementById('depositForm').addEventListener('submit', async e => {
       }
       showAlert(alert, 'success', (j.message || 'Top-up request submitted.') + proofMsg);
       e.target.reset();
+      const accSel = document.getElementById('depositAccount');
+      if (accSel.options.length === 2) accSel.selectedIndex = 1;
       document.getElementById('depositAmt').value = document.getElementById('depositAmt').min || '10';
       updateAmountHints();
       loadHistory();
@@ -422,7 +431,7 @@ async function loadHistory() {
     };
     tbody.innerHTML = items.map(t => {
       const sign = ['deposit', 'transfer_in'].includes(t.txn_type) ? '+' : '-';
-      const note = [t.transfer_ref ? `Ref: ${t.transfer_ref}` : '', t.admin_note || t.note || (t.ref_username ? `Related user: ${t.ref_username}` : '')].filter(Boolean).join(' · ');
+      const note = [t.deposit_account_label ? `To: ${t.deposit_account_label}` : '', t.transfer_ref ? `Ref: ${t.transfer_ref}` : '', t.admin_note || t.note || (t.ref_username ? `Related user: ${t.ref_username}` : '')].filter(Boolean).join(' · ');
       let action = '';
       if (t.txn_type === 'deposit' && t.status === 'pending') {
         action = t.has_proof
@@ -459,12 +468,58 @@ async function loadDepositInfo() {
       updateAmountHints();
     }
     if (j.configured) {
-      document.getElementById('depositInstructionsText').textContent = j.instructions;
+      renderDepositAccounts(Array.isArray(j.accounts) ? j.accounts : []);
+      if (j.instructions && j.instructions.trim()) {
+        const pre = document.getElementById('depositInstructionsText');
+        pre.textContent = j.instructions;
+        pre.classList.remove('d-none');
+      }
       document.getElementById('depositInstructions').classList.remove('d-none');
     } else {
       document.getElementById('depositNotConfigured').classList.remove('d-none');
     }
   } catch {}
+}
+
+function renderDepositAccounts(accounts) {
+  const box = document.getElementById('depositAccounts');
+  const sel = document.getElementById('depositAccount');
+  const wrap = document.getElementById('depositAccountWrap');
+  if (!accounts.length) {
+    box.innerHTML = '';
+    sel.innerHTML = '';
+    sel.required = false;
+    wrap.classList.add('d-none');
+    return;
+  }
+  box.innerHTML = accounts.map(a => `
+    <div class="col-md-6">
+      <div class="border rounded p-3 h-100 bg-body-tertiary">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <span class="fw-semibold">${esc(a.provider)}</span>
+          <span class="badge ${a.kind === 'bank' ? 'text-bg-primary' : 'text-bg-success'}">${a.kind === 'bank' ? 'Bank Transfer' : 'E-Wallet'}</span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <span class="font-monospace fs-5">${esc(a.account_number)}</span>
+          <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" data-copy="${esc(a.account_number)}">Copy</button>
+        </div>
+        <div class="small">a.n. ${esc(a.account_holder)}</div>
+        ${a.note ? `<div class="small text-body-secondary mt-1">${esc(a.note)}</div>` : ''}
+      </div>
+    </div>`).join('');
+  box.querySelectorAll('[data-copy]').forEach(btn => btn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(btn.dataset.copy.replace(/[\s.-]/g, ''));
+      btn.textContent = 'Copied';
+      setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+    } catch {}
+  }));
+  sel.innerHTML = '<option value="">Choose the account you sent money to</option>' + accounts.map(a =>
+    `<option value="${Number(a.id)}">${esc(a.kind === 'bank' ? 'Bank' : 'E-Wallet')} · ${esc(a.provider)} ${esc(a.account_number)} a.n. ${esc(a.account_holder)}</option>`
+  ).join('');
+  if (accounts.length === 1) sel.value = String(accounts[0].id);
+  sel.required = true;
+  wrap.classList.remove('d-none');
 }
 
 async function uploadDepositProof(txnId, file) {

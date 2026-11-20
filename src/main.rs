@@ -9,6 +9,7 @@ mod services {
 mod commission;
 mod config;
 mod db;
+mod deposit_accounts;
 mod email;
 mod federation;
 mod ffmpeg;
@@ -47,13 +48,15 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
     use crate::handlers::pay;
     use crate::handlers::{
         admin::{
-            admin_data, admin_disburse, admin_fx_clear, admin_fx_list, admin_fx_override,
-            admin_payment_settings_get, admin_payment_settings_save, admin_payments,
-            admin_smtp_get, admin_smtp_save, admin_storage_migration_cancel,
-            admin_storage_migration_items_get, admin_storage_migrations_get,
-            admin_storage_migrations_start, admin_storage_settings_get,
-            admin_storage_settings_save, admin_storage_settings_test, admin_wallet_approve,
-            admin_wallet_complete, admin_wallet_reject, admin_wallet_transactions, AdminState,
+            admin_data, admin_deposit_accounts_create, admin_deposit_accounts_delete,
+            admin_deposit_accounts_list, admin_deposit_accounts_update, admin_disburse,
+            admin_fx_clear, admin_fx_list, admin_fx_override, admin_payment_settings_get,
+            admin_payment_settings_save, admin_payments, admin_smtp_get, admin_smtp_save,
+            admin_storage_migration_cancel, admin_storage_migration_items_get,
+            admin_storage_migrations_get, admin_storage_migrations_start,
+            admin_storage_settings_get, admin_storage_settings_save, admin_storage_settings_test,
+            admin_wallet_approve, admin_wallet_complete, admin_wallet_reject,
+            admin_wallet_transactions, AdminState,
         },
         affiliate::{
             admin_affiliate_commissions, affiliate_earnings, affiliate_link,
@@ -147,6 +150,14 @@ async fn start_http_server(cfg: config::Config, pool: sqlx::PgPool) -> anyhow::R
             get(admin_storage_migration_items_get),
         )
         .route("/admin/smtp", get(admin_smtp_get).post(admin_smtp_save))
+        .route(
+            "/admin/deposit_accounts",
+            get(admin_deposit_accounts_list).post(admin_deposit_accounts_create),
+        )
+        .route(
+            "/admin/deposit_accounts/:id",
+            post(admin_deposit_accounts_update).delete(admin_deposit_accounts_delete),
+        )
         .with_state(AdminState {
             pool: pool.clone(),
             cfg: cfg.clone(),

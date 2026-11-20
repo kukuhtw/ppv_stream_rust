@@ -1,4 +1,5 @@
 // src/handlers/admin.rs
+use crate::deposit_accounts::{self, DepositAccountInput};
 use crate::payment_settings::load_payment_settings;
 use crate::plugins::payment::PaymentPluginRegistry;
 use crate::storage_settings::{collect_local_files, load_storage_settings, StoredStorageSettings};
@@ -1783,6 +1784,142 @@ pub async fn admin_payment_settings_save(
     }
 }
 
+// ─── Platform deposit accounts (manual bank / e-wallet payments) ─────────────
+// E-wallet = GoPay, DANA, OVO, LinkAja, ShopeePay, ... (not blockchain).
+// GET    /admin/deposit_accounts           → list all
+// POST   /admin/deposit_accounts           → create
+// POST   /admin/deposit_accounts/:id       → update
+// DELETE /admin/deposit_accounts/:id       → delete (past deposits keep their label snapshot)
+
+pub async fn admin_deposit_accounts_list(
+    State(st): State<AdminState>,
+    cookies: Cookies,
+) -> impl IntoResponse {
+    let admin_user_id = match ensure_admin_session(&st, &cookies).await {
+        Ok(user_id) => user_id,
+        Err(resp) => return resp,
+    };
+    info!(admin_user_id = %admin_user_id, action = "admin_deposit_accounts_view", "deposit accounts viewed");
+    let accounts = deposit_accounts::list_all(&st.pool).await;
+    Json(json!({"ok": true, "accounts": accounts}))
+}
+
+pub async fn admin_deposit_accounts_create(
+    State(st): State<AdminState>,
+    cookies: Cookies,
+    Json(p): Json<DepositAccountInput>,
+) -> impl IntoResponse {
+    let admin_user_id = match ensure_admin_session(&st, &cookies).await {
+        Ok(user_id) => user_id,
+        Err(resp) => return resp,
+    };
+    let c = match p.validate() {
+        Ok(c) => c,
+        Err(e) => return Json(json!({"ok": false, "error": e})),
+    };
+    let res = sqlx::query(
+        r#"INSERT INTO platform_deposit_accounts
+              (kind, provider, account_number, account_holder, note, is_active, sort_order)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           RETURNING id"#,
+    )
+    .bind(&c.kind)
+    .bind(&c.provider)
+    .bind(&c.account_number)
+    .bind(&c.account_holder)
+    .bind(c.note.as_deref())
+    .bind(c.is_active)
+    .bind(c.sort_order)
+    .fetch_one(&st.pool)
+    .await;
+    match res {
+        Ok(r) => {
+            let id: i64 = r.try_get("id").unwrap_or(0);
+            // Audit log without the account number (data minimisation).
+            info!(admin_user_id = %admin_user_id, action = "admin_deposit_account_create",
+                  account_id = id, kind = %c.kind, provider = %c.provider, active = c.is_active,
+                  "deposit account created");
+            Json(json!({"ok": true, "id": id, "message": "Account added."}))
+        }
+        Err(e) => {
+            warn!("deposit account insert failed: {e}");
+            Json(json!({"ok": false, "error": "could not save account"}))
+        }
+    }
+}
+
+pub async fn admin_deposit_accounts_update(
+    State(st): State<AdminState>,
+    cookies: Cookies,
+    Path(id): Path<i64>,
+    Json(p): Json<DepositAccountInput>,
+) -> impl IntoResponse {
+    let admin_user_id = match ensure_admin_session(&st, &cookies).await {
+        Ok(user_id) => user_id,
+        Err(resp) => return resp,
+    };
+    let c = match p.validate() {
+        Ok(c) => c,
+        Err(e) => return Json(json!({"ok": false, "error": e})),
+    };
+    let res = sqlx::query(
+        r#"UPDATE platform_deposit_accounts
+              SET kind = $2, provider = $3, account_number = $4, account_holder = $5,
+                  note = $6, is_active = $7, sort_order = $8, updated_at = NOW()
+            WHERE id = $1"#,
+    )
+    .bind(id)
+    .bind(&c.kind)
+    .bind(&c.provider)
+    .bind(&c.account_number)
+    .bind(&c.account_holder)
+    .bind(c.note.as_deref())
+    .bind(c.is_active)
+    .bind(c.sort_order)
+    .execute(&st.pool)
+    .await;
+    match res {
+        Ok(r) if r.rows_affected() == 1 => {
+            info!(admin_user_id = %admin_user_id, action = "admin_deposit_account_update",
+                  account_id = id, kind = %c.kind, provider = %c.provider, active = c.is_active,
+                  "deposit account updated");
+            Json(json!({"ok": true, "message": "Account updated."}))
+        }
+        Ok(_) => Json(json!({"ok": false, "error": "account not found"})),
+        Err(e) => {
+            warn!("deposit account update failed: {e}");
+            Json(json!({"ok": false, "error": "could not save account"}))
+        }
+    }
+}
+
+pub async fn admin_deposit_accounts_delete(
+    State(st): State<AdminState>,
+    cookies: Cookies,
+    Path(id): Path<i64>,
+) -> impl IntoResponse {
+    let admin_user_id = match ensure_admin_session(&st, &cookies).await {
+        Ok(user_id) => user_id,
+        Err(resp) => return resp,
+    };
+    let res = sqlx::query("DELETE FROM platform_deposit_accounts WHERE id = $1")
+        .bind(id)
+        .execute(&st.pool)
+        .await;
+    match res {
+        Ok(r) if r.rows_affected() == 1 => {
+            info!(admin_user_id = %admin_user_id, action = "admin_deposit_account_delete",
+                  account_id = id, "deposit account deleted");
+            Json(json!({"ok": true, "message": "Account deleted."}))
+        }
+        Ok(_) => Json(json!({"ok": false, "error": "account not found"})),
+        Err(e) => {
+            warn!("deposit account delete failed: {e}");
+            Json(json!({"ok": false, "error": "could not delete account"}))
+        }
+    }
+}
+
 pub async fn admin_smtp_save(
     State(st): State<AdminState>,
     cookies: Cookies,
@@ -1893,6 +2030,7 @@ pub async fn admin_wallet_transactions(
         r#"SELECT wt.id, wt.txn_type, wt.amount_cents, wt.balance_after, wt.status,
                   wt.note, wt.admin_note, wt.created_at::TEXT AS created_at,
                   wt.transfer_ref, wt.sender_name, wt.proof_mime,
+                  wt.deposit_account_label,
                   (wt.proof_path IS NOT NULL) AS has_proof,
                   wt.proof_uploaded_at::TEXT AS proof_uploaded_at,
                   u.username,
@@ -1939,6 +2077,7 @@ pub async fn admin_wallet_transactions(
                 "ref_username":  r.try_get::<Option<String>, _>("ref_username").unwrap_or(None),
                 "transfer_ref":  r.try_get::<Option<String>, _>("transfer_ref").unwrap_or(None),
                 "sender_name":   r.try_get::<Option<String>, _>("sender_name").unwrap_or(None),
+                "deposit_account_label": r.try_get::<Option<String>, _>("deposit_account_label").unwrap_or(None),
                 "has_proof":     r.try_get::<Option<bool>,   _>("has_proof").unwrap_or(None).unwrap_or(false),
                 "proof_mime":    r.try_get::<Option<String>, _>("proof_mime").unwrap_or(None),
                 "proof_uploaded_at": r.try_get::<Option<String>, _>("proof_uploaded_at").unwrap_or(None),

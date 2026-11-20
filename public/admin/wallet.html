@@ -190,6 +190,7 @@ function openWalletAction(row, kind) {
     <div><strong>Transaction Type:</strong> ${esc(row.txn_type || '-')}</div>
     <div><strong>Note:</strong> ${esc(row.note || '-')}</div>
     ${kind === 'deposit' ? `
+    <div><strong>Transferred to:</strong> ${esc(row.deposit_account_label || '-')}</div>
     <div><strong>Transfer reference:</strong> ${esc(row.transfer_ref || '-')}</div>
     <div><strong>Sender name:</strong> ${esc(row.sender_name || '-')}</div>
     <div class="mt-2">${proofLink(row)}</div>
@@ -258,7 +259,7 @@ async function loadDeposits() {
       <td class="small text-nowrap">${esc((row.created_at || '').slice(0, 16))}</td>
       <td class="small">${esc(row.username || '-')}</td>
       <td class="small fw-semibold">$${(Math.abs(row.amount_cents || 0) / 100).toFixed(2)}</td>
-      <td class="small"><div>${esc(row.transfer_ref || '-')}</div><div class="text-body-secondary">${esc(row.sender_name || '')}</div><div class="mt-1">${proofLink(row)}</div></td>
+      <td class="small">${row.deposit_account_label ? `<div class="fw-semibold">→ ${esc(row.deposit_account_label)}</div>` : ''}<div>${esc(row.transfer_ref || '-')}</div><div class="text-body-secondary">${esc(row.sender_name || '')}</div><div class="mt-1">${proofLink(row)}</div></td>
       <td class="small text-body-secondary">${esc(row.note || '-')}</td>
       <td class="small text-body-secondary">${esc(row.admin_note || '-')}</td>
       <td class="small">${statusBadge(row.status || '-')}</td>

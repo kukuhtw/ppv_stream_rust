@@ -162,6 +162,46 @@ if [ -n "$TXN_ID" ]; then
 else
   fail "no txn_id from deposit; approval flow skipped"
 fi
+echo "== Manual payment accounts (bank / e-wallet)"
+req "POST /admin/deposit_accounts (bank)" 200 POST /admin/deposit_accounts "${A[@]}" -H 'Content-Type: application/json' \
+  -d '{"kind":"bank","provider":"BCA","account_number":"1234567890","account_holder":"PT Smoke","note":"smoke"}' \
+  && json_ok "bank account added"
+BANK_ID="$(jq -r '.id // empty' <<<"$BODY" 2>/dev/null)"
+req "POST /admin/deposit_accounts (e-wallet)" 200 POST /admin/deposit_accounts "${A[@]}" -H 'Content-Type: application/json' \
+  -d '{"kind":"ewallet","provider":"GoPay","account_number":"081200000000","account_holder":"PT Smoke"}' \
+  && json_ok "e-wallet account added"
+req "POST /admin/deposit_accounts invalid kind" 200 POST /admin/deposit_accounts "${A[@]}" -H 'Content-Type: application/json' \
+  -d '{"kind":"crypto","provider":"X","account_number":"1","account_holder":"Y"}'
+if [ "$(jq -r '.ok' <<<"$BODY" 2>/dev/null)" = "false" ]; then pass "invalid kind refused"; else fail "invalid kind: ${BODY:0:200}"; fi
+req "POST /admin/deposit_accounts as normal user" '200|401|403' POST /admin/deposit_accounts "${U[@]}" -H 'Content-Type: application/json' \
+  -d '{"kind":"bank","provider":"BCA","account_number":"1","account_holder":"Y"}'
+if [ "$(jq -r '.ok // empty' <<<"$BODY" 2>/dev/null)" = "true" ]; then fail "normal user created a deposit account"; else pass "normal user cannot add deposit accounts"; fi
+req "GET /api/wallet/deposit_info lists accounts" 200 GET /api/wallet/deposit_info "${U[@]}"
+if jq -e '(.accounts | length) == 2 and .configured == true' <<<"$BODY" >/dev/null 2>&1; then pass "user sees 2 accounts"; else fail "deposit_info: ${BODY:0:200}"; fi
+req "GET /api/wallet/deposit_info anonymous" 200 GET /api/wallet/deposit_info
+if jq -e '(.accounts | length) == 0' <<<"$BODY" >/dev/null 2>&1; then pass "accounts hidden from anonymous users"; else fail "anonymous deposit_info: ${BODY:0:200}"; fi
+req "POST /api/wallet/deposit without destination" 200 POST /api/wallet/deposit "${U[@]}" -H 'Content-Type: application/json' \
+  -d '{"amount_cents":1000,"transfer_ref":"SMOKE-REF-2","sender_name":"Smoke Tester"}'
+if [ "$(jq -r '.ok' <<<"$BODY" 2>/dev/null)" = "false" ]; then pass "destination account required"; else fail "deposit without destination: ${BODY:0:200}"; fi
+if [ -n "$BANK_ID" ]; then
+  req "POST /api/wallet/deposit to bank account" 200 POST /api/wallet/deposit "${U[@]}" -H 'Content-Type: application/json' \
+    -d "{\"amount_cents\":1000,\"transfer_ref\":\"SMOKE-REF-3\",\"sender_name\":\"Smoke Tester\",\"deposit_account_id\":$BANK_ID}" \
+    && json_ok "deposit with destination accepted"
+  req "GET admin deposits show destination" 200 GET "/admin/wallet/transactions?txn_type=deposit&status=pending" "${A[@]}"
+  if jq -e '[.items[] | select(.deposit_account_label == "BCA 1234567890 a.n. PT Smoke")] | length == 1' <<<"$BODY" >/dev/null 2>&1; then
+    pass "admin sees destination label"; else fail "destination label: ${BODY:0:300}"; fi
+  req "POST /admin/deposit_accounts/$BANK_ID deactivate" 200 POST "/admin/deposit_accounts/$BANK_ID" "${A[@]}" -H 'Content-Type: application/json' \
+    -d '{"kind":"bank","provider":"BCA","account_number":"1234567890","account_holder":"PT Smoke","is_active":false}' \
+    && json_ok "account deactivated"
+  req "POST /api/wallet/deposit to inactive account" 200 POST /api/wallet/deposit "${U[@]}" -H 'Content-Type: application/json' \
+    -d "{\"amount_cents\":1000,\"transfer_ref\":\"SMOKE-REF-4\",\"sender_name\":\"Smoke Tester\",\"deposit_account_id\":$BANK_ID}"
+  if [ "$(jq -r '.ok' <<<"$BODY" 2>/dev/null)" = "false" ]; then pass "inactive account refused"; else fail "inactive account: ${BODY:0:200}"; fi
+  req "DELETE /admin/deposit_accounts/$BANK_ID" 200 DELETE "/admin/deposit_accounts/$BANK_ID" "${A[@]}" && json_ok "account deleted"
+  req "GET admin deposits keep label after delete" 200 GET "/admin/wallet/transactions?txn_type=deposit&status=pending" "${A[@]}"
+  if jq -e '[.items[] | select(.deposit_account_label == "BCA 1234567890 a.n. PT Smoke")] | length == 1' <<<"$BODY" >/dev/null 2>&1; then
+    pass "label snapshot survives delete"; else fail "label after delete: ${BODY:0:300}"; fi
+fi
+
 req "POST /admin/fx/override USD/IDR" 200 POST /admin/fx/override "${A[@]}" \
   -H 'Content-Type: application/json' -d '{"pair":"USD/IDR","rate":16123}' && json_ok "fx override saved"
 req "GET /api/kurs after override" 200 GET /api/kurs

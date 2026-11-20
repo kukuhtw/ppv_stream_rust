@@ -120,6 +120,67 @@
   </div>
 
   <div class="card shadow-sm mb-4">
+    <div class="card-header fw-semibold">Manual Payment Accounts (Bank Transfer &amp; E-Wallet)</div>
+    <div class="card-body">
+      <p class="small text-body-secondary">Platform accounts that users transfer to manually when topping up their wallet: bank accounts (BCA, Mandiri, BRI, BNI, ...) and e-wallets (GoPay, DANA, OVO, LinkAja, ShopeePay). Active accounts are shown on the user's Wallet &rarr; Deposit tab; you then verify the transfer and approve it under <a href="/public/admin/wallet.html">Wallets</a>.</p>
+      <div id="depAccAlert" class="d-none mb-3"></div>
+      <div class="table-responsive mb-3">
+        <table class="table align-middle small">
+          <thead><tr><th>Type</th><th>Bank / E-Wallet</th><th>Account / Phone No.</th><th>Account Holder</th><th>Note</th><th>Order</th><th>Status</th><th></th></tr></thead>
+          <tbody id="depAccRows"><tr><td colspan="8" class="text-body-secondary">Loading...</td></tr></tbody>
+        </table>
+      </div>
+      <form id="depAccForm" class="border rounded p-3">
+        <input type="hidden" id="depAccId">
+        <div class="fw-semibold mb-2" id="depAccFormTitle">Add Account</div>
+        <div class="row g-2">
+          <div class="col-md-2">
+            <label for="depAccKind" class="form-label small">Type</label>
+            <select id="depAccKind" class="form-select">
+              <option value="bank">Bank</option>
+              <option value="ewallet">E-Wallet</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label for="depAccProvider" class="form-label small">Bank / E-Wallet Name</label>
+            <input id="depAccProvider" class="form-control" maxlength="60" list="depAccProviderList" placeholder="BCA / GoPay" required>
+            <datalist id="depAccProviderList">
+              <option value="BCA"><option value="Mandiri"><option value="BRI"><option value="BNI"><option value="BSI"><option value="CIMB Niaga"><option value="Permata">
+              <option value="GoPay"><option value="DANA"><option value="OVO"><option value="LinkAja"><option value="ShopeePay">
+            </datalist>
+          </div>
+          <div class="col-md-3">
+            <label for="depAccNumber" class="form-label small">Account / Phone Number</label>
+            <input id="depAccNumber" class="form-control font-monospace" maxlength="60" inputmode="numeric" placeholder="1234567890 / 0812..." required>
+          </div>
+          <div class="col-md-4">
+            <label for="depAccHolder" class="form-label small">Account Holder (a.n.)</label>
+            <input id="depAccHolder" class="form-control" maxlength="120" required>
+          </div>
+          <div class="col-md-6">
+            <label for="depAccNote" class="form-label small">Note for users (optional)</label>
+            <input id="depAccNote" class="form-control" maxlength="300" placeholder="Include your username in the transfer note">
+          </div>
+          <div class="col-md-2">
+            <label for="depAccOrder" class="form-label small">Order</label>
+            <input id="depAccOrder" type="number" class="form-control" value="0" min="-1000" max="1000">
+          </div>
+          <div class="col-md-2 d-flex align-items-end">
+            <div class="form-check form-switch mb-2">
+              <input class="form-check-input" type="checkbox" id="depAccActive" checked>
+              <label class="form-check-label small" for="depAccActive">Active</label>
+            </div>
+          </div>
+          <div class="col-12 d-flex gap-2">
+            <button class="btn btn-primary" type="submit" id="depAccSubmit">Add Account</button>
+            <button class="btn btn-outline-secondary d-none" type="button" id="depAccCancel">Cancel Edit</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card shadow-sm mb-4">
     <div class="card-header fw-semibold">SMTP Settings</div>
     <div class="card-body">
       <div id="smtpAlert" class="d-none mb-3"></div>
@@ -513,6 +574,104 @@ document.getElementById('paymentSettingsForm').addEventListener('submit', async 
     if (j.ok) await loadPaymentSettings();
   } catch (err) {
     showAlert('paymentAlert', 'danger', 'Error: ' + err.message);
+  }
+});
+
+let depositAccounts = [];
+
+function resetDepAccForm() {
+  document.getElementById('depAccForm').reset();
+  document.getElementById('depAccId').value = '';
+  document.getElementById('depAccOrder').value = '0';
+  document.getElementById('depAccActive').checked = true;
+  document.getElementById('depAccFormTitle').textContent = 'Add Account';
+  document.getElementById('depAccSubmit').textContent = 'Add Account';
+  document.getElementById('depAccCancel').classList.add('d-none');
+}
+
+async function loadDepositAccounts() {
+  const tbody = document.getElementById('depAccRows');
+  try {
+    const j = await fetch('/admin/deposit_accounts').then(r => r.json());
+    if (!j.ok) {
+      tbody.innerHTML = `<tr><td colspan="8" class="text-danger">${esc(j.error || 'Failed to load accounts.')}</td></tr>`;
+      return;
+    }
+    depositAccounts = Array.isArray(j.accounts) ? j.accounts : [];
+    if (!depositAccounts.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-body-secondary">No accounts yet. Users cannot top up manually until you add at least one (or set WALLET_DEPOSIT_INSTRUCTIONS).</td></tr>';
+      return;
+    }
+    tbody.innerHTML = depositAccounts.map(a => `<tr>
+      <td>${a.kind === 'bank' ? '<span class="badge text-bg-primary">Bank</span>' : '<span class="badge text-bg-success">E-Wallet</span>'}</td>
+      <td class="fw-semibold">${esc(a.provider)}</td>
+      <td class="font-monospace">${esc(a.account_number)}</td>
+      <td>${esc(a.account_holder)}</td>
+      <td class="text-body-secondary">${esc(a.note || '-')}</td>
+      <td>${Number(a.sort_order) || 0}</td>
+      <td>${a.is_active ? '<span class="badge text-bg-success">Active</span>' : '<span class="badge text-bg-secondary">Inactive</span>'}</td>
+      <td class="text-nowrap">
+        <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2" onclick="editDepositAccount(${Number(a.id)})">Edit</button>
+        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" onclick="deleteDepositAccount(${Number(a.id)})">Delete</button>
+      </td>
+    </tr>`).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="8" class="text-danger">${esc(err.message)}</td></tr>`;
+  }
+}
+
+function editDepositAccount(id) {
+  const a = depositAccounts.find(x => Number(x.id) === Number(id));
+  if (!a) return;
+  document.getElementById('depAccId').value = a.id;
+  document.getElementById('depAccKind').value = a.kind;
+  document.getElementById('depAccProvider').value = a.provider;
+  document.getElementById('depAccNumber').value = a.account_number;
+  document.getElementById('depAccHolder').value = a.account_holder;
+  document.getElementById('depAccNote').value = a.note || '';
+  document.getElementById('depAccOrder').value = a.sort_order || 0;
+  document.getElementById('depAccActive').checked = !!a.is_active;
+  document.getElementById('depAccFormTitle').textContent = 'Edit Account';
+  document.getElementById('depAccSubmit').textContent = 'Save Changes';
+  document.getElementById('depAccCancel').classList.remove('d-none');
+  document.getElementById('depAccForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function deleteDepositAccount(id) {
+  if (!confirm('Delete this account? Past deposits keep the account label in their history. To hide it temporarily, edit it and switch off "Active" instead.')) return;
+  try {
+    const j = await fetch('/admin/deposit_accounts/' + Number(id), { method: 'DELETE' }).then(r => r.json());
+    showAlert('depAccAlert', j.ok ? 'success' : 'danger', j.ok ? (j.message || 'Deleted.') : ('Failed: ' + (j.error || 'unknown')));
+    if (j.ok) { resetDepAccForm(); loadDepositAccounts(); }
+  } catch (err) {
+    showAlert('depAccAlert', 'danger', 'Error: ' + err.message);
+  }
+}
+
+document.getElementById('depAccCancel').addEventListener('click', resetDepAccForm);
+
+document.getElementById('depAccForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const id = document.getElementById('depAccId').value;
+  const payload = {
+    kind: document.getElementById('depAccKind').value,
+    provider: document.getElementById('depAccProvider').value.trim(),
+    account_number: document.getElementById('depAccNumber').value.trim(),
+    account_holder: document.getElementById('depAccHolder').value.trim(),
+    note: document.getElementById('depAccNote').value.trim() || null,
+    sort_order: parseInt(document.getElementById('depAccOrder').value, 10) || 0,
+    is_active: document.getElementById('depAccActive').checked
+  };
+  try {
+    const j = await fetch(id ? '/admin/deposit_accounts/' + Number(id) : '/admin/deposit_accounts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(r => r.json());
+    showAlert('depAccAlert', j.ok ? 'success' : 'danger', j.ok ? (j.message || 'Saved.') : ('Failed: ' + (j.error || 'unknown')));
+    if (j.ok) { resetDepAccForm(); loadDepositAccounts(); }
+  } catch (err) {
+    showAlert('depAccAlert', 'danger', 'Error: ' + err.message);
   }
 });
 
@@ -970,6 +1129,7 @@ document.getElementById('adminPwForm').addEventListener('submit', async e => {
 });
 
 loadPaymentSettings();
+loadDepositAccounts();
 loadSmtpSettings();
 loadStorageSettings();
 setInterval(loadStorageMigrationJobs, 5000);
